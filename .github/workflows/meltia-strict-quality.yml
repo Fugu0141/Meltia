@@ -1,0 +1,62 @@
+name: meltia-strict-quality
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'dictionaries/**'
+      - '.github/workflows/meltia-strict-quality.yml'
+      - 'docs/MELTIA_QUALITY_STANDARD.md'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'dictionaries/**'
+      - '.github/workflows/meltia-strict-quality.yml'
+  schedule:
+    - cron: '37 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meltia-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reproducibility-and-safety:
+    name: quality / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Run deterministic safety, replay and gold quality checks
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "schedule" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            CASES=15000
+          else
+            CASES=1200
+          fi
+          dotnet run --project src/Meltype.Core.Tests -c Release -- --meltia-qa \
+            "$RUNNER_TEMP/meltia-qa.json" "$CASES"
+      - name: Upload reproducible JSON evidence (including failed runs)
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: meltia-qa-${{ matrix.os }}
+          path: ${{ runner.temp }}/meltia-qa.json
+          retention-days: 30
+          if-no-files-found: warn
