@@ -84,7 +84,7 @@ function message(findings, author) {
     list,
     '',
     '新しく作ったソースファイルの先頭には、次の 2 行を入れてください (コメントの記号はファイルに合わせてください)。',
-    '貢献の著作権は書いた人に残るので ([CLA](https://github.com/yksr-melt/Meltype/blob/main/CONTRIBUTING.md) の 3)、名前は **あなたの名前** (GitHub のユーザー名など) にしてください。',
+    '貢献した部分の著作権は原則として貢献者に残ります。Meltia 独自の CLA は導入していません。名前は **あなたの名前** (GitHub のユーザー名など) にしてください。詳細は [Meltiaの貢献ガイド](https://github.com/Fugu0141/Meltia/blob/main/CONTRIBUTING.md) を参照してください。',
     '',
     '```',
     '// SPDX-License-Identifier: GPL-3.0-or-later',
