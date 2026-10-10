@@ -88,7 +88,7 @@ struct EventTests {
     switch action {
     case "Enter": _=key(controller,client,"\r",code:UInt16(kVK_Return))
     case "Space": _=key(controller,client," ",code:UInt16(kVK_Space));_=key(controller,client,"\r",code:UInt16(kVK_Return))
-    case "Tab": _=key(controller,client,"\t",code:UInt16(kVK_Tab))
+    case "Tab": _=key(controller,client,"\t",code:UInt16(kVK_Tab));_=key(controller,client,"\r",code:UInt16(kVK_Return))
     default: controller.commitComposition(client)
     }
     #if REAL_CONVERTER

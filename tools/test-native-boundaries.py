@@ -170,7 +170,13 @@ class NativeBoundaryTests(unittest.TestCase):
                 with self.subTest(token=token, action=action):
                     self.type_text("kyouha「" + token + "」ashita")
                     result = self.key(0, vk=action)
-                    if action == 0x20:
+                    # Space and Tab may *start* conversion rather than commit.
+                    # Tab conversion is enabled by default (issue #219). Finish
+                    # the composition explicitly and check that no text is lost.
+                    if action == 0x09 and not result["commits"]:
+                        self.assertTrue(result["consumed"], "Tab should be handled by IME")
+                        self.assertIsNotNone(result["view"], "Tab should keep the composition visible")
+                    if action in (0x20, 0x09) and not result["commits"]:
                         result = self.key(0, vk=0x0D)
                     self.assertEqual([{"deleteBefore": 0, "text": "きょうは「" + token + "」あした"}], result["commits"])
                     self.assertIsNone(result["view"])

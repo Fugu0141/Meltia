@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      contents: read # required to checkout a private repo under pull_request_target
       pull-requests: write
       issues: write
     steps:
