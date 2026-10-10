@@ -1,12 +1,12 @@
+# Meltia migration: inherited Meltype automation is intentionally not triggered
+# by issues, comments, or PRs. Review CLA policy and bot behavior before enabling.
+# The original workflow remains available in Git history.
 # 貢献者ライセンス同意 (CLA) の bot。初めて Pull Request を出した人に、コメントで同意してもらう (.github/bot/cla.mjs)。
 # pull_request_target は書き込みの権限を持つので、Pull Request のコードはチェックアウトしない (main の bot のスクリプトだけを使う)。
 name: cla
 
 on:
-  pull_request_target:
-    types: [opened, reopened, synchronize]
-  issue_comment:
-    types: [created]
+  workflow_dispatch:
 
 permissions: {}
 
