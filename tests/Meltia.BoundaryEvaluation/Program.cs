@@ -24,6 +24,13 @@ var penaltyOnly = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalFragmentationPenalty: true));
 var hostOnly = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalStrongHostAdvisory: true));
+var h10Independent = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalFragmentationPenalty: true,
+    ExperimentalUnknownLatinCandidates: true));
+var h10WithHost = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalStrongHostAdvisory: true,
+    ExperimentalFragmentationPenalty: true,
+    ExperimentalUnknownLatinCandidates: true));
 var detector = CompositionDetector.CreateDefault();
 var records = new List<CaseRecord>();
 foreach (var gold in cases)
@@ -41,12 +48,15 @@ foreach (var gold in cases)
 
     try
     {
+        var h10Result = h10Independent.Analyze(gold.Raw);
+        predictions.Add(FromCore("Meltia-H10-independent", h10Result));
         var experiment = experimental.Analyze(gold.Raw);
         predictions.Add(FromCore("Meltia-experimental-independent", experiment));
     }
     catch (Exception ex)
     {
         predictions.Add(Error("Meltia-experimental-independent", ex));
+        predictions.Add(Error("Meltia-H10-independent", ex));
     }
 
     try
@@ -60,12 +70,16 @@ foreach (var gold in cases)
     }
     try
     {
-        var matched = experimental.Analyze(gold.Raw, MeltypeLexiconEvidence.For(gold.Raw));
+        var evidence = MeltypeLexiconEvidence.For(gold.Raw);
+        var withH10 = h10Independent.Analyze(gold.Raw, evidence);
+        predictions.Add(FromCore("Meltia-H10-lexicon", withH10));
+        var matched = experimental.Analyze(gold.Raw, evidence);
         predictions.Add(FromCore("Meltia-experimental-lexicon", matched));
     }
     catch (Exception ex)
     {
         predictions.Add(Error("Meltia-experimental-lexicon", ex));
+        predictions.Add(Error("Meltia-H10-lexicon", ex));
     }
 
     try
@@ -91,6 +105,15 @@ foreach (var gold in cases)
         var experimentalShadow = MeltypeBoundaryShadowBridge.CompareSegments(
             gold.Raw, segments, experimental);
         predictions.Add(FromCore("Meltia-experimental-shadow", experimentalShadow.Meltia));
+        var h10Shadow = MeltypeBoundaryShadowBridge.CompareSegments(
+            gold.Raw, segments, h10WithHost);
+        predictions.Add(FromCore("Meltia-H10-shadow", h10Shadow.Meltia));
+        var h10SharedShadow = MeltypeBoundaryShadowBridge.CompareSegments(
+            gold.Raw, segments, h10WithHost,
+            englishWords: matchedEvidence.EnglishWords,
+            properNames: matchedEvidence.ProperNames);
+        predictions.Add(FromCore("Meltia-H10-shadow-lexicon",
+            h10SharedShadow.Meltia));
         predictions.Add(FromCore("Meltia-penalty-only-shadow",
             MeltypeBoundaryShadowBridge.CompareSegments(
                 gold.Raw, segments, penaltyOnly).Meltia));
@@ -110,6 +133,8 @@ foreach (var gold in cases)
         predictions.Add(Error("Meltia-shadow-advised", ex));
         predictions.Add(Error("Meltia-shadow-lexicon-matched", ex));
         predictions.Add(Error("Meltia-experimental-shadow", ex));
+        predictions.Add(Error("Meltia-H10-shadow", ex));
+        predictions.Add(Error("Meltia-H10-shadow-lexicon", ex));
         predictions.Add(Error("Meltia-penalty-only-shadow", ex));
         predictions.Add(Error("Meltia-host-only-shadow", ex));
         predictions.Add(Error("Meltia-experimental-shadow-lexicon", ex));
@@ -123,7 +148,9 @@ string[] models = [
     "Meltia-shadow-advised", "Meltia-shadow-lexicon-matched",
     "Meltia-experimental-independent", "Meltia-experimental-lexicon",
     "Meltia-experimental-shadow", "Meltia-experimental-shadow-lexicon",
-    "Meltia-penalty-only-shadow", "Meltia-host-only-shadow"
+    "Meltia-penalty-only-shadow", "Meltia-host-only-shadow",
+    "Meltia-H10-independent", "Meltia-H10-lexicon",
+    "Meltia-H10-shadow", "Meltia-H10-shadow-lexicon"
 ];
 var overall = models.ToDictionary(
     model => model, model => Aggregate(records, model));
@@ -154,6 +181,7 @@ var report = new
         "Meltype-offline: CompositionText.Append per character + CompositionDetector.Segment; NOT Windows TSF",
         "Experimental mode: same C# core, independent opt-in host corroboration and higher per-English-span cost, not active IME",
         "Ablation: penalty-only and host-only share the exact same Meltype segments and raw strings",
+        "H10: bounded unknown-Latin phonetic seam proposals, no dictionary or gold-dependent training",
         "Core 47 cases have already been studied and are DEVELOPMENT diagnostics, not a blind holdout",
         "Robustness suite: 530 synthetic inputs from H1/H9 previously used 54 OOV English words and 19 Japanese phonetic words, NOT natural holdout or Python parity"
     },
@@ -212,7 +240,9 @@ var priorJapanese = overall["Meltia-shadow-advised"].JapaneseOnlyFalseEnglishCas
 foreach (var model in new[] {
     "Meltia-experimental-independent", "Meltia-experimental-lexicon",
     "Meltia-experimental-shadow", "Meltia-experimental-shadow-lexicon",
-    "Meltia-penalty-only-shadow", "Meltia-host-only-shadow"
+    "Meltia-penalty-only-shadow", "Meltia-host-only-shadow",
+    "Meltia-H10-independent", "Meltia-H10-lexicon",
+    "Meltia-H10-shadow", "Meltia-H10-shadow-lexicon"
 })
 {
     if (overall[model].JapaneseOnlyFalseEnglishCases > priorJapanese)
