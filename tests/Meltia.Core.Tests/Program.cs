@@ -168,6 +168,10 @@ var romajiUpperAdvisory = research.Analyze("NIHONGO",
     new BoundaryEvidence(MeltypeEnglish: [new Utf16Span(0, 7)]));
 Check(romajiUpperAdvisory.Routes[0].EnglishSpans.Count == 0,
     "experiment does not promote all-capitals long Japanese word");
+var shortJapaneseUpper = research.Analyze("KURU",
+    new BoundaryEvidence(MeltypeEnglish: [new Utf16Span(0, 4)]));
+Check(shortJapaneseUpper.Routes[0].EnglishSpans.Count == 0,
+    "unlisted uppercase Japanese romaji does not become an English acronym");
 var strongAdvisory = research.Analyze("commit",
     new BoundaryEvidence(MeltypeEnglish: [new Utf16Span(0, 6)]));
 Check(strongAdvisory.Routes[0].EnglishSpans.SequenceEqual([new Utf16Span(0, 6)]),
