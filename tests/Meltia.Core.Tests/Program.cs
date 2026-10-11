@@ -255,4 +255,48 @@ Check(h10Research.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates &&
       h10Research.Routes.Count <= MeltiaBoundaryEngine.MaxRoutes,
     "H10 preserves the global candidate and route caps");
 
+// Seeded adversarial stream safety. This does not use gold: only checks
+// deterministic, bounded output and immutable UTF-16 raw interpretation.
+var h10Rng = new Random(20261015);
+string[] h10Bits = [
+    "nihongo", "kinouha", "strategy", "no", "requirement", "😀",
+    "knowledge.", "wakaru", "feature", "database", " ", "KURU",
+    "commit", "https://a.co", "@", "ga", "SPYAIR", "API"
+];
+var h10PropertyOk = true;
+for (int i = 0; i < 120; i++)
+{
+    var input = string.Concat(Enumerable.Range(0, h10Rng.Next(1, 12))
+        .Select(_ => h10Bits[h10Rng.Next(h10Bits.Length)]));
+    var a = h10.Analyze(input);
+    var b = h10.Analyze(input);
+    h10PropertyOk &= a.Raw == input && b.Raw == input &&
+        !a.AutoCommitAllowed && !b.AutoCommitAllowed &&
+        a.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates &&
+        a.Routes.Count is > 0 and <= MeltiaBoundaryEngine.MaxRoutes &&
+        a.Candidates.SequenceEqual(b.Candidates) &&
+        a.Routes.Zip(b.Routes, (x, y) =>
+            x.Score == y.Score && x.EnglishSpans.SequenceEqual(y.EnglishSpans))
+            .All(x => x) &&
+        a.Routes.Count == b.Routes.Count;
+    foreach (var route in a.Routes)
+    {
+        var previousEnd = 0;
+        foreach (var span in route.EnglishSpans)
+        {
+            h10PropertyOk &= span.Start >= previousEnd && span.End <= input.Length &&
+                span.Start < span.End &&
+                !(span.Start > 0 && span.Start < input.Length &&
+                    char.IsHighSurrogate(input[span.Start - 1]) &&
+                    char.IsLowSurrogate(input[span.Start])) &&
+                !(span.End > 0 && span.End < input.Length &&
+                    char.IsHighSurrogate(input[span.End - 1]) &&
+                    char.IsLowSurrogate(input[span.End]));
+            previousEnd = span.End;
+        }
+    }
+    if (!h10PropertyOk) break;
+}
+Check(h10PropertyOk, "H10 120 seeded mixed Japanese-English-emoji invariant cases");
+
 Console.WriteLine($"ALL PASS {passed}");
