@@ -4,7 +4,7 @@
 
 この評価は **B層 / C# Coreのオフライン比較**であり、Windows TSF、Mozc、本番アプリの変換品質ではない。
 
-- ゴールドは `tests/Meltia.BoundaryEvaluation/GoldCorpus.cs` の **47件の合成・入力意図付きケース**。入力断片を日本語（false）/英字（true）で明示し、UTF-16半開区間をプログラムで自動構築する。
+- ゴールドは `tests/Meltia.BoundaryEvaluation/GoldCorpus.cs` の **47件の合成・入力意図付きケース（gold v1.1）**。入力断片を日本語（false）/英字（true）で明示し、UTF-16半開区間をプログラムで自動構築する。
 - 自然文を複数人がラベル確定した `human_verified` コーパス **ではない**。独立なholdout、統計的な汎化性能、H9の5,470件モデル評価の再現を主張しない。
 - H7のS01〜S13の分類を各2例以上含む。ほかに同じrawでも異なる意図を持つ`tokyo` / `ime` を別ラベルで採録。
 - 研究由来の具体例：H9の `kinouhastrategywakaru`、`kinouhastrategynorequirementtoiu`、`kinouhaSTRATEGYtoiu`、`korekaraknowledge.wakaru`、`dokoniakerusonomamakyouno`。元研究レポートの意図spanを、実際の連結断片から算出。
@@ -57,3 +57,10 @@ CIの `Meltia composition shadow bridge` ワークフローでも同じコマン
 5. その後にWindows TSFとMozcの実入力、編集後安定性、遅延を別レイヤーで検証する。
 
 **この評価ランナーを導入しただけでは境界精度が上がったわけではない。**
+
+
+## 評価コーパス訂正履歴
+
+- **v1.0（速報・破棄）**：初回CIの数値を確認後、`githubdeissue` の`issue`を日本語だと誤ラベルしたことを発見。速報のスコアは**比較基準から除外**する。入力意図は`github`（英字）+`de`（日本語）+`issue`（英字）。
+- **v1.1（2026-10-12）**：上記のGoldだけを訂正して、全文脈・全モデルの精度を再計測する。ケース数やraw数は変わらず、Gold英字span総数は46→47となる。
+- 今後もgold訂正が必要な場合は原因と旧数値を記録し、都合が悪いケースを削除せずに再計測する。
