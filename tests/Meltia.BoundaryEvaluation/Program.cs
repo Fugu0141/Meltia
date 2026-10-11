@@ -64,7 +64,7 @@ var report = new
     Schema = "meltia/boundary-evaluation-v1",
     EvidenceLevel = "B-offline-CSharp-synthetic-intent",
     GoldStatus = "synthetic-intent-labeled-not-human-verified",
-    CorpusVersion = "meltia-synthetic-v1",
+    CorpusVersion = "meltia-synthetic-v1.1",
     SourceNotes = new[] {
         "H7 categories: IncrementalBoundaryLab/docs/research-evaluation-standard.md (research branch)",
         "Selected H9 failure cases: IncrementalBoundaryLab/research/2026-10-10-h9-additional-evaluation.md (research/h9-followup-evaluation-20261010)",
@@ -106,6 +106,17 @@ foreach (var model in models)
             " expected=" + Show(item.GoldEnglish) + " actual=" + Show(pred.English) +
             (pred.Error is null ? "" : " error=" + pred.Error));
     }
+}
+Console.WriteLine("CATEGORY | Meltype Top1/TopK | Meltia-alone Top1/TopK | Shadow Top1/TopK");
+foreach (var category in byCategory)
+{
+    var a = category.Value["Meltype-offline"];
+    var b = category.Value["Meltia-independent"];
+    var c = category.Value["Meltia-shadow-advised"];
+    Console.WriteLine(category.Key + " | " +
+        a.ExactCases + "/" + a.Cases + " / " + a.TopKExactCases + "/" + a.Cases + " | " +
+        b.ExactCases + "/" + b.Cases + " / " + b.TopKExactCases + "/" + b.Cases + " | " +
+        c.ExactCases + "/" + c.Cases + " / " + c.TopKExactCases + "/" + c.Cases);
 }
 Console.WriteLine("Evaluation JSON: " + output);
 var errors = overall.Values.Sum(x => x.Errors);
