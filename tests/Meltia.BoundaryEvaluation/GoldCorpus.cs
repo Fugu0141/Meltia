@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Synthetic intent-labeled test suite: examples are NOT human-validated natural typing.
+// Synthetic intent-labeled test suite v1.1: examples are NOT human-validated natural typing.
 // H9/H8 study cases are cited in docs/MELTIA_BOUNDARY_EVALUATION.md.
 using Meltia.Core.Boundary;
 
@@ -44,7 +44,7 @@ internal static class GoldCorpus
     {
         var cases = new[] {
             Make("S01-commit-first", "S01-start", ("commit",true),("simasita",false)),
-            Make("S01-github-first", "S01-start", ("github",true),("deissue",false)),
+            Make("S01-github-first", "S01-start", ("github",true),("de",false),("issue",true)),
             Make("S01-network-first", "S01-start", ("network",true),("miru",false)),
             Make("S02-commit-middle", "S02-middle", ("kyouha",false),("commit",true),("simasita",false)),
             Make("S02-customer-middle", "S02-middle", ("shigotode",false),("customer",true),("ga",false)),
