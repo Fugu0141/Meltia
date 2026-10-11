@@ -209,6 +209,9 @@ foreach (var model in models)
         " languageRegionExact=" + m.LanguageRegionExactCases + "/" + m.Cases +
         " languageRegionTopK=" + m.TopKLanguageRegionExactCases + "/" + m.Cases +
         " spanGoldRecall=" + Format(m.GoldCandidateRecall) +
+        " candidateEdges=" + (m.CandidateEdges?.ToString() ?? "N/A") +
+        " candidateGoldMatchFraction=" + Format(m.CandidateGoldMatchFraction) +
+        " japaneseOnlyCandidateCases=" + (m.JapaneseOnlyCandidateCases?.ToString() ?? "N/A") +
         " switchF1=" + Format(m.SwitchF1Micro) +
         " errors=" + m.Errors);
     foreach (var item in records.Where(x => !x.Predictions.Single(p => p.Model == model)
@@ -312,6 +315,7 @@ static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
     int n = 0, exact = 0, topK = 0, regionExact = 0, regionTopK = 0;
     int goldSpans = 0, hits = 0;
     int tp = 0, fp = 0, fn = 0, errors = 0, japanese = 0, falseEnglish = 0;
+    int candidateEdges = 0, japaneseCandidateCases = 0, japaneseCandidateEdges = 0;
     var macros = new List<double>();
     foreach (var row in sample)
     {
@@ -331,12 +335,18 @@ static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
         if (p.Candidates is not null)
         {
             hits += row.GoldEnglish.Count(g => p.Candidates.Contains(g));
+            candidateEdges += p.Candidates.Count;
         }
         goldSpans += row.GoldEnglish.Count;
-        if (row.Category == "S11-japanese-only")
+        if (row.Category is "S11-japanese-only" or "R08-japanese-only")
         {
             japanese++;
             if (p.English.Count > 0) falseEnglish++;
+            if (p.Candidates is { Count: > 0 })
+            {
+                japaneseCandidateCases++;
+                japaneseCandidateEdges += p.Candidates.Count;
+            }
         }
         var truth = Switches(row.Raw.Length, row.GoldEnglish);
         var predicted = Switches(row.Raw.Length, p.English);
@@ -354,7 +364,11 @@ static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
         tp, fp, fn,
         2*tp+fp+fn > 0 ? 2.0*tp/(2*tp+fp+fn) : null,
         macros.Count > 0 ? macros.Average() : null,
-        japanese, falseEnglish);
+        japanese, falseEnglish,
+        hasCandidates ? candidateEdges : null,
+        hasCandidates && candidateEdges > 0 ? (double)hits / candidateEdges : null,
+        hasCandidates ? japaneseCandidateCases : null,
+        hasCandidates ? japaneseCandidateEdges : null);
 }
 
 internal sealed record Prediction(string Model, IReadOnlyList<Utf16Span> English,
@@ -370,4 +384,6 @@ internal sealed record Metrics(
     int GoldSpans, int? GoldCandidateHits, double? GoldCandidateRecall,
     int SwitchTP, int SwitchFP, int SwitchFN,
     double? SwitchF1Micro, double? SwitchF1Macro,
-    int JapaneseOnlyCases, int JapaneseOnlyFalseEnglishCases);
+    int JapaneseOnlyCases, int JapaneseOnlyFalseEnglishCases,
+    int? CandidateEdges, double? CandidateGoldMatchFraction,
+    int? JapaneseOnlyCandidateCases, int? JapaneseOnlyCandidateEdges);
