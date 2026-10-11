@@ -18,24 +18,24 @@ var next = engine.Analyze("ashitahaNIHONGOde", new BoundaryEvidence(EnglishWords
 Check(!next.Routes[0].EnglishSpans.Any(), "fully phonetic islands are not split");
 Check(!engine.Analyze("tokyo", new BoundaryEvidence(EnglishWords:["tokyo"])).Routes[0].EnglishSpans.Any(),
     "romaji-readable ambiguous English remains Japanese");
-Check(Has(engine.Analyze("tokyo", new BoundaryEvidence(ExplicitEnglish:[new(0,5)])),new(0,5)),
+Check(Has(engine.Analyze("tokyo", new BoundaryEvidence(ExplicitEnglish:[new Utf16Span(0, 5)])),new Utf16Span(0, 5)),
     "explicit English lock overrides ambiguity");
-Check(!engine.Analyze("tokyo", new BoundaryEvidence(ExplicitJapanese:[new(0,5)],
+Check(!engine.Analyze("tokyo", new BoundaryEvidence(ExplicitJapanese:[new Utf16Span(0, 5)],
     EnglishWords:["tokyo"])).Routes[0].EnglishSpans.Any(), "explicit Japanese lock");
 Check(Has(engine.Analyze("reflectsareta",new BoundaryEvidence(EnglishWords:["reflect"])),
-    new(0,7)), "reflect Japanese suffix");
+    new Utf16Span(0, 7)), "reflect Japanese suffix");
 Check(Has(engine.Analyze("handanwodelegatesuru",new BoundaryEvidence(EnglishWords:["delegate"])),
-    new(8,16)), "delegate in mixed romaji");
+    new Utf16Span(8, 16)), "delegate in mixed romaji");
 Check(Has(engine.Analyze("kyouhaKingGnudeSPYAIRde"),
-    new(6,13), new(15,21)), "two distinct artist-name islands");
-Check(Has(engine.Analyze("kyouhaAimerde"),new(6,11)), "unknown capitalized name");
-Check(Has(engine.Analyze("hello@example.com"),new(0,17)), "email protected");
-Check(Has(engine.Analyze("https://example.com"),new(0,19)), "URL protected");
+    new Utf16Span(6, 13), new Utf16Span(15, 21)), "two distinct artist-name islands");
+Check(Has(engine.Analyze("kyouhaAimerde"),new Utf16Span(6, 11)), "unknown capitalized name");
+Check(Has(engine.Analyze("hello@example.com"),new Utf16Span(0, 17)), "email protected");
+Check(Has(engine.Analyze("https://example.com"),new Utf16Span(0, 19)), "URL protected");
 Check(!engine.Analyze("NIHONGO").AutoCommitAllowed, "never auto commit");
 Check(engine.Analyze("to" + new string('a', 1000)).Candidates.Count<=128, "bounded input candidate set");
 Check(engine.Analyze("kyouhaKingGnudeSPYAIRde").Routes.Count<=8, "bounded paths");
 bool rejected = false;
-try { engine.Analyze("😀a",new BoundaryEvidence(ExplicitEnglish:[new(1,2)])); }
+try { engine.Analyze("😀a",new BoundaryEvidence(ExplicitEnglish:[new Utf16Span(1, 2)])); }
 catch(ArgumentException) { rejected=true; }
 Check(rejected,"surrogate pair may not be split");
 var session = new MeltiaSession(engine);
