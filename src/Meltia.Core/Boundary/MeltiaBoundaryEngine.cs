@@ -49,7 +49,10 @@ public sealed class MeltiaBoundaryEngine
         if (raw.Length > MaxInputLength) throw new ArgumentOutOfRangeException(nameof(raw));
         evidence ??= new BoundaryEvidence();
         var japanese = (evidence.ExplicitJapanese ?? []).ToArray();
-        var hard = (evidence.ExplicitEnglish ?? []).Concat(evidence.Protected ?? []).ToList();
+        // Identical explicit/protected locks are idempotent. Overlapping distinct locks
+        // are still rejected below rather than silently resolved.
+        var hard = (evidence.ExplicitEnglish ?? []).Concat(evidence.Protected ?? [])
+            .Distinct().ToList();
         foreach (var expression in new[] { ProtectedUrl, ProtectedEmail })
             foreach (Match match in expression.Matches(raw))
             {
@@ -180,7 +183,10 @@ public sealed class MeltiaBoundaryEngine
                     if (forced && edge.Span != required) continue;
                     foreach (var tail in dp[edge.Span.End])
                     {
-                        if (tail.EnglishSpans.Count >= 4) continue;
+                        // Do not impose a four-English-span cap here: mandatory locks
+                        // (including protected URLs) must survive even in long input.
+                        // Candidates are already bounded by MaxCandidates and the
+                        // DP keeps only MaxRoutes paths per input position.
                         var path = new[] { edge.Span }.Concat(tail.EnglishSpans).ToArray();
                         offers.Add(new BoundaryRoute(path, edge.Score + tail.Score - 0.3));
                     }
