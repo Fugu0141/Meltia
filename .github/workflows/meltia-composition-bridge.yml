@@ -35,10 +35,13 @@ jobs:
       - name: Build and run synthetic gold boundary evaluation (no accuracy threshold yet)
         run: |
           dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-evaluation.json
+      - name: Evaluate 530 additional synthetic robustness cases (not a blind holdout)
+        run: |
+          dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-robustness.json --suite robustness
       - name: Upload per-case boundary evaluation report even on evaluator failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: meltia-boundary-evaluation
-          path: artifacts/meltia-boundary-evaluation.json
+          path: artifacts/meltia-boundary-*.json
           if-no-files-found: warn
