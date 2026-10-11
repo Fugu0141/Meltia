@@ -5,11 +5,16 @@ using Meltia.CompositionBridge;
 using Meltia.Core.Boundary;
 using Meltia.BoundaryEvaluation;
 
-if (args.Length != 2 || args[0] != "--output" || string.IsNullOrWhiteSpace(args[1]))
+if ((args.Length != 2 && args.Length != 4) || args[0] != "--output" ||
+    string.IsNullOrWhiteSpace(args[1]) ||
+    args.Length == 4 && (args[2] != "--suite" || args[3] is not ("core" or "robustness")))
 {
-    Console.Error.WriteLine("Usage: dotnet run --project tests/Meltia.BoundaryEvaluation -- --output report.json");
+    Console.Error.WriteLine(
+        "Usage: dotnet run --project tests/Meltia.BoundaryEvaluation -- --output report.json [--suite core|robustness]");
     return 64;
 }
+string suite = args.Length == 4 ? args[3] : "core";
+var cases = suite == "robustness" ? RobustnessCorpus.Cases : GoldCorpus.Cases;
 
 var engine = new MeltiaBoundaryEngine();
 var experimental = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
@@ -17,7 +22,7 @@ var experimental = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalFragmentationPenalty: true));
 var detector = CompositionDetector.CreateDefault();
 var records = new List<CaseRecord>();
-foreach (var gold in GoldCorpus.Cases)
+foreach (var gold in cases)
 {
     var predictions = new List<Prediction>();
     try
@@ -109,7 +114,7 @@ string[] models = [
 ];
 var overall = models.ToDictionary(
     model => model, model => Aggregate(records, model));
-var byCategory = GoldCorpus.Cases.Select(x => x.Group).Distinct()
+var byCategory = cases.Select(x => x.Group).Distinct()
     .OrderBy(x => x, StringComparer.Ordinal)
     .ToDictionary(group => group,
         group => models.ToDictionary(model => model,
@@ -120,7 +125,9 @@ var report = new
     Schema = "meltia/boundary-evaluation-v1",
     EvidenceLevel = "B-offline-CSharp-synthetic-intent",
     GoldStatus = "synthetic-intent-labeled-not-human-verified",
-    CorpusVersion = "meltia-synthetic-v1.1",
+    CorpusVersion = suite == "robustness"
+        ? "meltia-H1-vocabulary-robustness-v1" : "meltia-synthetic-v1.1",
+    Suite = suite,
     EnglishDictionaryTypes = MeltypeLexiconEvidence.EnglishWordTypes,
     ProperNameTypes = MeltypeLexiconEvidence.ProperNameTypes,
     SourceNotes = new[] {
@@ -133,7 +140,8 @@ var report = new
         "Meltia-shadow-advised: includes Meltype English suggestions and protected spans; NOT an independent baseline",
         "Meltype-offline: CompositionText.Append per character + CompositionDetector.Segment; NOT Windows TSF",
         "Experimental mode: same C# core, independent opt-in host corroboration and higher per-English-span cost, not active IME",
-        "These 47 cases were already studied and are DEVELOPMENT diagnostics, not a blind holdout"
+        "Core 47 cases have already been studied and are DEVELOPMENT diagnostics, not a blind holdout",
+        "Robustness suite: 530 synthetic inputs from H1/H9 previously used 54 OOV English words and 19 Japanese phonetic words, NOT natural holdout or Python parity"
     },
     CorpusCases = records.Count,
     DistinctRaw = records.Select(x => x.Raw).Distinct(StringComparer.Ordinal).Count(),
@@ -149,7 +157,7 @@ var json = JsonSerializer.Serialize(report, new JsonSerializerOptions(JsonSerial
 var output = Path.GetFullPath(args[1]);
 Directory.CreateDirectory(Path.GetDirectoryName(output)!);
 File.WriteAllText(output, json + "\n");
-Console.WriteLine("Corpus: " + records.Count + " intent-labeled synthetic cases; " +
+Console.WriteLine("Corpus suite=" + suite + ": " + records.Count + " intent-labeled synthetic cases; " +
     report.DistinctRaw + " distinct raw inputs; " + report.GoldEnglishSpans + " gold English spans");
 foreach (var model in models)
 {
