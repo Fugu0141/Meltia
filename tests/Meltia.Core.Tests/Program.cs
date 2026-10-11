@@ -150,4 +150,41 @@ for (int i = 0; i < 300; i++)
 }
 Check(editValid, "300 seeded cursor/edit recomputations preserve raw and route");
 
+
+// Optional research mode: lexical membership alone should not reward
+// unrelated two-letter substrings inside Japanese phonetic suffixes.
+var research = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalStrongHostAdvisory: true,
+    ExperimentalFragmentationPenalty: true));
+var isolatedLexicon = research.Analyze("commitsimasita",
+    new BoundaryEvidence(EnglishWords: ["commit", "as", "it"]));
+Check(isolatedLexicon.Routes[0].EnglishSpans.SequenceEqual([new Utf16Span(0, 6)]),
+    "experimental cost keeps commit without fragmenting Japanese suffix into as/it");
+var readableAdvisory = research.Analyze("tokyo",
+    new BoundaryEvidence(MeltypeEnglish: [new Utf16Span(0, 5)]));
+Check(readableAdvisory.Routes[0].EnglishSpans.Count == 0,
+    "experiment does not force readable lowercase Japanese romanization to English");
+var romajiUpperAdvisory = research.Analyze("NIHONGO",
+    new BoundaryEvidence(MeltypeEnglish: [new Utf16Span(0, 7)]));
+Check(romajiUpperAdvisory.Routes[0].EnglishSpans.Count == 0,
+    "experiment does not promote all-capitals long Japanese word");
+var strongAdvisory = research.Analyze("commit",
+    new BoundaryEvidence(MeltypeEnglish: [new Utf16Span(0, 6)]));
+Check(strongAdvisory.Routes[0].EnglishSpans.SequenceEqual([new Utf16Span(0, 6)]),
+    "experiment promotes non-phonetic host English evidence");
+var shortUpper = research.Analyze("IME",
+    new BoundaryEvidence(MeltypeEnglish: [new Utf16Span(0, 3)]));
+Check(shortUpper.Routes[0].EnglishSpans.SequenceEqual([new Utf16Span(0, 3)]),
+    "experiment recognizes host-identified short uppercase acronym");
+var swallowed = research.Analyze("kyouhaKingGnudeSPYAIRde",
+    new BoundaryEvidence(MeltypeEnglish: [new Utf16Span(0, 23)]));
+Check(!swallowed.Routes[0].EnglishSpans.Contains(new Utf16Span(0, 23)),
+    "experiment refuses whole-sentence lowercase+uppercase host swallowing");
+Check(research.Analyze("tokyo",
+    new BoundaryEvidence(ExplicitEnglish: [new Utf16Span(0, 5)])).Routes[0]
+        .EnglishSpans.SequenceEqual([new Utf16Span(0, 5)]),
+    "explicit user English lock still takes precedence in research mode");
+Check(!research.Analyze("commit").AutoCommitAllowed,
+    "experimental routing is never allowed to commit text");
+
 Console.WriteLine($"ALL PASS {passed}");
