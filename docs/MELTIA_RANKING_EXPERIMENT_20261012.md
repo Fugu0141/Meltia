@@ -50,7 +50,7 @@ var research = new MeltiaBoundaryEngine(
 - 基本の非侵襲性（`AutoCommitAllowed=false`）、UTF-16整合性、複数必須span、編集のプロパティテストは変更せず実行。
 - `NIHONGO` /`KURU` と`IME` /`commit`の相反する入力、単純辞書部分一致`commitsimasita`、Meltypeが混在文全体を英語にしたケースを追加契約化。
 - [評価エントリ](../tests/Meltia.BoundaryEvaluation/Program.cs) は `--suite core` (47件) と `--suite robustness` (530件) の2モード。各方式のケース、候補、Top-K、区間F1を別JSON artifactに保存。
-- `Meltia-penalty-only-shadow` と`Meltia-host-only-shadow` のアブレーションを両セットで測定。各方式で例外が出たらCI失敗。**ただし精度合格閾値の固定はまだしていない。**
+- `Meltia-penalty-only-shadow` と`Meltia-host-only-shadow` のアブレーションを両セットで測定。各方式で例外が出たらCI失敗。**実験方式が既定シャドーより日本語のみの誤英語判定を増やした場合もCI失敗**とする。研究済みデータに合わせたTop1精度閾値は設けない。
 
 ```bash
 dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-evaluation.json --suite core
