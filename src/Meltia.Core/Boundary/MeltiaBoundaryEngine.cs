@@ -188,7 +188,12 @@ public sealed class MeltiaBoundaryEngine
         // an instruction to show or commit English in the user's IME.
         if (_options.ExperimentalUnknownLatinCandidates)
             foreach (var edge in MeltiaUnknownLatinCandidates.Generate(raw))
-                Add(edge.Span, edge.Origin, edge.Score);
+            {
+                // H10 adds hypotheses; it must never alter the provenance or
+                // ranking of an existing lexicon / Meltype / capitalization edge.
+                if (!bySpan.ContainsKey(edge.Span))
+                    Add(edge.Span, edge.Origin, edge.Score);
+            }
 
         // Mandatory spans survive pruning. All other proposals may be truncated.
         var mandatoryCandidates = bySpan.Values.Where(x => x.Mandatory)
@@ -196,7 +201,10 @@ public sealed class MeltiaBoundaryEngine
         if (mandatoryCandidates.Count > MaxCandidates)
             throw new ArgumentException("Too many mandatory ranges");
         var remaining = bySpan.Values.Where(x => !x.Mandatory)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.Span.Start).ThenBy(x => x.Span.End)
+            // Preserve previously ranked host/lexicon candidates before
+            // admitting speculative H10 edges under the bounded candidate cap.
+            .OrderBy(x => x.Origin == "h10-unknown-latin-provisional" ? 1 : 0)
+            .ThenByDescending(x => x.Score).ThenBy(x => x.Span.Start).ThenBy(x => x.Span.End)
             .Take(MaxCandidates - mandatoryCandidates.Count).ToList();
         var candidates = mandatoryCandidates.Concat(remaining)
             .OrderBy(x => x.Span.Start).ThenBy(x => x.Span.End).ToArray();
