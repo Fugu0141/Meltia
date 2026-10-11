@@ -2,7 +2,7 @@
 namespace Meltia.Core.Boundary;
 
 /// <summary>
-/// H10 research: bounded, dictionary-independent *proposal* generator.
+/// Meltia v0.7 research: bounded, dictionary-independent *proposal* generator.
 /// It does not infer user intent or alter the current Japanese/English route.
 /// A romaji-readable stream is a strong negative control; no English spans
 /// are generated solely from substring spelling in such a stream.
@@ -77,7 +77,7 @@ internal static class MeltiaUnknownLatinCandidates
 
                     yield return new BoundaryCandidate(
                         new Utf16Span(run.Index + start, run.Index + end),
-                        "h10-unknown-latin-provisional", score);
+                        "v0.7-unknown-latin-provisional", score);
                 }
             }
         }
