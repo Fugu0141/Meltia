@@ -11,7 +11,7 @@
 - **IME としての完成度** — 入力・確定・取り消し・学習・辞書との連携を検証
 - **検証可能な改善** — 精度だけでなく誤判定の種類、遅延、安定性も記録
 
-境界判定方式は [IncrementalBoundaryLab](https://github.com/Fugu0141/IncrementalBoundaryLab) で研究中です。**Meltia への統合は今後の計画であり、現在のコードでの動作を保証するものではありません。**
+境界判定方式は [IncrementalBoundaryLab](https://github.com/Fugu0141/IncrementalBoundaryLab) で研究中です。現在、独立した [Meltia Coreのv0.5相当の境界診断試作](docs/MELTIA_CORE_V05_PORT.md) と、[Meltypeの実装に直接つながる読み取り専用アダプター](docs/MELTIA_SHADOW_COMPOSITION_BRIDGE.md) を開発しています。**既定IMEの自動変換には未導入**で、Windows TSF上の実測精度・安定性も未検証です。
 
 ## 現在の状態と今後
 

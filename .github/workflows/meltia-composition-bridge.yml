@@ -1,0 +1,32 @@
+name: Meltia composition shadow bridge
+on:
+  push:
+    paths:
+      - 'src/Meltia.CompositionBridge/**'
+      - 'tests/Meltia.CompositionBridge.Tests/**'
+      - 'src/Meltia.Core/**'
+      - 'src/Meltype.Core/**'
+      - '.github/workflows/meltia-composition-bridge.yml'
+  pull_request:
+    paths:
+      - 'src/Meltia.CompositionBridge/**'
+      - 'tests/Meltia.CompositionBridge.Tests/**'
+      - 'src/Meltia.Core/**'
+      - 'src/Meltype.Core/**'
+      - '.github/workflows/meltia-composition-bridge.yml'
+permissions:
+  contents: read
+jobs:
+  bridge-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build actual Meltype + Meltia reference bridge
+        run: dotnet build src/Meltia.CompositionBridge/Meltia.CompositionBridge.csproj -c Release --nologo
+      - name: Run read-only bridge contract tests
+        run: dotnet run --project tests/Meltia.CompositionBridge.Tests/Meltia.CompositionBridge.Tests.csproj -c Release
+      - name: Keep base boundary regression coverage
+        run: dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
