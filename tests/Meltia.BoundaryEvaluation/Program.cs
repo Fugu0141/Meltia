@@ -12,6 +12,9 @@ if (args.Length != 2 || args[0] != "--output" || string.IsNullOrWhiteSpace(args[
 }
 
 var engine = new MeltiaBoundaryEngine();
+var experimental = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalStrongHostAdvisory: true,
+    ExperimentalFragmentationPenalty: true));
 var detector = CompositionDetector.CreateDefault();
 var records = new List<CaseRecord>();
 foreach (var gold in GoldCorpus.Cases)
@@ -29,12 +32,31 @@ foreach (var gold in GoldCorpus.Cases)
 
     try
     {
+        var experiment = experimental.Analyze(gold.Raw);
+        predictions.Add(FromCore("Meltia-experimental-independent", experiment));
+    }
+    catch (Exception ex)
+    {
+        predictions.Add(Error("Meltia-experimental-independent", ex));
+    }
+
+    try
+    {
         var matched = engine.Analyze(gold.Raw, MeltypeLexiconEvidence.For(gold.Raw));
         predictions.Add(FromCore("Meltia-lexicon-matched", matched));
     }
     catch (Exception ex)
     {
         predictions.Add(Error("Meltia-lexicon-matched", ex));
+    }
+    try
+    {
+        var matched = experimental.Analyze(gold.Raw, MeltypeLexiconEvidence.For(gold.Raw));
+        predictions.Add(FromCore("Meltia-experimental-lexicon", matched));
+    }
+    catch (Exception ex)
+    {
+        predictions.Add(Error("Meltia-experimental-lexicon", ex));
     }
 
     try
@@ -57,18 +79,34 @@ foreach (var gold in GoldCorpus.Cases)
             englishWords: matchedEvidence.EnglishWords,
             properNames: matchedEvidence.ProperNames);
         predictions.Add(FromCore("Meltia-shadow-lexicon-matched", matchedShadow.Meltia));
+        var experimentalShadow = MeltypeBoundaryShadowBridge.CompareSegments(
+            gold.Raw, segments, experimental);
+        predictions.Add(FromCore("Meltia-experimental-shadow", experimentalShadow.Meltia));
+        var experimentalMatchedShadow = MeltypeBoundaryShadowBridge.CompareSegments(
+            gold.Raw, segments, experimental,
+            englishWords: matchedEvidence.EnglishWords,
+            properNames: matchedEvidence.ProperNames);
+        predictions.Add(FromCore("Meltia-experimental-shadow-lexicon",
+            experimentalMatchedShadow.Meltia));
     }
     catch (Exception ex)
     {
         predictions.Add(Error("Meltype-offline", ex));
         predictions.Add(Error("Meltia-shadow-advised", ex));
         predictions.Add(Error("Meltia-shadow-lexicon-matched", ex));
+        predictions.Add(Error("Meltia-experimental-shadow", ex));
+        predictions.Add(Error("Meltia-experimental-shadow-lexicon", ex));
     }
     records.Add(new CaseRecord(gold.Id, gold.Group, gold.Raw, gold.EnglishSpans, predictions));
 }
 
-string[] models = ["Meltype-offline", "Meltia-independent", "Meltia-lexicon-matched",
-    "Meltia-shadow-advised", "Meltia-shadow-lexicon-matched"];
+string[] models = [
+    "Meltype-offline",
+    "Meltia-independent", "Meltia-lexicon-matched",
+    "Meltia-shadow-advised", "Meltia-shadow-lexicon-matched",
+    "Meltia-experimental-independent", "Meltia-experimental-lexicon",
+    "Meltia-experimental-shadow", "Meltia-experimental-shadow-lexicon"
+];
 var overall = models.ToDictionary(
     model => model, model => Aggregate(records, model));
 var byCategory = GoldCorpus.Cases.Select(x => x.Group).Distinct()
@@ -93,7 +131,9 @@ var report = new
         "Meltia-lexicon-matched: English and proper names from same embedded Meltype files, filtered by raw occurrence, no gold labels",
         "Meltia-shadow-lexicon-matched: same evidence plus Meltype segmentation; an assisted comparison, NOT independent",
         "Meltia-shadow-advised: includes Meltype English suggestions and protected spans; NOT an independent baseline",
-        "Meltype-offline: CompositionText.Append per character + CompositionDetector.Segment; NOT Windows TSF"
+        "Meltype-offline: CompositionText.Append per character + CompositionDetector.Segment; NOT Windows TSF",
+        "Experimental mode: same C# core, independent opt-in host corroboration and higher per-English-span cost, not active IME",
+        "These 47 cases were already studied and are DEVELOPMENT diagnostics, not a blind holdout"
     },
     CorpusCases = records.Count,
     DistinctRaw = records.Select(x => x.Raw).Distinct(StringComparer.Ordinal).Count(),
