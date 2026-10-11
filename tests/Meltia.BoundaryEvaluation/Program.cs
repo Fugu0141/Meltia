@@ -258,6 +258,31 @@ foreach (var model in new[] {
 }
 Console.WriteLine("PASS Japanese-only negative-control nonregression (" +
     overall["Meltype-offline"].JapaneseOnlyCases + " synthetic cases)");
+
+// Unlike a post-hoc numerical accuracy threshold, these are semantic H10
+// contracts: adding *provisional* hypotheses must never discard an old
+// gold candidate or add extra English candidates to fully phonetic Japanese.
+foreach (var (h10, reference) in new[] {
+    ("Meltia-H10-independent", "Meltia-experimental-independent"),
+    ("Meltia-H10-lexicon", "Meltia-experimental-lexicon"),
+    ("Meltia-H10-shadow", "Meltia-experimental-shadow"),
+    ("Meltia-H10-shadow-lexicon", "Meltia-experimental-shadow-lexicon")
+})
+{
+    var newer = overall[h10];
+    var older = overall[reference];
+    if (newer.GoldCandidateHits < older.GoldCandidateHits ||
+        newer.JapaneseOnlyCandidateEdges > older.JapaneseOnlyCandidateEdges)
+    {
+        Console.Error.WriteLine("H10 CONSERVATIVE CANDIDATE REGRESSION: " +
+            h10 + " goldHits=" + newer.GoldCandidateHits +
+            " baseline=" + older.GoldCandidateHits +
+            " japaneseCandidates=" + newer.JapaneseOnlyCandidateEdges +
+            " baseline=" + older.JapaneseOnlyCandidateEdges);
+        return 4;
+    }
+}
+Console.WriteLine("PASS H10 candidate inclusion and Japanese-only candidate burden");
 var errors = overall.Values.Sum(x => x.Errors);
 if (errors > 0)
 {
