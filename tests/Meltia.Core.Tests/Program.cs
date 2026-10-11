@@ -191,4 +191,46 @@ Check(research.Analyze("tokyo",
 Check(!research.Analyze("commit").AutoCommitAllowed,
     "experimental routing is never allowed to commit text");
 
+// H10 independent candidate generation. This deliberately tests whether the
+// *candidate exists*, not whether English user intent is already inferred.
+// Untyped Japanese remains untouched, and old mode remains byte-for-byte stable.
+var h10 = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalFragmentationPenalty: true,
+    ExperimentalUnknownLatinCandidates: true));
+bool Proposed(BoundaryResult result, int start, int end) =>
+    result.Candidates.Any(x =>
+        x.Span == new Utf16Span(start, end) &&
+        x.Origin == "h10-unknown-latin-provisional");
+Check(Proposed(h10.Analyze("kinouhastrategywakaru"), 7, 15),
+    "H10 exposes unknown strategy inside Japanese flanks");
+var h10Two = h10.Analyze("kinouhastrategynorequirementtoiu");
+Check(Proposed(h10Two, 7, 15) && Proposed(h10Two, 17, 28),
+    "H10 retains two independent unknown English islands");
+Check(Proposed(h10.Analyze("korekaraknowledge.wakaru"), 8, 17),
+    "H10 stops the unknown English span before a punctuation mark");
+Check(!h10.Analyze("dokoniakerusonomamakyouno").Candidates
+    .Any(x => x.Origin == "h10-unknown-latin-provisional"),
+    "H10 never splits completely phonetic Japanese sample");
+Check(!h10.Analyze("nihongo").Candidates
+    .Any(x => x.Origin == "h10-unknown-latin-provisional"),
+    "H10 leaves simple Japanese phonetic sequence unchanged");
+Check(!engine.Analyze("kinouhastrategywakaru").Candidates
+    .Any(x => x.Origin == "h10-unknown-latin-provisional"),
+    "H10 remains disabled by default");
+var h10Ambiguous = h10.Analyze("tokyo");
+Check(!h10Ambiguous.Routes[0].EnglishSpans.Any() &&
+      !h10Ambiguous.Candidates.Any(x => x.Origin == "h10-unknown-latin-provisional"),
+    "H10 does not hallucinate an English label for ambiguous Tokyo");
+Check(!h10.Analyze("kinouhastrategywakaru").AutoCommitAllowed,
+    "H10 hypotheses can never auto-commit to an application");
+var h10Repeat = h10.Analyze("kinouhastrategynorequirementtoiu");
+Check(h10Repeat.Candidates.SequenceEqual(h10Two.Candidates) &&
+      h10Repeat.Routes.Count == h10Two.Routes.Count &&
+      h10Repeat.Routes.Zip(h10Two.Routes,
+          (a, b) => a.Score.Equals(b.Score) &&
+                    a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(x => x),
+    "H10 candidate lattice and Top-K ordering are deterministic");
+Check(h10.Analyze(new string('b', 1000)).Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates,
+    "H10 skips enormous ASCII runs within explicit complexity bound");
+
 Console.WriteLine($"ALL PASS {passed}");
