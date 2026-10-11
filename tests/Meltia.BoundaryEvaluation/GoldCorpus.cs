@@ -14,7 +14,7 @@ internal static class GoldCorpus
 
     // Build raw and [start,end) from independent labeled chunks. This prevents
     // the off-by-one errors identified in the earlier H9 research reports.
-    private static GoldCase Make(string id, string group, params (string Text, bool English)[] pieces)
+    internal static GoldCase Make(string id, string group, params (string Text, bool English)[] pieces)
     {
         if (pieces.Length == 0) throw new ArgumentException("No gold chunks");
         var spans = new List<Utf16Span>();
