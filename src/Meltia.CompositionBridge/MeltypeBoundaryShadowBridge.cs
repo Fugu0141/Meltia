@@ -83,7 +83,19 @@ public static class MeltypeBoundaryShadowBridge
         var evidence = FromSegments(raw, meltypeSegments, englishWords, properNames,
             explicitEnglish, explicitJapanese);
         var result = (engine ?? new MeltiaBoundaryEngine()).Analyze(raw, evidence);
-        var host = evidence.MeltypeEnglish ?? [];
+        // Keep the host's actual English decision separate from the advisory
+        // evidence we feed to Meltia. Protected English spans are mandatory and
+        // therefore absent from MeltypeEnglish, but MUST be included here when
+        // comparing full host output to the best Meltia route.
+        var host = new List<Utf16Span>();
+        var hostOffset = 0;
+        foreach (var segment in meltypeSegments)
+        {
+            var end = hostOffset + segment.Raw.Length;
+            if (segment.IsEnglish && end > hostOffset)
+                host.Add(new Utf16Span(hostOffset, end));
+            hostOffset = end;
+        }
         // An exact ordered comparison: adjacent words, missing spans and
         // larger-than-intended English spans must not be treated as equal.
         var exact = result.Routes.Count > 0 &&
