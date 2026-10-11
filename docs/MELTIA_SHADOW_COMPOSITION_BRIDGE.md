@@ -6,7 +6,7 @@
 
 - `src/Meltia.CompositionBridge`: Meltype.Core + Meltia.Coreへのプロジェクト参照。既存アプリのプロジェクトからは参照しません。
 - `MeltypeBoundaryShadowBridge.FromSegments`: 実際のMeltype分割のRawを検証し、英語区間・保護区間をUTF-16半開区間へ変換。
-- `CompareSegments`: P1/H系の知見による保留候補とMeltypeの分割候補を別々に保存し、最上位経路の一致を診断。
+- `CompareSegments`: P1/H系の知見による保留候補とMeltypeの分割候補を別々に保存し、最上位経路の一致を診断。比較対象にはMeltype側の`IsEnglish=true`な保護区間も含め、アドバイザリー証拠の一覧と混同しない。
 - `CompareDetector`: `CompositionDetector.Segment` をオフラインで呼び、その結果を読み取り専用で比較。
 - `tests/Meltia.CompositionBridge.Tests`: 日英混在、2固有名詞、`tokyo`、編集向け原文座標、絵文字、URL、ユーザーロック、誤った分割の棄却。
 - `.github/workflows/meltia-composition-bridge.yml`: .NET 10のビルドと橋渡しテストをGitHub Actionsで実行。
