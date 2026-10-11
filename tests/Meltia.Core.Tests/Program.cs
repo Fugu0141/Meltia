@@ -197,6 +197,13 @@ Check(!research.Analyze("commit").AutoCommitAllowed,
 var h10 = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalFragmentationPenalty: true,
     ExperimentalUnknownLatinCandidates: true));
+var h10DefaultPenalty = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true));
+Check(h10DefaultPenalty.Analyze("kinouhastrategywakaru").Routes[0].EnglishSpans.Count == 0,
+    "H10 enables cautious fragment penalty even when caller did not request it");
+Check(h10DefaultPenalty.Analyze("kinouhastrategywakaru").Routes[0].EnglishSpans
+        .SequenceEqual(h10.Analyze("kinouhastrategywakaru").Routes[0].EnglishSpans),
+    "H10 implicit safety cost matches explicit candidate mode");
 bool Proposed(BoundaryResult result, int start, int end) =>
     result.Candidates.Any(x =>
         x.Span == new Utf16Span(start, end) &&
