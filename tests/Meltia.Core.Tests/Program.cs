@@ -50,4 +50,104 @@ Check(session.Analyze(["go"]).Routes[0].EnglishSpans.SequenceEqual(before.Routes
 session.Clear();
 session.Insert("😀a"); session.MoveCaret(2); session.Backspace();
 Check(session.Raw=="a", "UTF-16-aware backspace");
+
+// Regression: long mixed sentences can contain more than four protected/locked
+// Latin islands. Dropping the fifth mandatory span used to make DP impossible.
+var sixEnglish = "ok ok ok ok ok ok ";
+var sixLocks = Enumerable.Range(0, 6).Select(i => new Utf16Span(3 * i, 3 * i + 2)).ToArray();
+var sixResult = engine.Analyze(sixEnglish, new BoundaryEvidence(ExplicitEnglish: sixLocks));
+Check(sixResult.Routes[0].EnglishSpans.SequenceEqual(sixLocks),
+    "six independent explicit English spans survive the route search");
+Check(sixResult.Routes.Count <= MeltiaBoundaryEngine.MaxRoutes && !sixResult.AutoCommitAllowed,
+    "long mandatory route remains bounded and never commits");
+var sameLock = new Utf16Span(0, 5);
+var duplicateLocks = engine.Analyze("tokyo", new BoundaryEvidence(
+    ExplicitEnglish: [sameLock, sameLock], Protected: [sameLock]));
+Check(duplicateLocks.Routes[0].EnglishSpans.SequenceEqual([sameLock]),
+    "identical explicit and protected locks are idempotent");
+bool overlapRejected = false;
+try { engine.Analyze("abcdef", new BoundaryEvidence(
+    ExplicitEnglish: [new Utf16Span(0, 4), new Utf16Span(2, 6)])); }
+catch (ArgumentException) { overlapRejected = true; }
+Check(overlapRejected, "distinct overlapping mandatory spans are still rejected");
+var urlToken = "https://a.co";
+var sixUrls = string.Join(" ", Enumerable.Repeat(urlToken, 6));
+var sixUrlSpans = Enumerable.Range(0, 6)
+    .Select(i => new Utf16Span(i * (urlToken.Length + 1),
+        i * (urlToken.Length + 1) + urlToken.Length)).ToArray();
+var manyUrls = engine.Analyze(sixUrls);
+Check(manyUrls.Routes[0].EnglishSpans.SequenceEqual(sixUrlSpans),
+    "six separate protected URLs retain their original raw boundaries");
+
+// Seeded metamorphic evaluation: deterministic read-only output, ordered
+// non-overlapping valid UTF-16 spans, and no loss of raw input over 300 samples.
+// These are invariant checks, NOT 300 human-labeled accuracy measurements.
+var seed = new Random(20261012);
+var fragments = new[] { "ni", "hon", "go", "Tokyo", "SPYAIR", "あ",
+    "😀", " ", "https://a.co", "-", "ga", "de", "KingGnu" };
+var invariantOk = true;
+for (int sample = 0; sample < 300; sample++)
+{
+    var rawSample = string.Concat(Enumerable.Range(0, seed.Next(1, 13))
+        .Select(_ => fragments[seed.Next(fragments.Length)]));
+    var evidenceSample = new BoundaryEvidence(EnglishWords: ["go", "tokyo", "SPYAIR"]);
+    var a = engine.Analyze(rawSample, evidenceSample);
+    var b = engine.Analyze(rawSample, evidenceSample);
+    invariantOk &= a.Raw == rawSample && b.Raw == rawSample
+        && !a.AutoCommitAllowed && !b.AutoCommitAllowed
+        && a.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates
+        && a.Routes.Count is > 0 and <= MeltiaBoundaryEngine.MaxRoutes
+        && a.Routes.Count == b.Routes.Count;
+    if (!invariantOk) break;
+    for (int j = 0; j < a.Routes.Count; j++)
+    {
+        var left = a.Routes[j];
+        var right = b.Routes[j];
+        invariantOk &= left.Score.Equals(right.Score)
+            && left.EnglishSpans.SequenceEqual(right.EnglishSpans);
+        var previousEnd = 0;
+        foreach (var span in left.EnglishSpans)
+        {
+            invariantOk &= span.Start >= previousEnd && span.End <= rawSample.Length
+                && span.Start < span.End
+                && !(span.Start > 0 && span.Start < rawSample.Length &&
+                     char.IsHighSurrogate(rawSample[span.Start - 1]) &&
+                     char.IsLowSurrogate(rawSample[span.Start]))
+                && !(span.End > 0 && span.End < rawSample.Length &&
+                     char.IsHighSurrogate(rawSample[span.End - 1]) &&
+                     char.IsLowSurrogate(rawSample[span.End]));
+            previousEnd = span.End;
+        }
+    }
+    if (!invariantOk) break;
+}
+Check(invariantOk, "300 seeded mixed-script invariant and determinism cases");
+
+var editSession = new MeltiaSession(engine);
+var editRandom = new Random(20261013);
+var editValid = true;
+for (int i = 0; i < 300; i++)
+{
+    var movePositions = Enumerable.Range(0, editSession.Raw.Length + 1)
+        .Where(x => x == 0 || x == editSession.Raw.Length ||
+            !(char.IsHighSurrogate(editSession.Raw[x - 1]) &&
+              char.IsLowSurrogate(editSession.Raw[x]))).ToArray();
+    editSession.MoveCaret(movePositions[editRandom.Next(movePositions.Length)]);
+    switch (editRandom.Next(3))
+    {
+        case 0:
+            var insert = fragments[editRandom.Next(fragments.Length)];
+            if (editSession.Raw.Length + insert.Length < MeltiaBoundaryEngine.MaxInputLength)
+                editSession.Insert(insert);
+            break;
+        case 1: editSession.Backspace(); break;
+        case 2: editSession.DeleteForward(); break;
+    }
+    var state = editSession.Analyze(["go", "tokyo"]);
+    editValid &= state.Raw == editSession.Raw && !state.AutoCommitAllowed
+        && state.Routes.Count > 0;
+    if (!editValid) break;
+}
+Check(editValid, "300 seeded cursor/edit recomputations preserve raw and route");
+
 Console.WriteLine($"ALL PASS {passed}");
