@@ -30,7 +30,8 @@ public sealed record BoundaryEvidence(
 // Explicit opt-in for offline experiments. Default remains the v0.5 behavior.
 // This is NOT wired to the active Meltype TSF/composition host.
 public sealed record MeltiaBoundaryOptions(
-    bool ExperimentalStrongHostAdvisory = false);
+    bool ExperimentalStrongHostAdvisory = false,
+    bool ExperimentalFragmentationPenalty = false);
 
 /// <summary>
 /// v0.5 parallel boundary engine. No changes to Meltype composition/TSF or commit behavior.
@@ -179,7 +180,11 @@ public sealed class MeltiaBoundaryEngine
             .Take(MaxCandidates - mandatoryCandidates.Count).ToList();
         var candidates = mandatoryCandidates.Concat(remaining)
             .OrderBy(x => x.Span.Start).ThenBy(x => x.Span.End).ToArray();
-        var routes = BuildRoutes(raw.Length, candidates, hard);
+        // The original 0.3/span favors chaining many small lexical hits;
+        // research mode charges roughly the base score of a short dictionary
+        // word to discourage gratuitous language switches. Defaults unchanged.
+        var perSpanCost = _options.ExperimentalFragmentationPenalty ? 4.5 : 0.3;
+        var routes = BuildRoutes(raw.Length, candidates, hard, perSpanCost);
         return new BoundaryResult(raw, candidates, routes, bySpan.Count > MaxCandidates);
     }
 
@@ -209,7 +214,8 @@ public sealed class MeltiaBoundaryEngine
     }
 
     private static IReadOnlyList<BoundaryRoute> BuildRoutes(
-        int length, IReadOnlyList<BoundaryCandidate> candidates, IReadOnlyList<Utf16Span> mandatory)
+        int length, IReadOnlyList<BoundaryCandidate> candidates,
+        IReadOnlyList<Utf16Span> mandatory, double perSpanCost)
     {
         var byStart = candidates.GroupBy(x => x.Span.Start)
             .ToDictionary(g => g.Key, g => g.ToArray());
@@ -233,7 +239,7 @@ public sealed class MeltiaBoundaryEngine
                         // Candidates are already bounded by MaxCandidates and the
                         // DP keeps only MaxRoutes paths per input position.
                         var path = new[] { edge.Span }.Concat(tail.EnglishSpans).ToArray();
-                        offers.Add(new BoundaryRoute(path, edge.Score + tail.Score - 0.3));
+                        offers.Add(new BoundaryRoute(path, edge.Score + tail.Score - perSpanCost));
                     }
                 }
             dp[index] = offers.OrderByDescending(x => x.Score)
