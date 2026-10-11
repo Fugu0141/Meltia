@@ -48,6 +48,18 @@ public sealed class MeltiaBoundaryEngine
     public MeltiaBoundaryEngine(MeltiaBoundaryOptions? options = null) =>
         _options = options ?? new MeltiaBoundaryOptions();
 
+    // Short uppercase text can be valid Japanese romaji (e.g. KURU).
+    // Only these conventional technical acronyms override that ambiguity
+    // without an explicit language lock; extend via dictionaries in future.
+    private static readonly HashSet<string> CommonTechnicalAcronyms =
+        new(StringComparer.Ordinal)
+        {
+            "AI", "API", "BIOS", "CLI", "CPU", "CSS", "DNS", "GPU",
+            "HTML", "HTTP", "IDE", "IME", "JS", "JSON", "LAN",
+            "OS", "RAM", "SDK", "SQL", "SSD", "TSF", "UI",
+            "URL", "USB", "UTF", "XML"
+        };
+
     private static readonly string[] Particles = ["shimasu", "shita", "sareta", "suru",
         "desu", "kara", "made", "noni", "noto", "de", "ga", "no", "wo", "ni", "ha", "to"];
     private static readonly Regex AsciiRuns = new("[A-Za-z]+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -204,7 +216,8 @@ public sealed class MeltiaBoundaryEngine
             return conservative;
         // Explicitly typed short uppercase acronyms carry evidence that their
         // lower-case counterpart does not (e.g. IME vs ime).
-        if (token.Length <= 5 && token.All(char.IsAsciiLetterUpper))
+        if (token.Length <= 5 && token.All(char.IsAsciiLetterUpper) &&
+            CommonTechnicalAcronyms.Contains(token))
             return 5.0;
         // An unreadable Latin token is stronger evidence than a dictionary
         // substring. However it is still only a reversible preview hypothesis.
