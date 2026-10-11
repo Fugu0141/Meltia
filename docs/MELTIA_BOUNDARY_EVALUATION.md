@@ -32,6 +32,7 @@
 
 - `ExactCases`: 英語span集合が完全一致した **ケース数**（英語のみ・日本語のみも分母に含める）。単語間の隣接spanの分割も区別。
 - `TopKExactCases`: 候補経路のいずれかが全gold spanと一致したケース数。MeltypeはTop1のみ。
+- `LanguageRegionExactCases` / `TopKLanguageRegionExactCases`: 連続する英語単語spanを1つの英語**言語領域**に結合してから、Top1 / TopK完全一致を測る。英語単語同士の境界が誤りでも言語切替が正しければこちらは正答。S06のような隣接英単語を、単語境界と日英切替境界の両方で同じ得点として数えないための別指標。
 - `GoldCandidateRecall`: 候補一覧に含まれた英語gold span数 / gold英語span総数。Meltypeには候補一覧がないため **N/A**。Meltiaは枝刈り後の診断候補であり、生候補Recallを主張しない。
 - `SwitchF1Micro`: 内部の英語/非英語の文字境界で計測したmicro F1。文頭0と文末lenは境界に含めず、隣接英単語の**同言語**語彙境界は切替に含めない。
 - `SwitchF1Macro`: (TP、FP、FN)に少なくとも1つが存在するケースだけのmacro F1。どのケースも切替が無い場合は **N/A**。
