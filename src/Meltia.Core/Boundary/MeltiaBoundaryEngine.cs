@@ -27,6 +27,11 @@ public sealed record BoundaryEvidence(
     IReadOnlyList<Utf16Span>? ExplicitJapanese = null,
     IReadOnlyList<Utf16Span>? Protected = null);
 
+// Explicit opt-in for offline experiments. Default remains the v0.5 behavior.
+// This is NOT wired to the active Meltype TSF/composition host.
+public sealed record MeltiaBoundaryOptions(
+    bool ExperimentalStrongHostAdvisory = false);
+
 /// <summary>
 /// v0.5 parallel boundary engine. No changes to Meltype composition/TSF or commit behavior.
 /// Keeps ambiguous lexical matches as candidates without allowing them to fragment
@@ -37,6 +42,11 @@ public sealed class MeltiaBoundaryEngine
     public const int MaxInputLength = 1024;
     public const int MaxCandidates = 128;
     public const int MaxRoutes = 8;
+    private readonly MeltiaBoundaryOptions _options;
+
+    public MeltiaBoundaryEngine(MeltiaBoundaryOptions? options = null) =>
+        _options = options ?? new MeltiaBoundaryOptions();
+
     private static readonly string[] Particles = ["shimasu", "shita", "sareta", "suru",
         "desu", "kara", "made", "noni", "noto", "de", "ga", "no", "wo", "ni", "ha", "to"];
     private static readonly Regex AsciiRuns = new("[A-Za-z]+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -79,7 +89,17 @@ public sealed class MeltiaBoundaryEngine
                 !old.Mandatory && score > old.Score) bySpan[span] = next;
         }
         foreach (var span in hard) Add(span, "user-or-protected", 100, true);
-        foreach (var span in evidence.MeltypeEnglish ?? []) Add(span, "meltype-advisory", -0.2);
+        foreach (var span in evidence.MeltypeEnglish ?? [])
+        {
+            // In the default mode, host output is ONLY a provisional candidate.
+            // Optional experiment: prioritize host suggestions when the token has
+            // strong orthographic evidence that it is not Japanese romaji.
+            // An embedded CamelCase transition with a lowercase prefix is NOT
+            // such evidence (Meltype may have swallowed a full mixed sentence).
+            double advisoryScore = ExperimentalHostScore(raw, span);
+            Add(span, advisoryScore > 0 ? "meltype-strong-advisory" : "meltype-advisory",
+                advisoryScore);
+        }
 
         var words = (evidence.EnglishWords ?? []).Concat(evidence.ProperNames ?? [])
             .Where(x => x is { Length: >= 2 and <= 72 } && x.All(char.IsAsciiLetter))
@@ -161,6 +181,31 @@ public sealed class MeltiaBoundaryEngine
             .OrderBy(x => x.Span.Start).ThenBy(x => x.Span.End).ToArray();
         var routes = BuildRoutes(raw.Length, candidates, hard);
         return new BoundaryResult(raw, candidates, routes, bySpan.Count > MaxCandidates);
+    }
+
+    private double ExperimentalHostScore(string raw, Utf16Span span)
+    {
+        const double conservative = -0.2;
+        if (!_options.ExperimentalStrongHostAdvisory ||
+            span.Start < 0 || span.End > raw.Length || span.Start >= span.End)
+            return conservative;
+        var token = raw.Substring(span.Start, span.Length);
+        if (token.Length > 72 || token.Length < 2 || !token.All(char.IsAsciiLetter))
+            return conservative;
+        // Do not promote a whole mixed-script romanized stream just because
+        // the old engine returned it as one English segment.
+        if (char.IsAsciiLetterLower(token[0]) &&
+            token.Any(char.IsAsciiLetterUpper))
+            return conservative;
+        // Explicitly typed short uppercase acronyms carry evidence that their
+        // lower-case counterpart does not (e.g. IME vs ime).
+        if (token.Length <= 5 && token.All(char.IsAsciiLetterUpper))
+            return 5.0;
+        // An unreadable Latin token is stronger evidence than a dictionary
+        // substring. However it is still only a reversible preview hypothesis.
+        if (token.Length >= 4 && !MeltiaRomaji.CanRead(token))
+            return 5.0;
+        return conservative;
     }
 
     private static IReadOnlyList<BoundaryRoute> BuildRoutes(
