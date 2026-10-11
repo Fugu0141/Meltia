@@ -1,0 +1,30 @@
+name: Meltia Core boundary diagnostics
+on:
+  pull_request:
+    paths:
+      - 'src/Meltia.Core/**'
+      - 'src/Meltia.Cli/**'
+      - 'tests/Meltia.Core.Tests/**'
+      - '.github/workflows/meltia-core.yml'
+  push:
+    paths:
+      - 'src/Meltia.Core/**'
+      - 'src/Meltia.Cli/**'
+      - 'tests/Meltia.Core.Tests/**'
+      - '.github/workflows/meltia-core.yml'
+permissions:
+  contents: read
+jobs:
+  boundary-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Compile independent core
+        run: dotnet build src/Meltia.Cli/Meltia.Cli.csproj -c Release --nologo
+      - name: Execute boundary regression contracts
+        run: dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release --no-restore
+      - name: CLI smoke (non-committing)
+        run: dotnet run --project src/Meltia.Cli/Meltia.Cli.csproj -c Release --no-build -- handanwodelegatesuru --word=delegate
