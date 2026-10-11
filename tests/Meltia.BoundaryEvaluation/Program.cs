@@ -212,6 +212,9 @@ foreach (var model in models)
         " candidateEdges=" + (m.CandidateEdges?.ToString() ?? "N/A") +
         " candidateGoldMatchFraction=" + Format(m.CandidateGoldMatchFraction) +
         " japaneseOnlyCandidateCases=" + (m.JapaneseOnlyCandidateCases?.ToString() ?? "N/A") +
+        " stages=" + string.Join(",", m.FailureStages
+            .OrderBy(x => x.Key, StringComparer.Ordinal)
+            .Select(x => x.Key + ":" + x.Value)) +
         " switchF1=" + Format(m.SwitchF1Micro) +
         " errors=" + m.Errors);
     foreach (var item in records.Where(x => !x.Predictions.Single(p => p.Model == model)
@@ -335,17 +338,34 @@ static HashSet<int> Switches(int length, IReadOnlyList<Utf16Span> spans)
     return switches;
 }
 
+// Diagnostic stages are exclusive and prioritized. The route/top-K stage can
+// reflect either graph connectivity, beam pruning, or scoring; it does NOT
+// prove the correct combination was never constructible.
+static string FailureStage(CaseRecord row, Prediction p)
+{
+    if (p.Error is not null) return "exception";
+    if (p.English.SequenceEqual(row.GoldEnglish)) return "correct";
+    if (p.Candidates is null) return "host-top1-wrong";
+    if (row.GoldEnglish.Any(g => !p.Candidates.Contains(g))) return "candidate-missing";
+    if (p.Routes.Any(route => route.SequenceEqual(row.GoldEnglish)))
+        return "top1-ranking-wrong";
+    return "route-or-topk-missing";
+}
+
 static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
 {
     int n = 0, exact = 0, topK = 0, regionExact = 0, regionTopK = 0;
     int goldSpans = 0, hits = 0;
     int tp = 0, fp = 0, fn = 0, errors = 0, japanese = 0, falseEnglish = 0;
     int candidateEdges = 0, japaneseCandidateCases = 0, japaneseCandidateEdges = 0;
+    var failureStages = new Dictionary<string, int>(StringComparer.Ordinal);
     var macros = new List<double>();
     foreach (var row in sample)
     {
         n++;
         var p = row.Predictions.Single(x => x.Model == model);
+        var stage = FailureStage(row, p);
+        failureStages[stage] = failureStages.GetValueOrDefault(stage) + 1;
         var isExact = p.Error is null && p.English.SequenceEqual(row.GoldEnglish);
         if (isExact) exact++;
         if (p.Error is null && p.Routes.Any(route => route.SequenceEqual(row.GoldEnglish))) topK++;
@@ -393,7 +413,8 @@ static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
         hasCandidates ? candidateEdges : null,
         hasCandidates && candidateEdges > 0 ? (double)hits / candidateEdges : null,
         hasCandidates ? japaneseCandidateCases : null,
-        hasCandidates ? japaneseCandidateEdges : null);
+        hasCandidates ? japaneseCandidateEdges : null,
+        failureStages);
 }
 
 internal sealed record Prediction(string Model, IReadOnlyList<Utf16Span> English,
@@ -411,4 +432,5 @@ internal sealed record Metrics(
     double? SwitchF1Micro, double? SwitchF1Macro,
     int JapaneseOnlyCases, int JapaneseOnlyFalseEnglishCases,
     int? CandidateEdges, double? CandidateGoldMatchFraction,
-    int? JapaneseOnlyCandidateCases, int? JapaneseOnlyCandidateEdges);
+    int? JapaneseOnlyCandidateCases, int? JapaneseOnlyCandidateEdges,
+    IReadOnlyDictionary<string, int> FailureStages);
