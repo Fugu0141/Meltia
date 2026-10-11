@@ -203,6 +203,26 @@ foreach (var category in byCategory)
     }
 }
 Console.WriteLine("Evaluation JSON: " + output);
+// Strict negative control: experimental routing must not newly interpret
+// Japanese-only cases as English compared with the existing shadow mode.
+// Do NOT set a post-hoc overall accuracy threshold from these studied cases.
+var priorJapanese = overall["Meltia-shadow-advised"].JapaneseOnlyFalseEnglishCases;
+foreach (var model in new[] {
+    "Meltia-experimental-independent", "Meltia-experimental-lexicon",
+    "Meltia-experimental-shadow", "Meltia-experimental-shadow-lexicon",
+    "Meltia-penalty-only-shadow", "Meltia-host-only-shadow"
+})
+{
+    if (overall[model].JapaneseOnlyFalseEnglishCases > priorJapanese)
+    {
+        Console.Error.WriteLine("NEGATIVE CONTROL REGRESSION: " + model +
+            " Japanese-only false English=" + overall[model].JapaneseOnlyFalseEnglishCases +
+            " baseline=" + priorJapanese);
+        return 3;
+    }
+}
+Console.WriteLine("PASS Japanese-only negative-control nonregression (" +
+    overall["Meltype-offline"].JapaneseOnlyCases + " synthetic cases)");
 var errors = overall.Values.Sum(x => x.Errors);
 if (errors > 0)
 {
