@@ -203,7 +203,11 @@ public sealed class MeltiaBoundaryEngine
         // The original 0.3/span favors chaining many small lexical hits;
         // research mode charges roughly the base score of a short dictionary
         // word to discourage gratuitous language switches. Defaults unchanged.
-        var perSpanCost = _options.ExperimentalFragmentationPenalty ? 4.5 : 0.3;
+        // H10 produces many speculative Latin candidates. Always use the
+        // cautious fragmentation cost when its generator is enabled, even if
+        // a caller forgot to opt in to the ranking experiment separately.
+        var perSpanCost = _options.ExperimentalFragmentationPenalty ||
+            _options.ExperimentalUnknownLatinCandidates ? 4.5 : 0.3;
         var routes = BuildRoutes(raw.Length, candidates, hard, perSpanCost);
         return new BoundaryResult(raw, candidates, routes, bySpan.Count > MaxCandidates);
     }
