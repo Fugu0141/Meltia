@@ -183,13 +183,13 @@ public sealed class MeltiaBoundaryEngine
             }
         }
 
-        // H10 research mode: independent spelling/phonetic hypotheses.
+        // v0.7 research mode: independent spelling/phonetic hypotheses.
         // Low-confidence by design: these help candidate recall, but are not
         // an instruction to show or commit English in the user's IME.
         if (_options.ExperimentalUnknownLatinCandidates)
             foreach (var edge in MeltiaUnknownLatinCandidates.Generate(raw))
             {
-                // H10 adds hypotheses; it must never alter the provenance or
+                // v0.7 adds hypotheses; it must never alter the provenance or
                 // ranking of an existing lexicon / Meltype / capitalization edge.
                 if (!bySpan.ContainsKey(edge.Span))
                     Add(edge.Span, edge.Origin, edge.Score);
@@ -202,8 +202,8 @@ public sealed class MeltiaBoundaryEngine
             throw new ArgumentException("Too many mandatory ranges");
         var remaining = bySpan.Values.Where(x => !x.Mandatory)
             // Preserve previously ranked host/lexicon candidates before
-            // admitting speculative H10 edges under the bounded candidate cap.
-            .OrderBy(x => x.Origin == "h10-unknown-latin-provisional" ? 1 : 0)
+            // admitting speculative v0.7 edges under the bounded candidate cap.
+            .OrderBy(x => x.Origin == "v0.7-unknown-latin-provisional" ? 1 : 0)
             .ThenByDescending(x => x.Score).ThenBy(x => x.Span.Start).ThenBy(x => x.Span.End)
             .Take(MaxCandidates - mandatoryCandidates.Count).ToList();
         var candidates = mandatoryCandidates.Concat(remaining)
@@ -211,7 +211,7 @@ public sealed class MeltiaBoundaryEngine
         // The original 0.3/span favors chaining many small lexical hits;
         // research mode charges roughly the base score of a short dictionary
         // word to discourage gratuitous language switches. Defaults unchanged.
-        // H10 produces many speculative Latin candidates. Always use the
+        // v0.7 produces many speculative Latin candidates. Always use the
         // cautious fragmentation cost when its generator is enabled, even if
         // a caller forgot to opt in to the ranking experiment separately.
         var perSpanCost = _options.ExperimentalFragmentationPenalty ||
