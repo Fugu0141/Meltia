@@ -178,6 +178,8 @@ foreach (var model in models)
     var m = overall[model];
     Console.WriteLine(model + " exact=" + m.ExactCases + "/" + m.Cases +
         " topK=" + m.TopKExactCases + "/" + m.Cases +
+        " languageRegionExact=" + m.LanguageRegionExactCases + "/" + m.Cases +
+        " languageRegionTopK=" + m.TopKLanguageRegionExactCases + "/" + m.Cases +
         " spanGoldRecall=" + Format(m.GoldCandidateRecall) +
         " switchF1=" + Format(m.SwitchF1Micro) +
         " errors=" + m.Errors);
@@ -244,6 +246,22 @@ static Prediction FromCore(string model, BoundaryResult result) =>
 static Prediction Error(string model, Exception exception) =>
     new(model, [], [], null, exception.GetType().Name + ": " + exception.Message);
 
+// Language regions differ from English word-token edges: adjacent English
+// words are still one continuous Latin-language region. Retain both metrics.
+static IReadOnlyList<Utf16Span> CoalesceEnglishRegions(IReadOnlyList<Utf16Span> spans)
+{
+    var output = new List<Utf16Span>();
+    foreach (var span in spans)
+    {
+        if (output.Count > 0 && output[^1].End == span.Start)
+            output[^1] = new Utf16Span(output[^1].Start, span.End);
+        else if (output.Count > 0 && output[^1].End > span.Start)
+            throw new InvalidOperationException("Overlapping English regions");
+        else output.Add(span);
+    }
+    return output;
+}
+
 static HashSet<int> Switches(int length, IReadOnlyList<Utf16Span> spans)
 {
     var english = new bool[length];
@@ -261,7 +279,8 @@ static HashSet<int> Switches(int length, IReadOnlyList<Utf16Span> spans)
 
 static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
 {
-    int n = 0, exact = 0, topK = 0, goldSpans = 0, hits = 0;
+    int n = 0, exact = 0, topK = 0, regionExact = 0, regionTopK = 0;
+    int goldSpans = 0, hits = 0;
     int tp = 0, fp = 0, fn = 0, errors = 0, japanese = 0, falseEnglish = 0;
     var macros = new List<double>();
     foreach (var row in sample)
@@ -271,6 +290,13 @@ static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
         var isExact = p.Error is null && p.English.SequenceEqual(row.GoldEnglish);
         if (isExact) exact++;
         if (p.Error is null && p.Routes.Any(route => route.SequenceEqual(row.GoldEnglish))) topK++;
+        var languageGold = CoalesceEnglishRegions(row.GoldEnglish);
+        if (p.Error is null &&
+            CoalesceEnglishRegions(p.English).SequenceEqual(languageGold))
+            regionExact++;
+        if (p.Error is null && p.Routes.Any(route =>
+            CoalesceEnglishRegions(route).SequenceEqual(languageGold)))
+            regionTopK++;
         if (p.Error is not null) errors++;
         if (p.Candidates is not null)
         {
@@ -291,7 +317,8 @@ static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
         if (2*a + b + c > 0) macros.Add(2.0*a / (2*a+b+c));
     }
     bool hasCandidates = model != "Meltype-offline";
-    return new Metrics(n, exact, topK, errors, goldSpans,
+    return new Metrics(n, exact, topK, regionExact, regionTopK,
+        errors, goldSpans,
         hasCandidates ? hits : null,
         hasCandidates && goldSpans > 0 ? (double)hits / goldSpans : null,
         tp, fp, fn,
@@ -308,7 +335,8 @@ internal sealed record CaseRecord(string Id, string Category, string Raw,
     IReadOnlyList<Utf16Span> GoldEnglish, IReadOnlyList<Prediction> Predictions);
 
 internal sealed record Metrics(
-    int Cases, int ExactCases, int TopKExactCases, int Errors,
+    int Cases, int ExactCases, int TopKExactCases,
+    int LanguageRegionExactCases, int TopKLanguageRegionExactCases, int Errors,
     int GoldSpans, int? GoldCandidateHits, double? GoldCandidateRecall,
     int SwitchTP, int SwitchFP, int SwitchFN,
     double? SwitchF1Micro, double? SwitchF1Macro,
