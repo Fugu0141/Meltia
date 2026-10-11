@@ -239,5 +239,20 @@ Check(h10Repeat.Candidates.SequenceEqual(h10Two.Candidates) &&
     "H10 candidate lattice and Top-K ordering are deterministic");
 Check(h10.Analyze(new string('b', 1000)).Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates,
     "H10 skips enormous ASCII runs within explicit complexity bound");
+var hostEvidence = new BoundaryEvidence(
+    MeltypeEnglish: [new Utf16Span(7, 15)],
+    EnglishWords: ["strategy", "as", "no"]);
+var priorResearch = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalFragmentationPenalty: true)).Analyze(
+        "kinouhastrategywakaru", hostEvidence);
+var h10Research = h10.Analyze("kinouhastrategywakaru", hostEvidence);
+Check(priorResearch.Candidates.All(c => h10Research.Candidates.Contains(c)),
+    "H10 candidate generation preserves host/lexicon spans and scores");
+Check(h10Research.Candidates.Any(c => c.Span == new Utf16Span(7, 15) &&
+        c.Origin != "h10-unknown-latin-provisional"),
+    "H10 never overwrites the origin of an existing reference candidate");
+Check(h10Research.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates &&
+      h10Research.Routes.Count <= MeltiaBoundaryEngine.MaxRoutes,
+    "H10 preserves the global candidate and route caps");
 
 Console.WriteLine($"ALL PASS {passed}");
