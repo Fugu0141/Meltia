@@ -191,86 +191,86 @@ Check(research.Analyze("tokyo",
 Check(!research.Analyze("commit").AutoCommitAllowed,
     "experimental routing is never allowed to commit text");
 
-// H10 independent candidate generation. This deliberately tests whether the
+// v0.7 independent candidate generation. This deliberately tests whether the
 // *candidate exists*, not whether English user intent is already inferred.
 // Untyped Japanese remains untouched, and old mode remains byte-for-byte stable.
-var h10 = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+var v07 = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalFragmentationPenalty: true,
     ExperimentalUnknownLatinCandidates: true));
-var h10DefaultPenalty = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+var v07DefaultPenalty = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalUnknownLatinCandidates: true));
-Check(h10DefaultPenalty.Analyze("kinouhastrategywakaru").Routes[0].EnglishSpans.Count == 0,
-    "H10 enables cautious fragment penalty even when caller did not request it");
-Check(h10DefaultPenalty.Analyze("kinouhastrategywakaru").Routes[0].EnglishSpans
-        .SequenceEqual(h10.Analyze("kinouhastrategywakaru").Routes[0].EnglishSpans),
-    "H10 implicit safety cost matches explicit candidate mode");
+Check(v07DefaultPenalty.Analyze("kinouhastrategywakaru").Routes[0].EnglishSpans.Count == 0,
+    "v0.7 enables cautious fragment penalty even when caller did not request it");
+Check(v07DefaultPenalty.Analyze("kinouhastrategywakaru").Routes[0].EnglishSpans
+        .SequenceEqual(v07.Analyze("kinouhastrategywakaru").Routes[0].EnglishSpans),
+    "v0.7 implicit safety cost matches explicit candidate mode");
 bool Proposed(BoundaryResult result, int start, int end) =>
     result.Candidates.Any(x =>
         x.Span == new Utf16Span(start, end) &&
-        x.Origin == "h10-unknown-latin-provisional");
-Check(Proposed(h10.Analyze("kinouhastrategywakaru"), 7, 15),
-    "H10 exposes unknown strategy inside Japanese flanks");
-var h10Two = h10.Analyze("kinouhastrategynorequirementtoiu");
-Check(Proposed(h10Two, 7, 15) && Proposed(h10Two, 17, 28),
-    "H10 retains two independent unknown English islands");
-Check(Proposed(h10.Analyze("korekaraknowledge.wakaru"), 8, 17),
-    "H10 stops the unknown English span before a punctuation mark");
-Check(!h10.Analyze("dokoniakerusonomamakyouno").Candidates
-    .Any(x => x.Origin == "h10-unknown-latin-provisional"),
-    "H10 never splits completely phonetic Japanese sample");
-Check(!h10.Analyze("nihongo").Candidates
-    .Any(x => x.Origin == "h10-unknown-latin-provisional"),
-    "H10 leaves simple Japanese phonetic sequence unchanged");
+        x.Origin == "v0.7-unknown-latin-provisional");
+Check(Proposed(v07.Analyze("kinouhastrategywakaru"), 7, 15),
+    "v0.7 exposes unknown strategy inside Japanese flanks");
+var v07Two = v07.Analyze("kinouhastrategynorequirementtoiu");
+Check(Proposed(v07Two, 7, 15) && Proposed(v07Two, 17, 28),
+    "v0.7 retains two independent unknown English islands");
+Check(Proposed(v07.Analyze("korekaraknowledge.wakaru"), 8, 17),
+    "v0.7 stops the unknown English span before a punctuation mark");
+Check(!v07.Analyze("dokoniakerusonomamakyouno").Candidates
+    .Any(x => x.Origin == "v0.7-unknown-latin-provisional"),
+    "v0.7 never splits completely phonetic Japanese sample");
+Check(!v07.Analyze("nihongo").Candidates
+    .Any(x => x.Origin == "v0.7-unknown-latin-provisional"),
+    "v0.7 leaves simple Japanese phonetic sequence unchanged");
 Check(!engine.Analyze("kinouhastrategywakaru").Candidates
-    .Any(x => x.Origin == "h10-unknown-latin-provisional"),
-    "H10 remains disabled by default");
-var h10Ambiguous = h10.Analyze("tokyo");
-Check(!h10Ambiguous.Routes[0].EnglishSpans.Any() &&
-      !h10Ambiguous.Candidates.Any(x => x.Origin == "h10-unknown-latin-provisional"),
-    "H10 does not hallucinate an English label for ambiguous Tokyo");
-Check(!h10.Analyze("kinouhastrategywakaru").AutoCommitAllowed,
-    "H10 hypotheses can never auto-commit to an application");
-var h10Repeat = h10.Analyze("kinouhastrategynorequirementtoiu");
-Check(h10Repeat.Candidates.SequenceEqual(h10Two.Candidates) &&
-      h10Repeat.Routes.Count == h10Two.Routes.Count &&
-      h10Repeat.Routes.Zip(h10Two.Routes,
+    .Any(x => x.Origin == "v0.7-unknown-latin-provisional"),
+    "v0.7 remains disabled by default");
+var v07Ambiguous = v07.Analyze("tokyo");
+Check(!v07Ambiguous.Routes[0].EnglishSpans.Any() &&
+      !v07Ambiguous.Candidates.Any(x => x.Origin == "v0.7-unknown-latin-provisional"),
+    "v0.7 does not hallucinate an English label for ambiguous Tokyo");
+Check(!v07.Analyze("kinouhastrategywakaru").AutoCommitAllowed,
+    "v0.7 hypotheses can never auto-commit to an application");
+var v07Repeat = v07.Analyze("kinouhastrategynorequirementtoiu");
+Check(v07Repeat.Candidates.SequenceEqual(v07Two.Candidates) &&
+      v07Repeat.Routes.Count == v07Two.Routes.Count &&
+      v07Repeat.Routes.Zip(v07Two.Routes,
           (a, b) => a.Score.Equals(b.Score) &&
                     a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(x => x),
-    "H10 candidate lattice and Top-K ordering are deterministic");
-Check(h10.Analyze(new string('b', 1000)).Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates,
-    "H10 skips enormous ASCII runs within explicit complexity bound");
+    "v0.7 candidate lattice and Top-K ordering are deterministic");
+Check(v07.Analyze(new string('b', 1000)).Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates,
+    "v0.7 skips enormous ASCII runs within explicit complexity bound");
 var hostEvidence = new BoundaryEvidence(
     MeltypeEnglish: [new Utf16Span(7, 15)],
     EnglishWords: ["strategy", "as", "no"]);
 var priorResearch = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalFragmentationPenalty: true)).Analyze(
         "kinouhastrategywakaru", hostEvidence);
-var h10Research = h10.Analyze("kinouhastrategywakaru", hostEvidence);
-Check(priorResearch.Candidates.All(c => h10Research.Candidates.Contains(c)),
-    "H10 candidate generation preserves host/lexicon spans and scores");
-Check(h10Research.Candidates.Any(c => c.Span == new Utf16Span(7, 15) &&
-        c.Origin != "h10-unknown-latin-provisional"),
-    "H10 never overwrites the origin of an existing reference candidate");
-Check(h10Research.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates &&
-      h10Research.Routes.Count <= MeltiaBoundaryEngine.MaxRoutes,
-    "H10 preserves the global candidate and route caps");
+var v07Research = v07.Analyze("kinouhastrategywakaru", hostEvidence);
+Check(priorResearch.Candidates.All(c => v07Research.Candidates.Contains(c)),
+    "v0.7 candidate generation preserves host/lexicon spans and scores");
+Check(v07Research.Candidates.Any(c => c.Span == new Utf16Span(7, 15) &&
+        c.Origin != "v0.7-unknown-latin-provisional"),
+    "v0.7 never overwrites the origin of an existing reference candidate");
+Check(v07Research.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates &&
+      v07Research.Routes.Count <= MeltiaBoundaryEngine.MaxRoutes,
+    "v0.7 preserves the global candidate and route caps");
 
 // Seeded adversarial stream safety. This does not use gold: only checks
 // deterministic, bounded output and immutable UTF-16 raw interpretation.
-var h10Rng = new Random(20261015);
-string[] h10Bits = [
+var v07Rng = new Random(20261015);
+string[] v07Bits = [
     "nihongo", "kinouha", "strategy", "no", "requirement", "😀",
     "knowledge.", "wakaru", "feature", "database", " ", "KURU",
     "commit", "https://a.co", "@", "ga", "SPYAIR", "API"
 ];
-var h10PropertyOk = true;
+var v07PropertyOk = true;
 for (int i = 0; i < 120; i++)
 {
-    var input = string.Concat(Enumerable.Range(0, h10Rng.Next(1, 12))
-        .Select(_ => h10Bits[h10Rng.Next(h10Bits.Length)]));
-    var a = h10.Analyze(input);
-    var b = h10.Analyze(input);
-    h10PropertyOk &= a.Raw == input && b.Raw == input &&
+    var input = string.Concat(Enumerable.Range(0, v07Rng.Next(1, 12))
+        .Select(_ => v07Bits[v07Rng.Next(v07Bits.Length)]));
+    var a = v07.Analyze(input);
+    var b = v07.Analyze(input);
+    v07PropertyOk &= a.Raw == input && b.Raw == input &&
         !a.AutoCommitAllowed && !b.AutoCommitAllowed &&
         a.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates &&
         a.Routes.Count is > 0 and <= MeltiaBoundaryEngine.MaxRoutes &&
@@ -284,7 +284,7 @@ for (int i = 0; i < 120; i++)
         var previousEnd = 0;
         foreach (var span in route.EnglishSpans)
         {
-            h10PropertyOk &= span.Start >= previousEnd && span.End <= input.Length &&
+            v07PropertyOk &= span.Start >= previousEnd && span.End <= input.Length &&
                 span.Start < span.End &&
                 !(span.Start > 0 && span.Start < input.Length &&
                     char.IsHighSurrogate(input[span.Start - 1]) &&
@@ -295,8 +295,8 @@ for (int i = 0; i < 120; i++)
             previousEnd = span.End;
         }
     }
-    if (!h10PropertyOk) break;
+    if (!v07PropertyOk) break;
 }
-Check(h10PropertyOk, "H10 120 seeded mixed Japanese-English-emoji invariant cases");
+Check(v07PropertyOk, "v0.7 120 seeded mixed Japanese-English-emoji invariant cases");
 
 Console.WriteLine($"ALL PASS {passed}");
