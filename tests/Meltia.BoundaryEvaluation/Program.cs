@@ -29,6 +29,16 @@ foreach (var gold in GoldCorpus.Cases)
 
     try
     {
+        var matched = engine.Analyze(gold.Raw, MeltypeLexiconEvidence.For(gold.Raw));
+        predictions.Add(FromCore("Meltia-lexicon-matched", matched));
+    }
+    catch (Exception ex)
+    {
+        predictions.Add(Error("Meltia-lexicon-matched", ex));
+    }
+
+    try
+    {
         // Do not hand-label composition units: use the actual Meltype
         // CompositionText keystroke pipeline and its CompositionDetector.
         var composition = new CompositionText(detector);
@@ -41,16 +51,24 @@ foreach (var gold in GoldCorpus.Cases)
         predictions.Add(new Prediction("Meltype-offline", comparison.MeltypeEnglish.ToArray(),
             [comparison.MeltypeEnglish.ToArray()], null, null));
         predictions.Add(FromCore("Meltia-shadow-advised", comparison.Meltia));
+        var matchedEvidence = MeltypeLexiconEvidence.For(gold.Raw);
+        var matchedShadow = MeltypeBoundaryShadowBridge.CompareSegments(
+            gold.Raw, segments, engine,
+            englishWords: matchedEvidence.EnglishWords,
+            properNames: matchedEvidence.ProperNames);
+        predictions.Add(FromCore("Meltia-shadow-lexicon-matched", matchedShadow.Meltia));
     }
     catch (Exception ex)
     {
         predictions.Add(Error("Meltype-offline", ex));
         predictions.Add(Error("Meltia-shadow-advised", ex));
+        predictions.Add(Error("Meltia-shadow-lexicon-matched", ex));
     }
     records.Add(new CaseRecord(gold.Id, gold.Group, gold.Raw, gold.EnglishSpans, predictions));
 }
 
-string[] models = ["Meltype-offline", "Meltia-independent", "Meltia-shadow-advised"];
+string[] models = ["Meltype-offline", "Meltia-independent", "Meltia-lexicon-matched",
+    "Meltia-shadow-advised", "Meltia-shadow-lexicon-matched"];
 var overall = models.ToDictionary(
     model => model, model => Aggregate(records, model));
 var byCategory = GoldCorpus.Cases.Select(x => x.Group).Distinct()
@@ -65,11 +83,15 @@ var report = new
     EvidenceLevel = "B-offline-CSharp-synthetic-intent",
     GoldStatus = "synthetic-intent-labeled-not-human-verified",
     CorpusVersion = "meltia-synthetic-v1.1",
+    EnglishDictionaryTypes = MeltypeLexiconEvidence.EnglishWordTypes,
+    ProperNameTypes = MeltypeLexiconEvidence.ProperNameTypes,
     SourceNotes = new[] {
         "H7 categories: IncrementalBoundaryLab/docs/research-evaluation-standard.md (research branch)",
         "Selected H9 failure cases: IncrementalBoundaryLab/research/2026-10-10-h9-additional-evaluation.md (research/h9-followup-evaluation-20261010)",
         "Remaining cases: handcrafted regression and intent-ambiguity cases; NOT a blind holdout",
         "Meltia-independent: no external English lexicon or Meltype evidence",
+        "Meltia-lexicon-matched: English and proper names from same embedded Meltype files, filtered by raw occurrence, no gold labels",
+        "Meltia-shadow-lexicon-matched: same evidence plus Meltype segmentation; an assisted comparison, NOT independent",
         "Meltia-shadow-advised: includes Meltype English suggestions and protected spans; NOT an independent baseline",
         "Meltype-offline: CompositionText.Append per character + CompositionDetector.Segment; NOT Windows TSF"
     },
@@ -107,16 +129,16 @@ foreach (var model in models)
             (pred.Error is null ? "" : " error=" + pred.Error));
     }
 }
-Console.WriteLine("CATEGORY | Meltype Top1/TopK | Meltia-alone Top1/TopK | Shadow Top1/TopK");
+Console.WriteLine("CATEGORY | case count | model | Top1 | TopK | gold candidate recall");
 foreach (var category in byCategory)
 {
-    var a = category.Value["Meltype-offline"];
-    var b = category.Value["Meltia-independent"];
-    var c = category.Value["Meltia-shadow-advised"];
-    Console.WriteLine(category.Key + " | " +
-        a.ExactCases + "/" + a.Cases + " / " + a.TopKExactCases + "/" + a.Cases + " | " +
-        b.ExactCases + "/" + b.Cases + " / " + b.TopKExactCases + "/" + b.Cases + " | " +
-        c.ExactCases + "/" + c.Cases + " / " + c.TopKExactCases + "/" + c.Cases);
+    foreach (var model in models)
+    {
+        var m = category.Value[model];
+        Console.WriteLine(category.Key + " | " + m.Cases + " | " + model +
+            " | " + m.ExactCases + " | " + m.TopKExactCases +
+            " | " + Format(m.GoldCandidateRecall));
+    }
 }
 Console.WriteLine("Evaluation JSON: " + output);
 var errors = overall.Values.Sum(x => x.Errors);
