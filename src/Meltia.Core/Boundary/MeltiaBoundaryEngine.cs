@@ -31,7 +31,8 @@ public sealed record BoundaryEvidence(
 // This is NOT wired to the active Meltype TSF/composition host.
 public sealed record MeltiaBoundaryOptions(
     bool ExperimentalStrongHostAdvisory = false,
-    bool ExperimentalFragmentationPenalty = false);
+    bool ExperimentalFragmentationPenalty = false,
+    bool ExperimentalUnknownLatinCandidates = false);
 
 /// <summary>
 /// v0.5 parallel boundary engine. No changes to Meltype composition/TSF or commit behavior.
@@ -181,6 +182,13 @@ public sealed class MeltiaBoundaryEngine
                     Add(span, "lexicon-with-phonetic-flanks", 6.0);
             }
         }
+
+        // H10 research mode: independent spelling/phonetic hypotheses.
+        // Low-confidence by design: these help candidate recall, but are not
+        // an instruction to show or commit English in the user's IME.
+        if (_options.ExperimentalUnknownLatinCandidates)
+            foreach (var edge in MeltiaUnknownLatinCandidates.Generate(raw))
+                Add(edge.Span, edge.Origin, edge.Score);
 
         // Mandatory spans survive pruning. All other proposals may be truncated.
         var mandatoryCandidates = bySpan.Values.Where(x => x.Mandatory)
