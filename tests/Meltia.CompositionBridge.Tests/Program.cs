@@ -99,4 +99,31 @@ var fromDetector = MeltypeBoundaryShadowBridge.CompareDetector(
 Check(fromDetector.Meltia.Raw == "tokyo" && !fromDetector.AutoCommitAllowed,
     "real Meltype detector -> Meltia shadow adapter");
 
+
+// A real host may report many protected islands in one composition.
+// The adapter must not discard later mandatory regions.
+var hostToken = "https://a.co";
+var hostRaw = string.Join(" ", Enumerable.Repeat(hostToken, 6));
+var hostPieces = new List<CompositionSegment>();
+for (int i = 0; i < 6; ++i)
+{
+    if (i > 0) hostPieces.Add(new CompositionSegment(false, " ", " "));
+    hostPieces.Add(new CompositionSegment(true, "", hostToken) { IsProtected = true });
+}
+var manyProtected = MeltypeBoundaryShadowBridge.CompareSegments(hostRaw, hostPieces, engine);
+var expectedProtected = Enumerable.Range(0, 6)
+    .Select(i => new Utf16Span(i * (hostToken.Length + 1),
+        i * (hostToken.Length + 1) + hostToken.Length)).ToArray();
+Check(manyProtected.Meltia.Routes[0].EnglishSpans.SequenceEqual(expectedProtected),
+    "real host adapter retains all six protected English islands");
+Check(manyProtected.TopRouteMatchesMeltype && !manyProtected.AutoCommitAllowed,
+    "six-span shadow comparison exact and still advisory");
+
+// Duplicated explicit user locks must be harmless; contradictory locks are not.
+var repeatedUserLock = MeltypeBoundaryShadowBridge.CompareSegments(
+    "tokyo", [new CompositionSegment(false, "ときょ", "tokyo")],
+    engine, explicitEnglish: [new Utf16Span(0, 5), new Utf16Span(0, 5)]);
+Check(repeatedUserLock.Meltia.Routes[0].EnglishSpans.SequenceEqual(
+    [new Utf16Span(0, 5)]), "duplicate locks do not invalidate host bridge");
+
 Console.WriteLine($"ALL PASS {passed}");
