@@ -38,6 +38,9 @@ jobs:
       - name: Evaluate 530 additional synthetic robustness cases (not a blind holdout)
         run: |
           dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-robustness.json --suite robustness
+      - name: Evaluate 290 additional synthetic vocabulary-shift and Japanese-negative cases
+        run: |
+          dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-generalization.json --suite generalization
       - name: Upload per-case boundary evaluation report even on evaluator failure
         if: always()
         uses: actions/upload-artifact@v4
