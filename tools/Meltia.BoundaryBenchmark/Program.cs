@@ -21,6 +21,15 @@ var scenarios = new (string Name, string Raw, int Samples)[]
     ("mixed-emoji", "kyouha😀compilerdefirmwarewotukau", 24),
     ("japanese-1024", string.Concat(Enumerable.Repeat("watashihakyounihongowobenkyousuru", 40))[..1024], 8),
     ("latin-96", new string('q', 96), 12),
+    ("japanese-long-fully-readable",
+        string.Concat(Enumerable.Repeat("nihongo", 22)), 8),
+    ("long-single-english-middle",
+        string.Concat(Enumerable.Repeat("nihongo", 16)) + "neuroscience" +
+        string.Concat(Enumerable.Repeat("nihongo", 5)), 8),
+    ("long-two-english-islands",
+        string.Concat(Enumerable.Repeat("nihongo", 11)) +
+        "cryptography" + "no" + "semiconductor" +
+        string.Concat(Enumerable.Repeat("nihongo", 7)), 8),
 };
 var engines = new (string Version, MeltiaBoundaryEngine Engine)[]
 {
@@ -33,6 +42,12 @@ var engines = new (string Version, MeltiaBoundaryEngine Engine)[]
         ExperimentalPhoneticLatticeDecoder: true,
         ExperimentalContextualIslandScoring: true,
         ExperimentalUncertaintyReview: true))),
+    ("v1.0-windowed", new(new MeltiaBoundaryOptions(
+        ExperimentalUnknownLatinCandidates: true,
+        ExperimentalPhoneticLatticeDecoder: true,
+        ExperimentalContextualIslandScoring: true,
+        ExperimentalUncertaintyReview: true,
+        ExperimentalLongRunWindowing: true))),
 };
 var results = new List<ReportRow>();
 var count = 0;
@@ -61,6 +76,8 @@ foreach (var (name, raw, samples) in scenarios)
         }
         var elapsed = new double[samples];
         var allocated = new long[samples];
+        var candidates = new int[samples];
+        int truncated = 0;
         for (var i = 0; i < samples; i++)
         {
             long beforeBytes = GC.GetAllocatedBytesForCurrentThread();
@@ -68,19 +85,23 @@ foreach (var (name, raw, samples) in scenarios)
             var result = engine.Analyze(raw);
             elapsed[i] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             allocated[i] = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+            candidates[i] = result.Candidates.Count;
+            if (result.Truncated) truncated++;
             if (result.Raw != raw || result.Candidates.Count > MeltiaBoundaryEngine.MaxCandidates ||
                 result.Routes.Count is < 1 or > MeltiaBoundaryEngine.MaxRoutes ||
                 result.AutoCommitAllowed ||
-                (version == "v1.0-review" && result.Review is null) ||
+                (version != "v0.9-reference" && result.Review is null) ||
                 (version == "v0.9-reference" && result.Review is not null))
                 throw new InvalidOperationException("Benchmark violated bounded/no-commit contract: " + name);
             count += result.Candidates.Count + result.Routes.Count;
         }
         Array.Sort(elapsed);
         Array.Sort(allocated);
+        Array.Sort(candidates);
         results.Add(new ReportRow(name, version, raw.Length, samples,
             Median(elapsed), Percentile(elapsed, .95), Percentile(elapsed, .99),
-            Median(allocated), Percentile(allocated, .95)));
+            Median(allocated), Percentile(allocated, .95),
+            candidates[samples / 2], candidates[^1], truncated));
     }
 }
 var report = new
@@ -109,6 +130,23 @@ var report = new
                 Math.Max(1L, results.Single(x => x.Scenario == updated.Scenario &&
                     x.Model == "v0.9-reference").P50AllocatedBytes),
         }),
+    WindowedComparisons = results.Where(x => x.Model == "v1.0-windowed").Select(
+        updated => new {
+            updated.Scenario,
+            updated.CandidateMedian,
+            updated.TruncatedSamples,
+            BaselineCandidateMedian = results.Single(x =>
+                x.Scenario == updated.Scenario && x.Model == "v1.0-review").CandidateMedian,
+            P50LatencyRatio = updated.P50Ms / Math.Max(.000001,
+                results.Single(x => x.Scenario == updated.Scenario &&
+                    x.Model == "v1.0-review").P50Ms),
+            P95LatencyRatio = updated.P95Ms / Math.Max(.000001,
+                results.Single(x => x.Scenario == updated.Scenario &&
+                    x.Model == "v1.0-review").P95Ms),
+            P50AllocationRatio = (double)updated.P50AllocatedBytes /
+                Math.Max(1L, results.Single(x => x.Scenario == updated.Scenario &&
+                    x.Model == "v1.0-review").P50AllocatedBytes),
+        }),
     WorkSink = count
 };
 var file = Path.GetFullPath(args[1]);
@@ -117,7 +155,8 @@ File.WriteAllText(file, JsonSerializer.Serialize(report, new JsonSerializerOptio
 foreach (var row in results)
     Console.WriteLine($"{row.Scenario} {row.Model} utf16={row.Utf16Length} " +
         $"p50={row.P50Ms:F3}ms p95={row.P95Ms:F3}ms p99={row.P99Ms:F3}ms " +
-        $"alloc-p50={row.P50AllocatedBytes}B");
+        $"alloc-p50={row.P50AllocatedBytes}B " +
+        $"candidates={row.CandidateMedian} truncated={row.TruncatedSamples}/{row.Samples}");
 Console.WriteLine("Wrote " + file);
 return 0;
 
@@ -130,4 +169,5 @@ static long Percentile(long[] values, double p) =>
 
 internal sealed record ReportRow(string Scenario, string Model, int Utf16Length,
     int Samples, double P50Ms, double P95Ms, double P99Ms,
-    long P50AllocatedBytes, long P95AllocatedBytes);
+    long P50AllocatedBytes, long P95AllocatedBytes,
+    int CandidateMedian, int CandidateMax, int TruncatedSamples);
