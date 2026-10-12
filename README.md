@@ -37,6 +37,7 @@
 - [v1.0-dev 境界の不確実性レビューと867件評価](docs/MELTIA_V10_UNCERTAINTY_REVIEW_20261012.md)
 - [v1.0 フェーズ2：96文字を超える日英混在入力の候補生成研究](docs/MELTIA_V10_LONG_RUN_PHASE2_20261012.md)
 - [v1.0 フェーズ3：候補上限128件での位置的多様性と1019件評価](docs/MELTIA_V10_DIVERSE_CANDIDATES_PHASE3_20261012.md)
+- [v1.0 フェーズ4：日本語吸収を抑制するTop1経路スコアリング・1067件評価](docs/MELTIA_V10_FLANK_RANKING_PHASE4_20261012.md)
 - [貢献方法](CONTRIBUTING.md)
 - [セキュリティ報告](SECURITY.md)
 - [サードパーティー通知](THIRD-PARTY-NOTICES.md)
