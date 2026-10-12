@@ -54,6 +54,10 @@ def main() -> int:
             ("longrun-60", ["dotnet", "run", "--project", EVAL, "-c", "Release",
                             "--", "--output", str(output / "longrun-60.json"),
                             "--suite", "longrun"]),
+            ("candidate-budget-36", ["dotnet", "run", "--project", EVAL, "-c", "Release",
+                                     "--", "--output",
+                                     str(output / "candidate-budget-36.json"),
+                                     "--suite", "budget"]),
             ("offline-benchmark", ["dotnet", "run", "--project", BENCH, "-c", "Release",
                                    "--", "--output", str(output / "offline-benchmark.json")]),
         ])
