@@ -830,5 +830,12 @@ try { _ = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
 catch (ArgumentException) { rejectsPhase4Only = true; }
 Check(rejectsPhase4Only,
     "v1.0 phase4 refuses scoring without the phonetic lattice decoder");
+var rejectsPhase4NoUnknownGenerator = false;
+try { _ = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalJapaneseFlankScoring: true)); }
+catch (ArgumentException) { rejectsPhase4NoUnknownGenerator = true; }
+Check(rejectsPhase4NoUnknownGenerator,
+    "v1.0 phase4 refuses scoring without any speculative Latin proposals");
 
 Console.WriteLine($"ALL PASS {passed}");
