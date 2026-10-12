@@ -17,6 +17,8 @@ internal static class Program
     {
         switch (args.FirstOrDefault())
         {
+            case "--meltia-qa":
+                return MeltiaQualityGate.Run(args.Skip(1).ToArray());
             case "--eval":
                 Quality.Print(Quality.Run());
                 return 0;
