@@ -333,7 +333,7 @@ Check(v08.Analyze("https://example.com").Routes[0].EnglishSpans
 Check(v08.Analyze("ka😀strategy").Routes.All(route =>
     route.EnglishSpans.All(span => !(span.Start > 0 &&
         char.IsHighSurrogate("ka😀strategy"[span.Start - 1]) &&
-        char.IsLowSurrogate("ka😀strategy"[span.Start]))),
+        char.IsLowSurrogate("ka😀strategy"[span.Start])))),
     "v0.8 does not split surrogate pairs");
 Check(v08.Analyze("kinouhastrategywakaru").Candidates
     .SequenceEqual(v07Snapshot.Analyze("kinouhastrategywakaru").Candidates),
@@ -347,7 +347,7 @@ var v08Ok = true;
 for (int k = 0; k < 120; ++k)
 {
     var typed = string.Concat(Enumerable.Range(0, v08Seed.Next(1, 9))
-        .Select(_ => h10Bits[v08Seed.Next(h10Bits.Length)]));
+        .Select(_ => v07Bits[v08Seed.Next(v07Bits.Length)]));
     var x = v08.Analyze(typed);
     var y = v08.Analyze(typed);
     v08Ok &= x.Candidates.SequenceEqual(y.Candidates) &&
