@@ -404,5 +404,23 @@ Check(v09Two.Candidates.SequenceEqual(v09Repeat.Candidates) &&
           a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(x => x) &&
       !v09Two.AutoCommitAllowed,
     "v0.9 remains deterministic and read-only");
+Check(!v09.Analyze("ime").Routes[0].EnglishSpans.Any() &&
+      !v09.Analyze("japaneseno").Routes[0].EnglishSpans.Any(),
+    "v0.9 maintains Japanese preference for lowercase IME and japaneseno");
+Check(Has(v09.Analyze("ime", new BoundaryEvidence(
+        ExplicitEnglish: [new Utf16Span(0, 3)])), new Utf16Span(0, 3)),
+    "v0.9 explicit user English selection resolves ambiguous ime");
+var invalidV09ModeRejected = false;
+try
+{
+    _ = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+        ExperimentalContextualIslandScoring: true));
+}
+catch (ArgumentException)
+{
+    invalidV09ModeRejected = true;
+}
+Check(invalidV09ModeRejected,
+    "v0.9 rejects contradictory configuration without lattice decoder");
 
 Console.WriteLine($"ALL PASS {passed}");
