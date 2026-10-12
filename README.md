@@ -11,7 +11,7 @@
 - **IME としての完成度** — 入力・確定・取り消し・学習・辞書との連携を検証
 - **検証可能な改善** — 精度だけでなく誤判定の種類、遅延、安定性も記録
 
-境界判定方式は [IncrementalBoundaryLab](https://github.com/Fugu0141/IncrementalBoundaryLab) で研究中です。独立したMeltia Coreでは、v0.5の基盤に続き、**[v0.9の文脈的な複数英語区間評価](docs/MELTIA_V09_CONTEXTUAL_ISLANDS_20261012.md)を研究用オプションとして実装**（v0.7候補生成・v0.8音韻ラティスも維持）しています。[Meltypeとの比較アダプター](docs/MELTIA_SHADOW_COMPOSITION_BRIDGE.md)は読み取り専用です。**実際のIMEの入力・自動変換には未導入**で、Windows TSF上の実測精度・安定性も未検証です。
+境界判定方式は [IncrementalBoundaryLab](https://github.com/Fugu0141/IncrementalBoundaryLab) で研究中です。独立したMeltia Coreでは、v0.5の基盤に続き、**[v1.0-devの不確実性レビュー](docs/MELTIA_V10_UNCERTAINTY_REVIEW_20261012.md)を研究用オプションとして実装**（v0.7候補生成・v0.8音韻ラティス・v0.9経路評価は維持）しています。[Meltypeとの比較アダプター](docs/MELTIA_SHADOW_COMPOSITION_BRIDGE.md)は読み取り専用です。**実際のIMEの入力・自動変換には未導入**で、Windows TSF上の実測精度・安定性も未検証です。
 
 ## 現在の状態と今後
 
@@ -21,7 +21,7 @@
 | Meltia 用の説明・ライセンス方針 | 整備中 |
 | アプリ名・IME 登録・インストール先・自動更新の分離 | 未実施 |
 | Meltia 専用の安定版リリース | 未実施 |
-| 新しい境界判定アルゴリズムの統合 | 独立Coreはv0.9研究段階、実入力への統合は未実施 |
+| 新しい境界判定アルゴリズムの統合 | 独立Coreはv1.0-dev研究段階、実入力への統合は未実施 |
 
 詳細は [開発ロードマップ](docs/MELTIA_ROADMAP.md) を参照してください。
 
@@ -30,10 +30,11 @@
 - [プロジェクトの由来と本家との関係](docs/MELTIA_ORIGIN.md)
 - [ライセンスと著作権の取り扱い](docs/MELTIA_LICENSE_POLICY.md)
 - [開発ロードマップ](docs/MELTIA_ROADMAP.md)
-- [開発バージョン管理（v0.5〜v0.9）](docs/MELTIA_VERSIONING.md)
+- [開発バージョン管理（v0.5〜v1.0-dev）](docs/MELTIA_VERSIONING.md)
 - [v0.7 未知英語候補生成の実験・検証](docs/MELTIA_V07_UNKNOWN_LATIN_20261012.md)
 - [v0.8 音韻ラティス・経路探索の実装と実測](docs/MELTIA_V08_PHONETIC_LATTICE_20261012.md)
 - [v0.9 複数英語区間の文脈的評価と追加290件の比較](docs/MELTIA_V09_CONTEXTUAL_ISLANDS_20261012.md)
+- [v1.0-dev 境界の不確実性レビューと867件評価](docs/MELTIA_V10_UNCERTAINTY_REVIEW_20261012.md)
 - [貢献方法](CONTRIBUTING.md)
 - [セキュリティ報告](SECURITY.md)
 - [サードパーティー通知](THIRD-PARTY-NOTICES.md)
