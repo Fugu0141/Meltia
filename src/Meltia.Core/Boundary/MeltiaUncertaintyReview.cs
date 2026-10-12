@@ -61,7 +61,10 @@ internal static class MeltiaUncertaintyReview
                 !MeltiaRomaji.CanRead(token))
                 continue;
             var span = new Utf16Span(run.Index, run.Index + run.Length);
+            // An explicit Japanese lock is also a resolved user intention.
+            // Lexicon ambiguity must never override either language lock.
             if (!mandatory.Any(x => x.Overlaps(span)) &&
+                !(evidence.ExplicitJapanese ?? []).Any(x => x.Overlaps(span)) &&
                 !best.EnglishSpans.Any(x => x.Overlaps(span)))
                 ambiguousSpans.Add(span);
         }
