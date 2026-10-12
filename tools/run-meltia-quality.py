@@ -58,6 +58,10 @@ def main() -> int:
                                      "--", "--output",
                                      str(output / "candidate-budget-36.json"),
                                      "--suite", "budget"]),
+            ("phonetic-flank-48", ["dotnet", "run", "--project", EVAL, "-c", "Release",
+                                   "--", "--output",
+                                   str(output / "phonetic-flank-48.json"),
+                                   "--suite", "flank"]),
             ("offline-benchmark", ["dotnet", "run", "--project", BENCH, "-c", "Release",
                                    "--", "--output", str(output / "offline-benchmark.json")]),
         ])
