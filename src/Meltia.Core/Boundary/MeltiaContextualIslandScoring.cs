@@ -13,11 +13,11 @@ internal static class MeltiaContextualIslandScoring
         new(StringComparer.OrdinalIgnoreCase)
         { "no", "to", "de", "ga", "ni", "wo", "ha" };
 
-    // Approximate cost of one additional English span (v0.7/v0.8: 4.5).
+    // Partial contextual evidence, smaller than one added span cost (4.5).
     // It deliberately does NOT outweigh a large difference in orthography
     // and cannot make a purely Japanese input suddenly English if it has
     // no qualifying English candidate islands.
-    private const double SeparationEvidenceBonus = 4.5;
+    private const double SeparationEvidenceBonus = 3.0;
 
     public static double Between(string raw, Utf16Span left, Utf16Span right)
     {
@@ -36,6 +36,23 @@ internal static class MeltiaContextualIslandScoring
         if (!a.All(char.IsAsciiLetter) || !b.All(char.IsAsciiLetter) ||
             MeltiaRomaji.CanRead(a) || MeltiaRomaji.CanRead(b))
             return 0;
+
+        // v0.7 emits many plausible substrings. A proposal that begins
+        // with a long phonetic Japanese prefix (e.g. arigatou + part of
+        // an English word), or ends with a Japanese suffix, cannot act as
+        // independent evidence of an English island. Without this check,
+        // boosting every particle-looking gap badly harms one-island cases.
+        if (ContainsLongJapaneseFlank(a) || ContainsLongJapaneseFlank(b))
+            return 0;
         return SeparationEvidenceBonus;
+    }
+
+    private static bool ContainsLongJapaneseFlank(string token)
+    {
+        for (int n = 5; n < token.Length; n++)
+            if (MeltiaRomaji.CanRead(token[..n]) ||
+                MeltiaRomaji.CanRead(token[^n..]))
+                return true;
+        return false;
     }
 }
