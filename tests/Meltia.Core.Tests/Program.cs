@@ -9,8 +9,8 @@ void Check(bool condition, string title)
     Console.WriteLine("PASS " + title);
     passed++;
 }
-Check(typeof(MeltiaBoundaryEngine).Assembly.GetName().Version is { Major: 0, Minor: 8 },
-    "Meltia Core assembly development version is v0.8");
+Check(typeof(MeltiaBoundaryEngine).Assembly.GetName().Version is { Major: 0, Minor: 9 },
+    "Meltia Core assembly development version is v0.9");
 bool Has(BoundaryResult result, params Utf16Span[] spans) =>
     result.Routes.Any(route => spans.All(s => route.EnglishSpans.Contains(s)));
 var japanese = engine.Analyze("nihongo", new BoundaryEvidence(EnglishWords:["go"]));
@@ -372,5 +372,37 @@ for (int k = 0; k < 120; ++k)
     if (!v08Ok) break;
 }
 Check(v08Ok, "v0.8 deterministic 120-case seeded mixed-script lattice evaluation");
+
+
+// v0.9 opt-in scoring: same candidate inventory as v0.8; only the route
+// relationship of nonphonetic English islands connected by Japanese
+// particles is allowed to change. No learned gold words or auto-commit.
+var v09 = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true));
+const string v09TwoRaw = "kinouhastrategynorequirementtoiu";
+var v09Two = v09.Analyze(v09TwoRaw);
+Check(v09Two.Candidates.SequenceEqual(v08.Analyze(v09TwoRaw).Candidates),
+    "v0.9 does not change v0.8 English proposal inventory");
+Check(v09Two.Routes.Any(r => r.EnglishSpans.Count >= 2),
+    "v0.9 keeps multi-English-island candidate routes");
+Check(!v09.Analyze("dokoniakerusonomamakyouno").Routes[0].EnglishSpans.Any() &&
+      !v09.Analyze("nihongo").Routes[0].EnglishSpans.Any() &&
+      !v09.Analyze("tokyo").Routes[0].EnglishSpans.Any(),
+    "v0.9 does not promote Japanese-only or Tokyo ambiguity to English");
+Check(v09.Analyze("https://example.com").Routes[0].EnglishSpans
+        .SequenceEqual([new Utf16Span(0, 19)]) &&
+      Has(v09.Analyze("tokyo", new BoundaryEvidence(
+          ExplicitEnglish: [new Utf16Span(0, 5)])), new Utf16Span(0, 5)),
+    "v0.9 keeps mandatory locks and protected URL handling");
+var v09Repeat = v09.Analyze(v09TwoRaw);
+Check(v09Two.Candidates.SequenceEqual(v09Repeat.Candidates) &&
+      v09Two.Routes.Count == v09Repeat.Routes.Count &&
+      v09Two.Routes.Zip(v09Repeat.Routes, (a, b) =>
+          a.Score.Equals(b.Score) &&
+          a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(x => x) &&
+      !v09Two.AutoCommitAllowed,
+    "v0.9 remains deterministic and read-only");
 
 Console.WriteLine($"ALL PASS {passed}");
