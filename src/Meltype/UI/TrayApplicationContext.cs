@@ -103,8 +103,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         var menu = new ContextMenuStrip();
         _statusItem = new ToolStripMenuItem { Enabled = false };
+#if MELTIA_PREVIEW
+        _enabledItem = new ToolStripMenuItem("Meltia を有効にする", null, (_, _) => ToggleEnabled()) { CheckOnClick = false };
+#else
         _enabledItem = new ToolStripMenuItem("Meltype を有効にする", null, (_, _) => ToggleEnabled()) { CheckOnClick = false };
+#endif
+#if MELTIA_PREVIEW
+        _keyboardModeItem = new ToolStripMenuItem("Meltia キーボード (試験版)", null, (_, _) => SetMode(InputMode.Keyboard));
+#else
         _keyboardModeItem = new ToolStripMenuItem("Meltype キーボード (変換ボックスで入力)", null, (_, _) => SetMode(InputMode.Keyboard));
+#endif
         _autoSwitchModeItem = new ToolStripMenuItem("IME 自動切替 (Microsoft IME を使う)", null, (_, _) => SetMode(InputMode.AutoSwitch));
         _tsfModeItem = new ToolStripMenuItem("Meltype IME (入力欄に直接入力)", null, (_, _) => SetMode(InputMode.Tsf));
         menu.Items.Add(_statusItem);
@@ -124,6 +132,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _levelItem.DropDownItems.Add(new ToolStripMenuItem(LevelName(level), null, (_, _) => SetLevel(level)) { Tag = level });
         }
         menu.Items.Add(_levelItem);
+#if MELTIA_PREVIEW
+        var meltiaBoundaryItem = new ToolStripMenuItem(
+            "Meltia 新境界判定を試す (実験)", null, null)
+        {
+            CheckOnClick = true,
+            Checked = MeltiaPreviewBoundary.Enabled
+        };
+        meltiaBoundaryItem.CheckedChanged += (_, _) =>
+            MeltiaPreviewBoundary.Enabled = meltiaBoundaryItem.Checked;
+        menu.Items.Add(meltiaBoundaryItem);
+#endif
         // プロファイル (仕事用・趣味用・SNS 用など)。一覧は開くたびに作る (設定画面で足したもの・名前を変えたものを出す)
         _profileItem = new ToolStripMenuItem("プロファイル");
         _profileItem.DropDownItems.Add("(読み込み中)");
@@ -143,7 +162,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         backup.DropDownItems.Add("バックアップを書き出す...", null, (_, _) => CreateBackup());
         backup.DropDownItems.Add("バックアップから戻す...", null, (_, _) => RestoreBackup());
         menu.Items.Add(backup);
+#if MELTIA_PREVIEW
+        menu.Items.Add("Meltia の開発・不具合報告...", null, (_, _) =>
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "https://github.com/Fugu0141/Meltia/issues") { UseShellExecute = true }));
+#else
         menu.Items.Add("不具合の報告・提案...", null, (_, _) => OpenReport());
+#endif
 #if MELTIA_PREVIEW
         menu.Items.Add("Meltia について...", null, (_, _) => MessageBox.Show(AppInfo.AboutText, "Meltia について", MessageBoxButtons.OK, MessageBoxIcon.Information));
 #else
