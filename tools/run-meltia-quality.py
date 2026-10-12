@@ -51,6 +51,9 @@ def main() -> int:
             ("generalization-290", ["dotnet", "run", "--project", EVAL, "-c", "Release",
                                     "--", "--output", str(output / "generalization-290.json"),
                                     "--suite", "generalization"]),
+            ("longrun-60", ["dotnet", "run", "--project", EVAL, "-c", "Release",
+                            "--", "--output", str(output / "longrun-60.json"),
+                            "--suite", "longrun"]),
             ("offline-benchmark", ["dotnet", "run", "--project", BENCH, "-c", "Release",
                                    "--", "--output", str(output / "offline-benchmark.json")]),
         ])
