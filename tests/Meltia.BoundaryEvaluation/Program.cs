@@ -308,6 +308,9 @@ var overall = models.ToDictionary(
     model => model, model => Aggregate(records, model));
 var reviewMetrics = models.Where(x => x.StartsWith("Meltia-v1.0-", StringComparison.Ordinal))
     .ToDictionary(model => model, model => AggregateReviews(records, model));
+var phase3Impact = new[] { "independent", "lexicon", "shadow", "shadow-lexicon" }
+    .ToDictionary(condition => condition,
+        condition => AggregateDiverseImpact(records, condition));
 // The A04 adversarial cases intentionally have contradictory intents for
 // identical input bytes. Report the impossibility explicitly, then require
 // correct classification when a user actually supplies the language lock.
@@ -404,6 +407,7 @@ var report = new
     Categories = byCategory,
     Overall = overall,
     ReviewMetrics = reviewMetrics,
+    Phase3DiversityImpact = phase3Impact,
     AmbiguityPairs = ambiguityChecks,
     Cases = records,
 };
@@ -654,6 +658,13 @@ foreach (var row in records)
     }
 }
 Console.WriteLine("PASS phase3 nontruncated and Japanese-only candidate/route parity");
+foreach (var (condition, impact) in phase3Impact)
+    Console.WriteLine("PHASE3 IMPACT " + suite + " " + condition +
+        " changed=" + impact.ChangedInputs +
+        " goldAdded=" + impact.NewGoldEdges +
+        " goldDropped=" + impact.DroppedGoldEdges +
+        " newlyCorrect=" + impact.NewlyCorrectTop1 +
+        " newlyWrong=" + impact.NewlyWrongTop1);
 foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-lexicon" })
 {
     var baseline = overall["Meltia-v1.0-windowed-" + condition];
@@ -730,6 +741,38 @@ static string FailureStage(CaseRecord row, Prediction p)
     if (p.Routes.Any(route => route.SequenceEqual(row.GoldEnglish)))
         return "top1-ranking-wrong";
     return "route-or-topk-missing";
+}
+
+static CandidateSelectionImpact AggregateDiverseImpact(
+    IEnumerable<CaseRecord> sample, string condition)
+{
+    int changed = 0, added = 0, dropped = 0, fixedTop1 = 0,
+        brokenTop1 = 0, checkedCases = 0;
+    foreach (var row in sample)
+    {
+        var before = row.Predictions.Single(x =>
+            x.Model == "Meltia-v1.0-windowed-" + condition);
+        var after = row.Predictions.Single(x =>
+            x.Model == "Meltia-v1.0-diverse-" + condition);
+        if (before.Error is not null || after.Error is not null ||
+            before.Candidates is null || after.Candidates is null)
+            continue;
+        checkedCases++;
+        if (!before.Candidates.SequenceEqual(after.Candidates)) changed++;
+        foreach (var gold in row.GoldEnglish)
+        {
+            bool presentBefore = before.Candidates.Contains(gold);
+            bool presentAfter = after.Candidates.Contains(gold);
+            if (presentAfter && !presentBefore) added++;
+            if (presentBefore && !presentAfter) dropped++;
+        }
+        bool wasCorrect = before.English.SequenceEqual(row.GoldEnglish);
+        bool isCorrect = after.English.SequenceEqual(row.GoldEnglish);
+        if (isCorrect && !wasCorrect) fixedTop1++;
+        if (wasCorrect && !isCorrect) brokenTop1++;
+    }
+    return new CandidateSelectionImpact(
+        checkedCases, changed, added, dropped, fixedTop1, brokenTop1);
 }
 
 static ReviewMetrics AggregateReviews(IEnumerable<CaseRecord> sample, string model)
@@ -823,6 +866,10 @@ internal sealed record Prediction(string Model, IReadOnlyList<Utf16Span> English
     IReadOnlyList<IReadOnlyList<Utf16Span>> Routes,
     IReadOnlyList<Utf16Span>? Candidates, string? Error,
     BoundaryReview? Review = null);
+
+internal sealed record CandidateSelectionImpact(
+    int CheckedInputs, int ChangedInputs, int NewGoldEdges,
+    int DroppedGoldEdges, int NewlyCorrectTop1, int NewlyWrongTop1);
 
 internal sealed record ReviewMetrics(
     int Reviewed, int NeedsConfirmation, int ConfirmationTop1Wrong,
