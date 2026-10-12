@@ -6,13 +6,16 @@
 param(
     [ValidateSet("win-x64", "win-arm64")]
     [string]$Runtime = "win-x64",
+    [switch]$FrameworkDependent,
     [switch]$SkipSmokeTest
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $project = Join-Path $root "src/Meltia.Windows/Meltia.Windows.csproj"
-$out = Join-Path $root "artifacts/meltia-windows-preview-$Runtime"
-$zip = Join-Path $root "artifacts/meltia-windows-preview-$Runtime.zip"
+$restoreConfig = Join-Path $root "tools/meltia-publish.nuget.config"
+$flavor = if ($FrameworkDependent) { "-framework-dependent" } else { "" }
+$out = Join-Path $root "artifacts/meltia-windows-preview-$Runtime$flavor"
+$zip = Join-Path $root "artifacts/meltia-windows-preview-$Runtime$flavor.zip"
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     throw ".NET SDK 10 is required. No publish or validation was performed."
@@ -21,12 +24,32 @@ $sdks = @(dotnet --list-sdks)
 if (-not ($sdks | Where-Object { $_ -match '^10\.' })) {
     throw ".NET 10 SDK not found. Available SDKs: $($sdks -join ', ')"
 }
+if (-not (Test-Path -LiteralPath $restoreConfig)) {
+    throw "Missing tools/meltia-publish.nuget.config. Update to the latest preview branch."
+}
+# The repository-level nuget.config explicitly clears online sources.
+# Restore runtime packs via a publishing-only config, not by editing the
+# developer's global NuGet sources or weakening the offline core test setup.
+# Self-contained requires Microsoft.NETCore.App.Runtime.win-* and other
+# Windows runtime packages from nuget.org. The framework-dependent fallback
+# uses the matching .NET 10 desktop runtime installed on the user's PC.
+$selfContained = if ($FrameworkDependent) { "false" } else { "true" }
+Write-Host "Meltia restore: $Runtime (self-contained=$selfContained)"
+Write-Host "NuGet sources: tools/meltia-publish.nuget.config (nuget.org)"
+dotnet restore $project -r $Runtime --configfile $restoreConfig -p:SelfContained=$selfContained -p:PublishSingleFile=false --nologo
+if ($LASTEXITCODE -ne 0) {
+    if ($FrameworkDependent) {
+        throw "NuGet restore failed. Check the local .NET SDK 10 and Windows desktop reference packs."
+    }
+    throw "NuGet runtime-pack restore failed. Check network access to https://api.nuget.org/v3/index.json; for an installed .NET 10 Desktop runtime, try -FrameworkDependent."
+}
+
 New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
 # Never reuse the previous published folder: old Meltype files must not be
 # accidentally included in the renamed Meltia package.
 if (Test-Path $out) { Remove-Item -LiteralPath $out -Recurse -Force }
-dotnet publish $project -c Release -r $Runtime --self-contained true -p:PublishSingleFile=false -o $out --nologo
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed; no package created." }
+dotnet publish $project -c Release -r $Runtime --self-contained $selfContained --no-restore -p:PublishSingleFile=false -o $out --nologo
+if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed after restore; no package created." }
 $exe = Join-Path $out "Meltia.exe"
 if (-not (Test-Path $exe)) { throw "Published Meltia.exe missing." }
 Copy-Item (Join-Path $root "LICENSE") (Join-Path $out "LICENSE") -Force
@@ -51,3 +74,6 @@ if (Test-Path $zip) { Remove-Item -LiteralPath $zip -Force }
 Compress-Archive -Path (Join-Path $out "*") -DestinationPath $zip
 Write-Host "Meltia preview package: $zip"
 Write-Host "Keyboard preview ONLY. This is not a TSF-registered IME release."
+if ($FrameworkDependent) {
+    Write-Host "Framework-dependent: the target PC MUST have .NET 10 Windows Desktop Runtime installed."
+}
