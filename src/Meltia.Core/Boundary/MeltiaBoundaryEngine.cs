@@ -36,7 +36,8 @@ public sealed record MeltiaBoundaryOptions(
     bool ExperimentalUnknownLatinCandidates = false,
     bool ExperimentalPhoneticLatticeDecoder = false,
     bool ExperimentalContextualIslandScoring = false,
-    bool ExperimentalUncertaintyReview = false);
+    bool ExperimentalUncertaintyReview = false,
+    bool ExperimentalLongRunWindowing = false);
 
 /// <summary>
 /// v0.5 parallel boundary engine. No changes to Meltype composition/TSF or commit behavior.
@@ -59,6 +60,11 @@ public sealed class MeltiaBoundaryEngine
             !_options.ExperimentalPhoneticLatticeDecoder)
             throw new ArgumentException(
                 "v0.9 contextual scoring requires the phonetic lattice decoder.",
+                nameof(options));
+        if (_options.ExperimentalLongRunWindowing &&
+            !_options.ExperimentalUnknownLatinCandidates)
+            throw new ArgumentException(
+                "Long-run windowing requires experimental unknown Latin candidates.",
                 nameof(options));
     }
 
@@ -200,7 +206,8 @@ public sealed class MeltiaBoundaryEngine
         // Low-confidence by design: these help candidate recall, but are not
         // an instruction to show or commit English in the user's IME.
         if (_options.ExperimentalUnknownLatinCandidates)
-            foreach (var edge in MeltiaUnknownLatinCandidates.Generate(raw))
+            foreach (var edge in MeltiaUnknownLatinCandidates.Generate(
+                raw, _options.ExperimentalLongRunWindowing))
             {
                 // v0.7 adds hypotheses; it must never alter the provenance or
                 // ranking of an existing lexicon / Meltype / capitalization edge.
