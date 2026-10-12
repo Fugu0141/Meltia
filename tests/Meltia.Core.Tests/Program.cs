@@ -465,6 +465,11 @@ Check(v10.Analyze("tokyo", new BoundaryEvidence(
 Check(v10.Analyze("nihongo", new BoundaryEvidence(
     EnglishWords: ["go"])).Review is { UnresolvedReadableEnglish.Count: 0 },
     "v1.0 does not mistake the go substring in nihongo for standalone English");
+Check(v10.Analyze("tokyo", new BoundaryEvidence(
+    EnglishWords: ["tokyo"],
+    ExplicitJapanese: [new Utf16Span(0, 5)])).Review is
+    { NeedsConfirmation: false, UnresolvedReadableEnglish.Count: 0 },
+    "v1.0 respects explicit Japanese choice against English dictionary ambiguity");
 Check(v10.Analyze("tokyo").Review is { NeedsConfirmation: false,
         UnresolvedReadableEnglish.Count: 0 },
     "v1.0 never invents English intent evidence for untagged Tokyo");
