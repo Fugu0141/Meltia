@@ -268,8 +268,10 @@ if (suite == "adversarial")
             EnglishWords: [raw]));
         if (!english.Routes[0].EnglishSpans.SequenceEqual([lockSpan]) ||
             japanese.Routes[0].EnglishSpans.Count != 0 ||
-            withoutLock.Review is not { NeedsConfirmation: true } ||
-            withoutLock.Review.UnresolvedReadableEnglish.Count != 1 ||
+            withoutLock.Review is not {
+                NeedsConfirmation: true,
+                UnresolvedReadableEnglish.Count: 1
+            } ||
             english.AutoCommitAllowed || japanese.AutoCommitAllowed)
         {
             Console.Error.WriteLine("v1.0 A04 AMBIGUOUS INTENT LOCK FAILURE " + raw);
