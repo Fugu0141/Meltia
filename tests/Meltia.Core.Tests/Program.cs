@@ -521,4 +521,39 @@ foreach (var part in v10ReplayParts)
 }
 Check(v10PrefixSafe, "v1.0 all legal incremental prefixes are read-only and deterministic");
 
+
+// v1.0 quality release blocker: the exact same raw text can mean Japanese
+// or English. An orthography-only model cannot satisfy both labels without
+// user-supplied intention. Check both explicit choices work reproducibly.
+var intentPairs = new[] { "tokyo", "ime", "sake", "take", "kaki", "no" };
+var pairedIntentOk = true;
+foreach (var rawIntent in intentPairs)
+{
+    var whole = new Utf16Span(0, rawIntent.Length);
+    var englishChoice = v10.Analyze(rawIntent, new BoundaryEvidence(
+        EnglishWords: [rawIntent], ExplicitEnglish: [whole]));
+    var japaneseChoice = v10.Analyze(rawIntent, new BoundaryEvidence(
+        EnglishWords: [rawIntent], ExplicitJapanese: [whole]));
+    var unresolved = v10.Analyze(rawIntent, new BoundaryEvidence(
+        EnglishWords: [rawIntent]));
+    pairedIntentOk &= englishChoice.Routes[0].EnglishSpans.SequenceEqual([whole]) &&
+        japaneseChoice.Routes[0].EnglishSpans.Count == 0 &&
+        englishChoice.Review is { UnresolvedReadableEnglish.Count: 0 } &&
+        japaneseChoice.Review is { UnresolvedReadableEnglish.Count: 0 } &&
+        unresolved.Review is { NeedsConfirmation: true } &&
+        !englishChoice.AutoCommitAllowed && !japaneseChoice.AutoCommitAllowed;
+}
+Check(pairedIntentOk,
+    "v1.0 6 contradictory-intent spellings obey both explicit language locks and remain reversible");
+
+// Mandatory/protected inputs must remain mandatory even when the tentative
+// path search chooses a different language hypothesis elsewhere in the input.
+var mixedWithUrl = "ka😀https://example.org/docs ni compiler";
+var mixedWithUrlResult = v10.Analyze(mixedWithUrl);
+Check(mixedWithUrlResult.Raw == mixedWithUrl &&
+    mixedWithUrlResult.Routes.All(r =>
+        r.EnglishSpans.Contains(new Utf16Span(4, 28))) &&
+    !mixedWithUrlResult.AutoCommitAllowed,
+    "v1.0 protected URL after a surrogate pair survives Top-K and never commits");
+
 Console.WriteLine($"ALL PASS {passed}");
