@@ -11,6 +11,10 @@ internal static class MeltiaPhoneticLatticeDecoder
 {
     private const int MaxJapaneseEdgeLength = 8;
     private const double UnreadableAsciiCost = 3.5;
+    // Japanese syllables left intact are positive evidence, not merely free.
+    // A small per-character reward disfavors an English edge that swallows
+    // the beginning of an otherwise phonetic Japanese suffix.
+    private const double ReadableJapaneseCharReward = 0.25;
 
     public static IReadOnlyList<BoundaryRoute> Decode(
         string raw,
@@ -72,7 +76,9 @@ internal static class MeltiaPhoneticLatticeDecoder
                         length++)
                     {
                         if (!readable[i, length]) continue;
-                        offers.AddRange(dp[i + length]);
+                        foreach (var tail in dp[i + length])
+                            offers.Add(new BoundaryRoute(tail.EnglishSpans,
+                                tail.Score + length * ReadableJapaneseCharReward));
                     }
                     // A mistyped Japanese syllable or as-yet-unrecognized
                     // Latin letter remains representable; never throw or
