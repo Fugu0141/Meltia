@@ -32,7 +32,8 @@ public sealed record BoundaryEvidence(
 public sealed record MeltiaBoundaryOptions(
     bool ExperimentalStrongHostAdvisory = false,
     bool ExperimentalFragmentationPenalty = false,
-    bool ExperimentalUnknownLatinCandidates = false);
+    bool ExperimentalUnknownLatinCandidates = false,
+    bool ExperimentalPhoneticLatticeDecoder = false);
 
 /// <summary>
 /// v0.5 parallel boundary engine. No changes to Meltype composition/TSF or commit behavior.
@@ -215,8 +216,14 @@ public sealed class MeltiaBoundaryEngine
         // cautious fragmentation cost when its generator is enabled, even if
         // a caller forgot to opt in to the ranking experiment separately.
         var perSpanCost = _options.ExperimentalFragmentationPenalty ||
-            _options.ExperimentalUnknownLatinCandidates ? 4.5 : 0.3;
-        var routes = BuildRoutes(raw.Length, candidates, hard, perSpanCost);
+            _options.ExperimentalUnknownLatinCandidates ||
+            _options.ExperimentalPhoneticLatticeDecoder ? 4.5 : 0.3;
+        // v0.8 is a separate experimental decoder, never an implicit change
+        // to v0.7 or the installed Meltype input/composition path.
+        var routes = _options.ExperimentalPhoneticLatticeDecoder
+            ? MeltiaPhoneticLatticeDecoder.Decode(raw, candidates, hard,
+                japanese, perSpanCost, MaxRoutes)
+            : BuildRoutes(raw.Length, candidates, hard, perSpanCost);
         return new BoundaryResult(raw, candidates, routes, bySpan.Count > MaxCandidates);
     }
 
