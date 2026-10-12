@@ -140,7 +140,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add(_levelItem);
 #if MELTIA_PREVIEW
         var meltiaBoundaryItem = new ToolStripMenuItem(
-            "Meltia 新境界判定を試す (実験)", null, null)
+            "Meltia 新境界判定を試す (実験)")
         {
             CheckOnClick = true,
             Checked = MeltiaPreviewBoundary.Enabled
