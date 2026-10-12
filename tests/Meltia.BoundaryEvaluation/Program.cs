@@ -392,26 +392,26 @@ foreach (var row in records)
     }
 }
 Console.WriteLine("PASS v0.9 per-input candidate parity with v0.8");
-// Do not regress the already studied 47/530-case Top1 or Top-K for any
-// matched evidence mode. The fresh-vocabulary suite remains a separate
-// *unoptimized* exploratory report; only safety invariants gate it.
-if (suite != "generalization")
+// The same semantic nonregression now holds for all three named synthetic
+// suites, including newly introduced lexical types. All models use the same
+// exact inputs, evidence and gold labels within each suite. This guard is not
+// evidence of naturally typed text accuracy or a statistical significance test.
+foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-lexicon" })
 {
-    foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-lexicon" })
+    var older = overall["Meltia-v0.8-" + condition];
+    var newer = overall["Meltia-v0.9-" + condition];
+    if (newer.ExactCases < older.ExactCases ||
+        newer.TopKExactCases < older.TopKExactCases)
     {
-        var older = overall["Meltia-v0.8-" + condition];
-        var newer = overall["Meltia-v0.9-" + condition];
-        if (newer.ExactCases < older.ExactCases ||
-            newer.TopKExactCases < older.TopKExactCases)
-        {
-            Console.Error.WriteLine("v0.9 STUDIED CORPUS ACCURACY REGRESSION: " +
-                condition + " Top1=" + newer.ExactCases + "/" + older.ExactCases +
-                " TopK=" + newer.TopKExactCases + "/" + older.TopKExactCases);
-            return 7;
-        }
+        Console.Error.WriteLine("v0.9 SYNTHETIC CORPUS ACCURACY REGRESSION: " +
+            suite + " " + condition +
+            " Top1=" + newer.ExactCases + "/" + older.ExactCases +
+            " TopK=" + newer.TopKExactCases + "/" + older.TopKExactCases);
+        return 7;
     }
-    Console.WriteLine("PASS v0.9 studied-corpus Top1/TopK nonregression across all evidence conditions");
 }
+Console.WriteLine("PASS v0.9 Top1/TopK nonregression on " + suite +
+    " across all evidence conditions");
 var errors = overall.Values.Sum(x => x.Errors);
 if (errors > 0)
 {
