@@ -23,10 +23,13 @@ internal static class MeltiaPreviewSelfTest
             Check("preview-keeps-separated-data", () =>
             {
                 var path = Config.AppPaths.DataDirectory;
-                return path.Contains("Meltia", StringComparison.OrdinalIgnoreCase) &&
-                    !path.EndsWith(
-                        Path.Combine("AppData", "Local", "Meltype"),
-                        StringComparison.OrdinalIgnoreCase);
+                var expected = Environment.GetEnvironmentVariable("MELTYPE_DATA_DIR");
+                var meltype = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Meltype");
+                return string.Equals(path, expected, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(Path.GetFullPath(path),
+                        Path.GetFullPath(meltype), StringComparison.OrdinalIgnoreCase);
             });
 
             var raw = "nihongocompiler";
