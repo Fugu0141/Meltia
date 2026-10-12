@@ -18,6 +18,7 @@
 - [v1.0-dev 境界の不確実性レビュー](../../docs/MELTIA_V10_UNCERTAINTY_REVIEW_20261012.md)
 - [v1.0 フェーズ2：長文の未知英語候補生成（既定OFF）](../../docs/MELTIA_V10_LONG_RUN_PHASE2_20261012.md)
 - [v1.0 フェーズ3：128候補予算の位置的多様化（既定OFF）](../../docs/MELTIA_V10_DIVERSE_CANDIDATES_PHASE3_20261012.md)
+- [v1.0 フェーズ4：日本語ローマ字の吸収を抑制するスコアリング（既定OFF）](../../docs/MELTIA_V10_FLANK_RANKING_PHASE4_20261012.md)
 
 ```sh
 dotnet run --project src/Meltia.Cli -- kyouhaKingGnudeSPYAIRde
