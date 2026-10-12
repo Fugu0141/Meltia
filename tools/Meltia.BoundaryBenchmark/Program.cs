@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 // Reproducible diagnostic workload, not a Windows TSF latency claim.
 // The CI runner is noisy: do not set a hard latency gate using this sample.
 using System.Diagnostics;

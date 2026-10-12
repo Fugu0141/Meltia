@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Fugu0141
 """Run Meltia v1.0 diagnostic suites without GitHub-hosted Actions.
 
 This script does NOT modify the input method, commit a conversion, or mark

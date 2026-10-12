@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 // v1.0 Quality hardening: fixed, hand-authored intent-paired stress cases.
 // NOT unseen, natural text, statistically representative or blind holdout.
 // For A04 pairs identical bytes with opposing intended labels deliberately
