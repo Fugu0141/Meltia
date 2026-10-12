@@ -94,6 +94,23 @@ var v10DiverseWithHost = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalUncertaintyReview: true,
     ExperimentalLongRunWindowing: true,
     ExperimentalDiverseCandidatePruning: true));
+var v10FlankIndependent = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true,
+    ExperimentalLongRunWindowing: true,
+    ExperimentalDiverseCandidatePruning: true,
+    ExperimentalJapaneseFlankScoring: true));
+var v10FlankWithHost = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalStrongHostAdvisory: true,
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true,
+    ExperimentalLongRunWindowing: true,
+    ExperimentalDiverseCandidatePruning: true,
+    ExperimentalJapaneseFlankScoring: true));
 var detector = CompositionDetector.CreateDefault();
 var records = new List<CaseRecord>();
 foreach (var gold in cases)
@@ -123,6 +140,8 @@ foreach (var gold in cases)
             v10WindowIndependent.Analyze(gold.Raw)));
         predictions.Add(FromCore("Meltia-v1.0-diverse-independent",
             v10DiverseIndependent.Analyze(gold.Raw)));
+        predictions.Add(FromCore("Meltia-v1.0-flank-independent",
+            v10FlankIndependent.Analyze(gold.Raw)));
         var experiment = experimental.Analyze(gold.Raw);
         predictions.Add(FromCore("Meltia-experimental-independent", experiment));
     }
@@ -135,6 +154,7 @@ foreach (var gold in cases)
         predictions.Add(Error("Meltia-v1.0-independent", ex));
         predictions.Add(Error("Meltia-v1.0-windowed-independent", ex));
         predictions.Add(Error("Meltia-v1.0-diverse-independent", ex));
+        predictions.Add(Error("Meltia-v1.0-flank-independent", ex));
     }
 
     try
@@ -161,6 +181,8 @@ foreach (var gold in cases)
             v10WindowIndependent.Analyze(gold.Raw, evidence)));
         predictions.Add(FromCore("Meltia-v1.0-diverse-lexicon",
             v10DiverseIndependent.Analyze(gold.Raw, evidence)));
+        predictions.Add(FromCore("Meltia-v1.0-flank-lexicon",
+            v10FlankIndependent.Analyze(gold.Raw, evidence)));
         var matched = experimental.Analyze(gold.Raw, evidence);
         predictions.Add(FromCore("Meltia-experimental-lexicon", matched));
     }
@@ -173,6 +195,7 @@ foreach (var gold in cases)
         predictions.Add(Error("Meltia-v1.0-lexicon", ex));
         predictions.Add(Error("Meltia-v1.0-windowed-lexicon", ex));
         predictions.Add(Error("Meltia-v1.0-diverse-lexicon", ex));
+        predictions.Add(Error("Meltia-v1.0-flank-lexicon", ex));
     }
 
     try
@@ -216,6 +239,9 @@ foreach (var gold in cases)
         predictions.Add(FromCore("Meltia-v1.0-diverse-shadow",
             MeltypeBoundaryShadowBridge.CompareSegments(
                 gold.Raw, segments, v10DiverseWithHost).Meltia));
+        predictions.Add(FromCore("Meltia-v1.0-flank-shadow",
+            MeltypeBoundaryShadowBridge.CompareSegments(
+                gold.Raw, segments, v10FlankWithHost).Meltia));
         var v07SharedShadow = MeltypeBoundaryShadowBridge.CompareSegments(
             gold.Raw, segments, v07WithHost,
             englishWords: matchedEvidence.EnglishWords,
@@ -245,6 +271,11 @@ foreach (var gold in cases)
         predictions.Add(FromCore("Meltia-v1.0-diverse-shadow-lexicon",
             MeltypeBoundaryShadowBridge.CompareSegments(
                 gold.Raw, segments, v10DiverseWithHost,
+                englishWords: matchedEvidence.EnglishWords,
+                properNames: matchedEvidence.ProperNames).Meltia));
+        predictions.Add(FromCore("Meltia-v1.0-flank-shadow-lexicon",
+            MeltypeBoundaryShadowBridge.CompareSegments(
+                gold.Raw, segments, v10FlankWithHost,
                 englishWords: matchedEvidence.EnglishWords,
                 properNames: matchedEvidence.ProperNames).Meltia));
         predictions.Add(FromCore("Meltia-penalty-only-shadow",
@@ -277,7 +308,9 @@ foreach (var gold in cases)
         predictions.Add(Error("Meltia-v1.0-windowed-shadow", ex));
         predictions.Add(Error("Meltia-v1.0-windowed-shadow-lexicon", ex));
         predictions.Add(Error("Meltia-v1.0-diverse-shadow", ex));
+        predictions.Add(Error("Meltia-v1.0-flank-shadow", ex));
         predictions.Add(Error("Meltia-v1.0-diverse-shadow-lexicon", ex));
+        predictions.Add(Error("Meltia-v1.0-flank-shadow-lexicon", ex));
         predictions.Add(Error("Meltia-penalty-only-shadow", ex));
         predictions.Add(Error("Meltia-host-only-shadow", ex));
         predictions.Add(Error("Meltia-experimental-shadow-lexicon", ex));
@@ -303,7 +336,9 @@ string[] models = [
     "Meltia-v1.0-windowed-independent", "Meltia-v1.0-windowed-lexicon",
     "Meltia-v1.0-windowed-shadow", "Meltia-v1.0-windowed-shadow-lexicon",
     "Meltia-v1.0-diverse-independent", "Meltia-v1.0-diverse-lexicon",
-    "Meltia-v1.0-diverse-shadow", "Meltia-v1.0-diverse-shadow-lexicon"
+    "Meltia-v1.0-diverse-shadow", "Meltia-v1.0-diverse-shadow-lexicon",
+    "Meltia-v1.0-flank-independent", "Meltia-v1.0-flank-lexicon",
+    "Meltia-v1.0-flank-shadow", "Meltia-v1.0-flank-shadow-lexicon"
 ];
 var overall = models.ToDictionary(
     model => model, model => Aggregate(records, model));
@@ -312,6 +347,9 @@ var reviewMetrics = models.Where(x => x.StartsWith("Meltia-v1.0-", StringCompari
 var phase3Impact = new[] { "independent", "lexicon", "shadow", "shadow-lexicon" }
     .ToDictionary(condition => condition,
         condition => AggregateDiverseImpact(records, condition));
+var phase4Impact = new[] { "independent", "lexicon", "shadow", "shadow-lexicon" }
+    .ToDictionary(condition => condition,
+        condition => AggregateFlankImpact(records, condition));
 // The A04 adversarial cases intentionally have contradictory intents for
 // identical input bytes. Report the impossibility explicitly, then require
 // correct classification when a user actually supplies the language lock.
@@ -401,6 +439,7 @@ var report = new
         "Longrun: 60 synthetic scenarios with >96 contiguous ASCII characters, evaluates both baseline and strictly opt-in overlapping-window proposals",
         "Phase3 diverse: experimental start-region coverage only after 128-candidate pressure, always preserves user/protected and higher-priority lexicon and host candidates. No proven accuracy gain.",
         "Budget stress: 36 synthetic fixed intent labels, includes long Japanese negatives, dense multi-island gold and separated candidate regions.",
+        "Phase4 flank: speculative-only route re-scoring for English edges that absorb long readable Japanese prefixes or suffixes; never changes edge generation.",
         "Core 47 cases have already been studied and are DEVELOPMENT diagnostics, not a blind holdout",
         "Robustness suite: 530 synthetic inputs from H1/H9 previously used 54 OOV English words and 19 Japanese phonetic words, NOT natural holdout or Python parity"
     },
@@ -411,6 +450,7 @@ var report = new
     Overall = overall,
     ReviewMetrics = reviewMetrics,
     Phase3DiversityImpact = phase3Impact,
+    Phase4FlankImpact = phase4Impact,
     AmbiguityPairs = ambiguityChecks,
     Cases = records,
 };
@@ -680,6 +720,36 @@ foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-le
         " deltaCandidateEdges=" +
             ((diverse.CandidateEdges ?? 0) - (baseline.CandidateEdges ?? 0)));
 }
+// Flank scoring must not mutate a candidate list. Differences can only be
+// due to rescoring/reordering, and the evaluator records both regressions
+// and successes rather than tuning a threshold against this same corpus.
+foreach (var row in records)
+{
+    foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-lexicon" })
+    {
+        var old = row.Predictions.Single(x =>
+            x.Model == "Meltia-v1.0-diverse-" + condition);
+        var ranked = row.Predictions.Single(x =>
+            x.Model == "Meltia-v1.0-flank-" + condition);
+        if (old.Error is not null || ranked.Error is not null) continue;
+        if (!old.Candidates!.SequenceEqual(ranked.Candidates!))
+        {
+            Console.Error.WriteLine("PHASE4 CANDIDATE LIST REGRESSION " +
+                suite + " " + row.Id + " " + condition);
+            return 12;
+        }
+    }
+}
+Console.WriteLine("PASS phase4 exact candidate parity on " + suite);
+foreach (var (condition, impact) in phase4Impact)
+    Console.WriteLine("PHASE4 IMPACT " + suite + " " + condition +
+        " newlyCorrect=" + impact.NewlyCorrectTop1 +
+        " newlyWrong=" + impact.NewlyWrongTop1 +
+        " topKRescued=" + impact.RescuedTopK +
+        " topKLost=" + impact.LostTopK +
+        " japaneseFalseBefore=" + impact.JapaneseFalseBefore +
+        " japaneseFalseAfter=" + impact.JapaneseFalseAfter);
+
 var errors = overall.Values.Sum(x => x.Errors);
 if (errors > 0)
 {
@@ -744,6 +814,40 @@ static string FailureStage(CaseRecord row, Prediction p)
     if (p.Routes.Any(route => route.SequenceEqual(row.GoldEnglish)))
         return "top1-ranking-wrong";
     return "route-or-topk-missing";
+}
+
+static FlankRankingImpact AggregateFlankImpact(
+    IEnumerable<CaseRecord> sample, string condition)
+{
+    int evaluated = 0, changed = 0, fixedTop1 = 0, brokenTop1 = 0,
+        rescuedTopK = 0, lostTopK = 0, japaneseBefore = 0, japaneseAfter = 0;
+    foreach (var row in sample)
+    {
+        var before = row.Predictions.Single(x =>
+            x.Model == "Meltia-v1.0-diverse-" + condition);
+        var after = row.Predictions.Single(x =>
+            x.Model == "Meltia-v1.0-flank-" + condition);
+        if (before.Error is not null || after.Error is not null) continue;
+        evaluated++;
+        if (!before.English.SequenceEqual(after.English)) changed++;
+        bool b = before.English.SequenceEqual(row.GoldEnglish);
+        bool a = after.English.SequenceEqual(row.GoldEnglish);
+        if (a && !b) fixedTop1++;
+        if (b && !a) brokenTop1++;
+        bool wasInTopK = before.Routes.Any(x => x.SequenceEqual(row.GoldEnglish));
+        bool isInTopK = after.Routes.Any(x => x.SequenceEqual(row.GoldEnglish));
+        if (isInTopK && !wasInTopK) rescuedTopK++;
+        if (wasInTopK && !isInTopK) lostTopK++;
+        if (row.Category is "S11-japanese-only" or "R08-japanese-only" or
+            "G06-japanese-only" or "A01-japanese-orthographic" or
+            "L04-long-japanese-only" or "B03-japanese-negative")
+        {
+            if (before.English.Count > 0) japaneseBefore++;
+            if (after.English.Count > 0) japaneseAfter++;
+        }
+    }
+    return new FlankRankingImpact(evaluated, changed, fixedTop1,
+        brokenTop1, rescuedTopK, lostTopK, japaneseBefore, japaneseAfter);
 }
 
 static CandidateSelectionImpact AggregateDiverseImpact(
@@ -869,6 +973,12 @@ internal sealed record Prediction(string Model, IReadOnlyList<Utf16Span> English
     IReadOnlyList<IReadOnlyList<Utf16Span>> Routes,
     IReadOnlyList<Utf16Span>? Candidates, string? Error,
     BoundaryReview? Review = null);
+
+internal sealed record FlankRankingImpact(
+    int Evaluated, int ChangedTop1,
+    int NewlyCorrectTop1, int NewlyWrongTop1,
+    int RescuedTopK, int LostTopK,
+    int JapaneseFalseBefore, int JapaneseFalseAfter);
 
 internal sealed record CandidateSelectionImpact(
     int CheckedInputs, int ChangedInputs, int NewGoldEdges,
