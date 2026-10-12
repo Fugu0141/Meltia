@@ -641,4 +641,94 @@ Check(unicodeLongResult.Raw == unicodeLong &&
     unicodeLongResult.Candidates.All(c => c.Span.Start >= 2 && c.Span.End <= unicodeLong.Length - 1),
     "v1.0 tiling keeps absolute UTF-16 boundaries after an emoji");
 
+
+// v1.0 phase 3: direct adversarial candidate-budget contract. Do not use
+// fabricated gold to claim a real Japanese/English accuracy improvement.
+var speculativeDense = new List<BoundaryCandidate>();
+for (int i = 0; i < 160; ++i)
+{
+    var start = i % 20;
+    var length = 5 + i / 20;
+    speculativeDense.Add(new BoundaryCandidate(
+        new Utf16Span(start, start + length),
+        MeltiaDiverseCandidateSelector.UnknownOrigin, 10.0 - i * 0.01));
+}
+for (int i = 0; i < 16; ++i)
+    speculativeDense.Add(new BoundaryCandidate(
+        new Utf16Span(216 + i, 221 + i),
+        MeltiaDiverseCandidateSelector.UnknownOrigin, 0.01 - i * 0.0001));
+var prioritized = new BoundaryCandidate(
+    new Utf16Span(320, 328), "host-lexicon-advisory", 5.0);
+speculativeDense.Add(prioritized);
+var baselineDense = speculativeDense
+    .OrderBy(c => c.Origin == MeltiaDiverseCandidateSelector.UnknownOrigin ? 1 : 0)
+    .ThenByDescending(c => c.Score)
+    .ThenBy(c => c.Span.Start).ThenBy(c => c.Span.End)
+    .Take(MeltiaBoundaryEngine.MaxCandidates).ToArray();
+var selectedDense = MeltiaDiverseCandidateSelector.Select(
+    speculativeDense, MeltiaBoundaryEngine.MaxCandidates).ToArray();
+Check(baselineDense.Length == 128 && selectedDense.Length == 128 &&
+    selectedDense.Contains(prioritized) &&
+    !baselineDense.Any(c => c.Span.Start >= 216 && c.Span.Start < 240) &&
+    selectedDense.Any(c => c.Span.Start >= 216 && c.Span.Start < 240) &&
+    selectedDense.Select(c => c.Span).Distinct().Count() == selectedDense.Length,
+    "v1.0 phase3 preserves lexicon and rescues a distant candidate region under overload");
+Check(MeltiaDiverseCandidateSelector.Select(
+        speculativeDense, MeltiaBoundaryEngine.MaxCandidates)
+        .SequenceEqual(selectedDense) &&
+    MeltiaDiverseCandidateSelector.Select(
+        speculativeDense.AsEnumerable().Reverse(),
+        MeltiaBoundaryEngine.MaxCandidates)
+        .SequenceEqual(selectedDense),
+    "v1.0 phase3 budget is deterministic and insertion-order independent");
+
+var withoutCap = speculativeDense.Take(15).ToArray();
+var expectedWithoutCap = withoutCap
+    .OrderBy(c => c.Origin == MeltiaDiverseCandidateSelector.UnknownOrigin ? 1 : 0)
+    .ThenByDescending(c => c.Score)
+    .ThenBy(c => c.Span.Start).ThenBy(c => c.Span.End).ToArray();
+Check(MeltiaDiverseCandidateSelector.Select(withoutCap, 128)
+        .SequenceEqual(expectedWithoutCap) &&
+    MeltiaDiverseCandidateSelector.Select(withoutCap, 0).Count == 0,
+    "v1.0 phase3 reuses baseline sorting when cap is not reached");
+
+var phase3 = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true,
+    ExperimentalLongRunWindowing: true,
+    ExperimentalDiverseCandidatePruning: true));
+var phase3Parity = true;
+foreach (var rawSample in new[] {
+    "kyouhaphotonicswotukau", "tokyo", "ime", "nihongodearigatou",
+    "kyouhahttps://example.org/docs", "watashihaGPUwotukau"
+})
+{
+    var old = phase2.Analyze(rawSample);
+    var next = phase3.Analyze(rawSample);
+    phase3Parity &= old.Candidates.SequenceEqual(next.Candidates) &&
+        old.Routes.Count == next.Routes.Count &&
+        old.Routes.Zip(next.Routes, (a, b) =>
+            a.Score.Equals(b.Score) &&
+            a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(x => x);
+}
+Check(phase3Parity, "v1.0 phase3 does not change non-truncated short input");
+var phase3Japanese = phase3.Analyze(longRomaji);
+Check(phase3Japanese.Candidates.Count == 0 &&
+    phase3Japanese.Routes[0].EnglishSpans.Count == 0 &&
+    !phase3Japanese.AutoCommitAllowed,
+    "v1.0 phase3 preserves long Japanese-only negative control");
+var phase3Long = phase3.Analyze(longMixed);
+Check(phase3Long.Raw == longMixed &&
+    phase3Long.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates &&
+    phase3Long.Routes.Count <= MeltiaBoundaryEngine.MaxRoutes &&
+    !phase3Long.AutoCommitAllowed,
+    "v1.0 phase3 keeps UTF-16 raw, candidate limit and no auto-commit");
+var rejectedPhase3 = false;
+try { _ = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalDiverseCandidatePruning: true)); }
+catch (ArgumentException) { rejectedPhase3 = true; }
+Check(rejectedPhase3, "v1.0 phase3 rejects diversity without speculative generator");
+
 Console.WriteLine($"ALL PASS {passed}");
