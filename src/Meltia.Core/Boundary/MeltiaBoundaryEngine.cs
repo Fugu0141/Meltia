@@ -74,9 +74,10 @@ public sealed class MeltiaBoundaryEngine
                 "Candidate diversity requires experimental unknown Latin candidates.",
                 nameof(options));
         if (_options.ExperimentalJapaneseFlankScoring &&
-            !_options.ExperimentalPhoneticLatticeDecoder)
+            (!_options.ExperimentalPhoneticLatticeDecoder ||
+             !_options.ExperimentalUnknownLatinCandidates))
             throw new ArgumentException(
-                "Japanese flank scoring requires the phonetic lattice decoder.",
+                "Japanese flank scoring requires the phonetic lattice decoder and unknown Latin proposals.",
                 nameof(options));
     }
 
