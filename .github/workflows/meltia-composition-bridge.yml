@@ -1,58 +1,64 @@
-name: Meltia composition shadow bridge
+name: Meltia boundary quality
 on:
-  push:
-    paths:
-      - 'src/Meltia.CompositionBridge/**'
-      - 'tests/Meltia.CompositionBridge.Tests/**'
-      - 'tests/Meltia.BoundaryEvaluation/**'
-      - 'tools/Meltia.BoundaryBenchmark/**'
-      - 'src/Meltia.Core/**'
-      - 'src/Meltype.Core/**'
-      - '.github/workflows/meltia-composition-bridge.yml'
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: 'smoke: 47+56 cases; full: all 923 cases plus performance'
+        required: true
+        type: choice
+        options: [smoke, full]
+        default: smoke
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - 'src/Meltia.CompositionBridge/**'
       - 'tests/Meltia.CompositionBridge.Tests/**'
       - 'tests/Meltia.BoundaryEvaluation/**'
       - 'tools/Meltia.BoundaryBenchmark/**'
+      - 'tools/run-meltia-quality.py'
       - 'src/Meltia.Core/**'
       - 'src/Meltype.Core/**'
       - '.github/workflows/meltia-composition-bridge.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/Meltia.CompositionBridge/**'
+      - 'tests/Meltia.CompositionBridge.Tests/**'
+      - 'tests/Meltia.BoundaryEvaluation/**'
+      - 'tools/Meltia.BoundaryBenchmark/**'
+      - 'tools/run-meltia-quality.py'
+      - 'src/Meltia.Core/**'
+      - 'src/Meltype.Core/**'
+      - '.github/workflows/meltia-composition-bridge.yml'
+
 permissions:
   contents: read
+
+concurrency:
+  group: meltia-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   bridge-contracts:
+    # Draft PRs run locally: no minute usage until Ready for review.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Build actual Meltype + Meltia reference bridge
-        run: dotnet build src/Meltia.CompositionBridge/Meltia.CompositionBridge.csproj -c Release --nologo
-      - name: Run read-only bridge contract tests
-        run: dotnet run --project tests/Meltia.CompositionBridge.Tests/Meltia.CompositionBridge.Tests.csproj -c Release
-      - name: Keep base boundary regression coverage
-        run: dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
-      - name: Build and run synthetic gold boundary evaluation (no accuracy threshold yet)
+      - name: Run read-only boundary quality checks
+        env:
+          QUALITY_TIER: ${{ github.event_name == 'workflow_dispatch' && inputs.tier || 'smoke' }}
         run: |
-          dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-evaluation.json
-      - name: Evaluate 530 additional synthetic robustness cases (not a blind holdout)
-        run: |
-          dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-robustness.json --suite robustness
-      - name: Evaluate 290 additional synthetic vocabulary-shift and Japanese-negative cases
-        run: |
-          dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-generalization.json --suite generalization
-      - name: Evaluate 56 fixed adversarial ambiguity and mixed-script cases
-        run: |
-          dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-adversarial.json --suite adversarial
-      - name: Measure independent Core p50/p95/p99 and allocated bytes
-        run: |
-          dotnet run --project tools/Meltia.BoundaryBenchmark/Meltia.BoundaryBenchmark.csproj -c Release -- --output artifacts/meltia-boundary-performance.json
-      - name: Upload per-case boundary evaluation report even on evaluator failure
+          python3 tools/run-meltia-quality.py --tier "$QUALITY_TIER" --output-dir artifacts/meltia-quality
+      - name: Upload quality logs and per-suite JSON (also on failure)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: meltia-boundary-evaluation
-          path: artifacts/meltia-boundary-*.json
+          name: meltia-quality
+          path: artifacts/meltia-quality/
           if-no-files-found: warn
+          retention-days: 7

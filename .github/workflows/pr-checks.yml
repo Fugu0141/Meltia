@@ -7,7 +7,7 @@ name: pr-checks
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize, edited]
+    types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
   contents: read
@@ -18,6 +18,8 @@ concurrency:
 
 jobs:
   changes:
+    # Draft PRs are validated locally to avoid spending hosted minutes.
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -81,6 +83,7 @@ jobs:
         run: node .github/bot/pr-checks.mjs compare "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/pr.json"
 
   expectations:
+    if: github.event.pull_request.draft == false
     name: 報告の再現
     runs-on: ubuntu-latest
     timeout-minutes: 20

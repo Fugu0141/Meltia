@@ -101,3 +101,71 @@ Settings → Billing & plans / Settings → Actionsの確認を依頼する。
 
 この障害のため、**新規56件および性能測定のCI成功・測定値は未確認**。
 ソースへの追加と、実際の.NET環境でビルド・テストに成功したことは区別する。
+
+## 4. 無料枠を使い切った状態での検証・CI節約（2026-10-12）
+
+GitHub Actionsの**月間無料枠100%到達**が報告されたため、
+プライベートリポジトリのGitHub-hosted Runnerがジョブ初期化前に
+失敗する可能性が高い。これはユーザーのGitHub画面に基づく
+原因推定で、GitHub Check annotationsの本文による確定診断ではない。
+
+### ローカル実行（Windows/macOS/Linux）
+
+.NET SDK **10**、Python **3.10以降**、依存パッケージの復元用ネットワーク
+（初回のみ必要な場合あり）がある環境で、
+**リポジトリのルート**から次を実行：
+
+```sh
+python tools/run-meltia-quality.py --tier smoke
+python tools/run-meltia-quality.py --tier full
+```
+
+WindowsでPython Launcherを使う場合：
+
+```powershell
+py -3 tools/run-meltia-quality.py --tier full
+```
+
+- `smoke`: Core契約、Bridge契約、47件、56件を実行。
+- `full`: 上記に530件、290件、v0.9対v1.0オフライン性能比較を追加。
+- 成否・コマンドのログ・各ケースのJSON・性能結果を
+  `artifacts/meltia-quality/` に出力し、失敗時は**非ゼロ終了**。
+- `.NET` SDKが見つからない場合も`summary.json`で
+  `blocked-missing-dotnet`とし、**成功したと偽らない**。
+- `full`でもWindows TSFの実機入力・macOS/LinuxネイティブIME・
+  インストーラーの検証には**置き換えられない**。
+
+### GitHub Actionsの節約ルール
+
+1. Meltia専用CoreとShadow、元Meltypeの`build`、
+   `pr-checks`、`notices`は、
+   **Draft PRをスキップ**する設定に変更。
+   Ready for reviewに移行した際には自動CIを再開。
+2. コード`push`では`main`に限定し、
+   作業用ブランチで`push`と`pull_request`の重複実行を防止。
+   原則として開発中はローカル`smoke`を使用。
+3. 従来の`build.yml`はMeltypeのコード・配布物と関係する
+   変更に限定。Meltia専用Coreやベンチマークだけの変更では
+   Windows・macOSの全ビルドを自動起動しない。
+4. 新しいMeltia品質ワークフローのPRは`smoke`。
+   `workflow_dispatch`（手動起動）は`smoke`または`full`を指定。
+   ただし**workflow_dispatchは該当ワークフローが既定ブランチに存在することが前提**。
+   PRのDraft段階ではローカルスクリプトを使う。
+5. **リリース前に必ず**`full`（923件と性能）を成功させ、
+   元Meltype`build`の全OS・署名/インストーラーも別途検証。
+   Actionsの失敗やskipped状態を成功とみなさない。
+6. `pull_request_target`の`notices`は、
+   **既定ブランチ上のワークフローで動作する**ため、
+   Draftスキップ設定はPR内だけでは即座に有効にならず、
+   既定ブランチに適用されて初めて機能する。
+
+自動CIを減らすことは品質ゲートを弱めることではない。
+Draftと開発時には自前のテスト結果を収集し、レビュー・正式採用前に
+必要なゲートを全て実行して証拠を残す。
+
+### 制約・検証状況
+
+上記設定・スクリプトは**ソース実装**。GitHub-hostedランナーの
+利用枠が使い切られている間は、CI成功の実測とみなさない。
+ローカル開発環境に.NET SDK 10がない場合、`run-meltia-quality.py`
+はブロック理由を出力する。CIと正式配布の判定は保留する。
