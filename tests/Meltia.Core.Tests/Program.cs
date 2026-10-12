@@ -577,11 +577,11 @@ foreach (var shortSample in new[] {
     "nihongodearigatou", "tokyo", "ime", "https://example.org/docs"
 })
 {
-    var before = phase2Legacy.Analyze(shortSample);
-    var after = phase2.Analyze(shortSample);
-    shortLongParity &= before.Candidates.SequenceEqual(after.Candidates) &&
-        before.Routes.Count == after.Routes.Count &&
-        before.Routes.Zip(after.Routes, (a, b) =>
+    var legacyShortResult = phase2Legacy.Analyze(shortSample);
+    var windowedShortResult = phase2.Analyze(shortSample);
+    shortLongParity &= legacyShortResult.Candidates.SequenceEqual(windowedShortResult.Candidates) &&
+        legacyShortResult.Routes.Count == windowedShortResult.Routes.Count &&
+        legacyShortResult.Routes.Zip(windowedShortResult.Routes, (a, b) =>
             a.Score.Equals(b.Score) &&
             a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(x => x);
 }
@@ -705,11 +705,11 @@ foreach (var rawSample in new[] {
     "kyouhahttps://example.org/docs", "watashihaGPUwotukau"
 })
 {
-    var old = phase2.Analyze(rawSample);
-    var next = phase3.Analyze(rawSample);
-    phase3Parity &= old.Candidates.SequenceEqual(next.Candidates) &&
-        old.Routes.Count == next.Routes.Count &&
-        old.Routes.Zip(next.Routes, (a, b) =>
+    var phase2Sample = phase2.Analyze(rawSample);
+    var phase3Sample = phase3.Analyze(rawSample);
+    phase3Parity &= phase2Sample.Candidates.SequenceEqual(phase3Sample.Candidates) &&
+        phase2Sample.Routes.Count == phase3Sample.Routes.Count &&
+        phase2Sample.Routes.Zip(phase3Sample.Routes, (a, b) =>
             a.Score.Equals(b.Score) &&
             a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(x => x);
 }
@@ -797,12 +797,12 @@ foreach (var testRaw in new[] {
     "😀nihongocompilernihongo", "https://example.org/docs"
 })
 {
-    var before = phase3.Analyze(testRaw);
-    var after = phase4.Analyze(testRaw);
+    var phase3Sample = phase3.Analyze(testRaw);
+    var phase4Sample = phase4.Analyze(testRaw);
     phase4UnchangedCandidates &=
-        before.Candidates.SequenceEqual(after.Candidates) &&
-        after.Raw == testRaw && !after.AutoCommitAllowed &&
-        after.Routes.Count > 0;
+        phase3Sample.Candidates.SequenceEqual(phase4Sample.Candidates) &&
+        phase4Sample.Raw == testRaw && !phase4Sample.AutoCommitAllowed &&
+        phase4Sample.Routes.Count > 0;
 }
 Check(phase4UnchangedCandidates,
     "v1.0 phase4 changes route scores only; never inserts or removes a boundary candidate");
