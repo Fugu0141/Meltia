@@ -22,7 +22,8 @@ internal static class MeltiaPhoneticLatticeDecoder
         IReadOnlyList<Utf16Span> mandatory,
         IReadOnlyList<Utf16Span> explicitJapanese,
         double englishSpanCost,
-        int maxRoutes)
+        int maxRoutes,
+        bool contextualIslandScoring = false)
     {
         var starts = candidates.GroupBy(x => x.Span.Start)
             .ToDictionary(x => x.Key, x => x.ToArray());
@@ -95,8 +96,16 @@ internal static class MeltiaPhoneticLatticeDecoder
                     foreach (var tail in dp[edge.Span.End])
                     {
                         var spans = new[] { edge.Span }.Concat(tail.EnglishSpans).ToArray();
+                        // Only a complete pair of islands with a short
+                        // Japanese connector gets the v0.9 corroboration.
+                        // v0.8 keeps its exact scoring when the switch is off.
+                        var bridgeBonus = contextualIslandScoring &&
+                            tail.EnglishSpans.Count > 0
+                            ? MeltiaContextualIslandScoring.Between(
+                                raw, edge.Span, tail.EnglishSpans[0]) : 0;
                         offers.Add(new BoundaryRoute(spans,
-                            edge.Score + tail.Score - englishSpanCost));
+                            edge.Score + tail.Score - englishSpanCost +
+                            bridgeBonus));
                     }
                 }
             // A pure score-only top-eight beam drops almost every two/three
