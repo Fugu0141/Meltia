@@ -315,6 +315,26 @@ foreach (var (v07, reference) in new[] {
     }
 }
 Console.WriteLine("PASS v0.7 candidate inclusion and Japanese-only candidate burden");
+
+// v0.8 is a decoder-only experiment: it must not drop, insert or reorder
+// candidate evidence. Check *every* case rather than only aggregate recall.
+foreach (var row in records)
+{
+    foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-lexicon" })
+    {
+        var older = row.Predictions.Single(x => x.Model == "Meltia-v0.7-" + condition);
+        var newer = row.Predictions.Single(x => x.Model == "Meltia-v0.8-" + condition);
+        if (older.Error is not null || newer.Error is not null) continue;
+        if (older.Candidates is null || newer.Candidates is null ||
+            !older.Candidates.SequenceEqual(newer.Candidates))
+        {
+            Console.Error.WriteLine("v0.8 DECODER CANDIDATE PARITY REGRESSION: " +
+                row.Id + " model=" + condition);
+            return 5;
+        }
+    }
+}
+Console.WriteLine("PASS v0.8 per-input candidate parity across all four evidence conditions");
 var errors = overall.Values.Sum(x => x.Errors);
 if (errors > 0)
 {
