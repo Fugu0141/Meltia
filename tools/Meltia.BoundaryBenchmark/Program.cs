@@ -30,6 +30,9 @@ var scenarios = new (string Name, string Raw, int Samples)[]
         string.Concat(Enumerable.Repeat("nihongo", 11)) +
         "cryptography" + "no" + "semiconductor" +
         string.Concat(Enumerable.Repeat("nihongo", 7)), 8),
+    ("long-overloaded-repeated-mixed",
+        string.Concat(Enumerable.Repeat(
+            "nihongocryptographynosemiconductordephotonicsga", 12)), 8),
 };
 var engines = new (string Version, MeltiaBoundaryEngine Engine)[]
 {
@@ -48,6 +51,13 @@ var engines = new (string Version, MeltiaBoundaryEngine Engine)[]
         ExperimentalContextualIslandScoring: true,
         ExperimentalUncertaintyReview: true,
         ExperimentalLongRunWindowing: true))),
+    ("v1.0-diverse", new(new MeltiaBoundaryOptions(
+        ExperimentalUnknownLatinCandidates: true,
+        ExperimentalPhoneticLatticeDecoder: true,
+        ExperimentalContextualIslandScoring: true,
+        ExperimentalUncertaintyReview: true,
+        ExperimentalLongRunWindowing: true,
+        ExperimentalDiverseCandidatePruning: true))),
 };
 var results = new List<ReportRow>();
 var count = 0;
@@ -77,6 +87,7 @@ foreach (var (name, raw, samples) in scenarios)
         var elapsed = new double[samples];
         var allocated = new long[samples];
         var candidates = new int[samples];
+        var regions = new int[samples];
         int truncated = 0;
         for (var i = 0; i < samples; i++)
         {
@@ -86,6 +97,9 @@ foreach (var (name, raw, samples) in scenarios)
             elapsed[i] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             allocated[i] = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
             candidates[i] = result.Candidates.Count;
+            regions[i] = result.Candidates.Where(c =>
+                c.Origin == "v0.7-unknown-latin-provisional")
+                .Select(c => c.Span.Start / 24).Distinct().Count();
             if (result.Truncated) truncated++;
             if (result.Raw != raw || result.Candidates.Count > MeltiaBoundaryEngine.MaxCandidates ||
                 result.Routes.Count is < 1 or > MeltiaBoundaryEngine.MaxRoutes ||
@@ -98,10 +112,12 @@ foreach (var (name, raw, samples) in scenarios)
         Array.Sort(elapsed);
         Array.Sort(allocated);
         Array.Sort(candidates);
+        Array.Sort(regions);
         results.Add(new ReportRow(name, version, raw.Length, samples,
             Median(elapsed), Percentile(elapsed, .95), Percentile(elapsed, .99),
             Median(allocated), Percentile(allocated, .95),
-            candidates[samples / 2], candidates[^1], truncated));
+            candidates[samples / 2], candidates[^1], truncated,
+            regions[samples / 2]));
     }
 }
 var report = new
@@ -147,6 +163,28 @@ var report = new
                 Math.Max(1L, results.Single(x => x.Scenario == updated.Scenario &&
                     x.Model == "v1.0-review").P50AllocatedBytes),
         }),
+    DiverseComparisons = results.Where(x => x.Model == "v1.0-diverse").Select(
+        selected => new {
+            selected.Scenario,
+            selected.CandidateMedian,
+            selected.TruncatedSamples,
+            selected.SpeculativeStartRegionsMedian,
+            BaselineStartRegionsMedian = results.Single(x =>
+                x.Scenario == selected.Scenario &&
+                x.Model == "v1.0-windowed").SpeculativeStartRegionsMedian,
+            P50LatencyRatio = selected.P50Ms /
+                Math.Max(.000001, results.Single(x =>
+                    x.Scenario == selected.Scenario &&
+                    x.Model == "v1.0-windowed").P50Ms),
+            P95LatencyRatio = selected.P95Ms /
+                Math.Max(.000001, results.Single(x =>
+                    x.Scenario == selected.Scenario &&
+                    x.Model == "v1.0-windowed").P95Ms),
+            P50AllocationRatio = (double)selected.P50AllocatedBytes /
+                Math.Max(1L, results.Single(x =>
+                    x.Scenario == selected.Scenario &&
+                    x.Model == "v1.0-windowed").P50AllocatedBytes),
+        }),
     WorkSink = count
 };
 var file = Path.GetFullPath(args[1]);
@@ -170,4 +208,5 @@ static long Percentile(long[] values, double p) =>
 internal sealed record ReportRow(string Scenario, string Model, int Utf16Length,
     int Samples, double P50Ms, double P95Ms, double P99Ms,
     long P50AllocatedBytes, long P95AllocatedBytes,
-    int CandidateMedian, int CandidateMax, int TruncatedSamples);
+    int CandidateMedian, int CandidateMax, int TruncatedSamples,
+    int SpeculativeStartRegionsMedian);
