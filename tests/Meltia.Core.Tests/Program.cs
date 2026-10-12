@@ -607,6 +607,17 @@ Check(longMixed.Length > 96 && legacyLong.Candidates.Count == 0 &&
 Check(tiledLong.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates &&
     tiledLong.Routes.Count <= MeltiaBoundaryEngine.MaxRoutes,
     "v1.0 windowed generation respects hard candidate and route caps");
+var tiledLongRepeat = phase2.Analyze(longMixed);
+Check(tiledLong.Candidates.SequenceEqual(tiledLongRepeat.Candidates) &&
+    tiledLong.Routes.Zip(tiledLongRepeat.Routes, (a, b) =>
+        a.Score.Equals(b.Score) &&
+        a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(x => x),
+    "v1.0 long-run duplicate-window resolution stays deterministic");
+var englishLong = phase2.Analyze(longMixed, new BoundaryEvidence(
+    ExplicitEnglish: [desiredLongSpan]));
+Check(englishLong.Routes.All(r => r.EnglishSpans.Contains(desiredLongSpan)) &&
+    !englishLong.AutoCommitAllowed,
+    "v1.0 long-run hypotheses cannot displace an explicit English lock");
 
 var blockedLong = phase2.Analyze(longMixed, new BoundaryEvidence(
     ExplicitJapanese: [desiredLongSpan]));
