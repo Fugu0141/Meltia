@@ -753,4 +753,82 @@ try { _ = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
 catch (ArgumentException) { rejectedPhase3 = true; }
 Check(rejectedPhase3, "v1.0 phase3 rejects diversity without speculative generator");
 
+
+// v1.0 phase4 is a *scoring-only* experiment. Japanese-readability
+// negative evidence must be local, bounded, deterministic, and must never
+// suppress explicit user intent or known dictionary/host candidates.
+static BoundaryCandidate UnknownEntire(string value) =>
+    new(new Utf16Span(0, value.Length),
+        MeltiaDiverseCandidateSelector.UnknownOrigin, 1.0);
+Check(MeltiaBoundaryFlankScoring.Adjustment(
+        "nihongocompiler", UnknownEntire("nihongocompiler")) == -3.0 &&
+    MeltiaBoundaryFlankScoring.Adjustment(
+        "compilernihongo", UnknownEntire("compilernihongo")) == -3.0 &&
+    MeltiaBoundaryFlankScoring.Adjustment(
+        "nihongocompilernihongo", UnknownEntire("nihongocompilernihongo")) == -6.0,
+    "v1.0 phase4 downranks speculative English edges swallowing readable Japanese flanks");
+Check(MeltiaBoundaryFlankScoring.Adjustment(
+        "compiler", UnknownEntire("compiler")) == 0 &&
+    MeltiaBoundaryFlankScoring.Adjustment(
+        "tokyo", UnknownEntire("tokyo")) == 0 &&
+    MeltiaBoundaryFlankScoring.Adjustment(
+        "nihongocompiler", new BoundaryCandidate(
+            new Utf16Span(0, 15), "host-lexicon-advisory", 4.0)) == 0 &&
+    MeltiaBoundaryFlankScoring.Adjustment(
+        "nihongocompiler", new BoundaryCandidate(
+            new Utf16Span(0, 15),
+            MeltiaDiverseCandidateSelector.UnknownOrigin, 100, Mandatory: true)) == 0,
+    "v1.0 phase4 does not override Japanese/English ambiguity or trusted explicit evidence");
+
+var phase4 = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true,
+    ExperimentalLongRunWindowing: true,
+    ExperimentalDiverseCandidatePruning: true,
+    ExperimentalJapaneseFlankScoring: true));
+var phase4UnchangedCandidates = true;
+foreach (var testRaw in new[] {
+    "nihongocompiler", "compilernihongo",
+    "nihongocompilernihongo", "watashihakyounihongodesu",
+    "tokyo", "ime", "japaneseno",
+    "kyouhaphotonicswotukau", longMixed,
+    "😀nihongocompilernihongo", "https://example.org/docs"
+})
+{
+    var before = phase3.Analyze(testRaw);
+    var after = phase4.Analyze(testRaw);
+    phase4UnchangedCandidates &=
+        before.Candidates.SequenceEqual(after.Candidates) &&
+        after.Raw == testRaw && !after.AutoCommitAllowed &&
+        after.Routes.Count > 0;
+}
+Check(phase4UnchangedCandidates,
+    "v1.0 phase4 changes route scores only; never inserts or removes a boundary candidate");
+Check(phase4.Analyze("nihongo").Routes[0].EnglishSpans.Count == 0 &&
+    phase4.Analyze("japaneseno").Routes[0].EnglishSpans.Count == 0 &&
+    phase4.Analyze("ime").Routes[0].EnglishSpans.Count == 0 &&
+    phase4.Analyze(longRomaji).Routes[0].EnglishSpans.Count == 0,
+    "v1.0 phase4 protects phonetic Japanese-only cases");
+
+var phase4EnglishLock = phase4.Analyze(
+    "nihongocompiler", new BoundaryEvidence(
+        ExplicitEnglish: [new Utf16Span(0, 15)]));
+Check(phase4EnglishLock.Routes.All(route =>
+    route.EnglishSpans.Contains(new Utf16Span(0, 15))),
+    "v1.0 phase4 never penalizes an explicit English interpretation");
+var phase4JapaneseLock = phase4.Analyze(
+    "nihongocompiler", new BoundaryEvidence(
+        ExplicitJapanese: [new Utf16Span(0, 7)]));
+Check(phase4JapaneseLock.Routes.All(route =>
+    route.EnglishSpans.All(span => !span.Overlaps(new Utf16Span(0, 7)))),
+    "v1.0 phase4 respects explicit Japanese spans");
+var rejectsPhase4Only = false;
+try { _ = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalJapaneseFlankScoring: true)); }
+catch (ArgumentException) { rejectsPhase4Only = true; }
+Check(rejectsPhase4Only,
+    "v1.0 phase4 refuses scoring without the phonetic lattice decoder");
+
 Console.WriteLine($"ALL PASS {passed}");
