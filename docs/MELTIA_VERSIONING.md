@@ -9,8 +9,16 @@
 - **v0.7**: 未知英語の候補生成と複数英語区間の候補Recall改善。以前に誤って「H10」と表記した実装・テスト・評価の正式な開発版名称。[v0.7実装・検証記録](MELTIA_V07_UNKNOWN_LATIN_20261012.md)。
 - **v0.8**: v0.7の候補生成器を残し、日本語の音韻経路も同時探索する選択可能な境界デコーダ。[v0.8設計・検証記録](MELTIA_V08_PHONETIC_LATTICE_20261012.md)。
 - **v0.9**: v0.8の経路探索に、短い日本語助詞を挟む2つの英語候補の**文脈的な経路加点**をオプトインで追加。候補リストは変更しない。[v0.9評価記録](MELTIA_V09_CONTEXTUAL_ISLANDS_20261012.md)。
+- **v1.0-dev**: 既存のTop1・Top-Kを変えず、競合境界・日本語英語の意図未解決を診断し、確認必要性を提示。[v1.0診断と867件評価](MELTIA_V10_UNCERTAINTY_REVIEW_20261012.md)。正式リリースとは区別。
 
 この表は**開発上の実装段階**を区別するためのもの。GitHubのタグやリリースが存在することを示すものではなく、いずれも**Meltia独立IMEの正式リリース済みバージョンではない**。
+
+### v1.0-devの技術的な状態
+
+- `src/Meltia.Core/Meltia.Core.csproj` の開発版は **`1.0.0-dev`**。これは独立アルゴリズムCoreの版番号であり、アプリ・Windows IMEの正式版を意味しない。
+- `ExperimentalUncertaintyReview` は既定OFF。`BoundaryResult.Review`に候補競合・日本語英語の意図不明を報告する。`AutoCommitAllowed`は常にfalse。
+- [Draft PR #9](https://github.com/Fugu0141/Meltia/pull/9) はv0.9のDraft PR #8をベースとする。
+- 合成47/530/290件×4条件でv0.9との候補・Top1・Top-K一致を検証。自然文の人手による確認は未実施。
 
 ### v0.9の技術的な状態
 
