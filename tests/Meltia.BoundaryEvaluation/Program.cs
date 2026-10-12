@@ -7,14 +7,19 @@ using Meltia.BoundaryEvaluation;
 
 if ((args.Length != 2 && args.Length != 4) || args[0] != "--output" ||
     string.IsNullOrWhiteSpace(args[1]) ||
-    args.Length == 4 && (args[2] != "--suite" || args[3] is not ("core" or "robustness")))
+    args.Length == 4 && (args[2] != "--suite" || args[3] is not ("core" or "robustness" or "generalization")))
 {
     Console.Error.WriteLine(
-        "Usage: dotnet run --project tests/Meltia.BoundaryEvaluation -- --output report.json [--suite core|robustness]");
+        "Usage: dotnet run --project tests/Meltia.BoundaryEvaluation -- --output report.json [--suite core|robustness|generalization]");
     return 64;
 }
 string suite = args.Length == 4 ? args[3] : "core";
-var cases = suite == "robustness" ? RobustnessCorpus.Cases : GoldCorpus.Cases;
+var cases = suite switch
+{
+    "robustness" => RobustnessCorpus.Cases,
+    "generalization" => GeneralizationCorpus.Cases,
+    _ => GoldCorpus.Cases
+};
 
 var engine = new MeltiaBoundaryEngine();
 var experimental = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
@@ -218,8 +223,12 @@ var report = new
     EngineExperimentalFeatureVersion = "0.9",
     EvidenceLevel = "B-offline-CSharp-synthetic-intent",
     GoldStatus = "synthetic-intent-labeled-not-human-verified",
-    CorpusVersion = suite == "robustness"
-        ? "meltia-H1-vocabulary-robustness-v1" : "meltia-synthetic-v1.1",
+    CorpusVersion = suite switch
+    {
+        "robustness" => "meltia-H1-vocabulary-robustness-v1",
+        "generalization" => "meltia-v0.9-fresh-lexical-types-synthetic-v1",
+        _ => "meltia-synthetic-v1.1"
+    },
     Suite = suite,
     EnglishDictionaryTypes = MeltypeLexiconEvidence.EnglishWordTypes,
     ProperNameTypes = MeltypeLexiconEvidence.ProperNameTypes,
@@ -237,6 +246,7 @@ var report = new
         "v0.7: bounded unknown-Latin phonetic seam proposals, no dictionary or gold-dependent training",
         "v0.8: opt-in dynamic-programming lattice with zero-cost readable romaji paths and scored unknown-letter fallback; candidate generator unchanged",
         "v0.9: opt-in pairwise route evidence for two nonphonetic English islands separated by a Japanese 2-letter particle; no user text changes",
+        "Generalization: 40 lexical types not in old 54-word list, 18 Japanese romanized strings; 290 synthetic templates, NOT an independent blind holdout",
         "Core 47 cases have already been studied and are DEVELOPMENT diagnostics, not a blind holdout",
         "Robustness suite: 530 synthetic inputs from H1/H9 previously used 54 OOV English words and 19 Japanese phonetic words, NOT natural holdout or Python parity"
     },
@@ -382,6 +392,26 @@ foreach (var row in records)
     }
 }
 Console.WriteLine("PASS v0.9 per-input candidate parity with v0.8");
+// Do not regress the already studied 47/530-case Top1 or Top-K for any
+// matched evidence mode. The fresh-vocabulary suite remains a separate
+// *unoptimized* exploratory report; only safety invariants gate it.
+if (suite != "generalization")
+{
+    foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-lexicon" })
+    {
+        var older = overall["Meltia-v0.8-" + condition];
+        var newer = overall["Meltia-v0.9-" + condition];
+        if (newer.ExactCases < older.ExactCases ||
+            newer.TopKExactCases < older.TopKExactCases)
+        {
+            Console.Error.WriteLine("v0.9 STUDIED CORPUS ACCURACY REGRESSION: " +
+                condition + " Top1=" + newer.ExactCases + "/" + older.ExactCases +
+                " TopK=" + newer.TopKExactCases + "/" + older.TopKExactCases);
+            return 7;
+        }
+    }
+    Console.WriteLine("PASS v0.9 studied-corpus Top1/TopK nonregression across all evidence conditions");
+}
 var errors = overall.Values.Sum(x => x.Errors);
 if (errors > 0)
 {
@@ -479,7 +509,7 @@ static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
             candidateEdges += p.Candidates.Count;
         }
         goldSpans += row.GoldEnglish.Count;
-        if (row.Category is "S11-japanese-only" or "R08-japanese-only")
+        if (row.Category is "S11-japanese-only" or "R08-japanese-only" or "G06-japanese-only")
         {
             japanese++;
             if (p.English.Count > 0) falseEnglish++;
