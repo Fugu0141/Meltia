@@ -38,6 +38,7 @@
 - [v0.5](MELTIA_CORE_V05_PORT.md)：独立Boundary Coreの基盤。
 - [v0.6相当](MELTIA_RANKING_EXPERIMENT_20261012.md)：経路順位と辞書同条件比較の研究実装。
 - **[v0.7](MELTIA_V07_UNKNOWN_LATIN_20261012.md)：未知英語区間の候補生成と、複数英語区間の候補検出率改善。**
+- **[v0.8](MELTIA_V08_PHONETIC_LATTICE_20261012.md)：日本語音韻と英語を同一格子で探索してTop1を改善（53語規模の研究語彙から作成した合成コーパスの試験）。2・3英語区間の独立Top1は未達。**
 - H1〜H9はIncrementalBoundaryLab側の研究番号であって、Meltiaの開発版ではありません。旧称「H10」はv0.7として訂正しました。
 
 これらは**独立Coreの開発段階**であり、GitHub正式リリースや実IME動作を意味しません。
