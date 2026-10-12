@@ -12,6 +12,7 @@
 
 ### v0.7の技術的な状態
 
+- `src/Meltia.Core/Meltia.Core.csproj` の開発版メタデータを **`0.7.0-dev`** とし、Coreテストでも`0.7`を検査する。これはWindowsのMeltypeホストやインストーラーのバージョンではない。
 - 研究用スイッチ `ExperimentalUnknownLatinCandidates` で有効化する。既定値は無効。
 - 候補に格納する `Origin` は `v0.7-unknown-latin-provisional`、診断モデル名は `Meltia-v0.7-*`。機能識別子とバージョン名を一致させる。
 - 既存の候補と得点、UTF-16契約、IME本番の入力処理は変更しない。
