@@ -99,12 +99,31 @@ internal static class MeltiaPhoneticLatticeDecoder
                             edge.Score + tail.Score - englishSpanCost));
                     }
                 }
-            dp[i] = offers.OrderByDescending(x => x.Score)
+            // A pure score-only top-eight beam drops almost every two/three
+            // English-island hypothesis in favor of small variations of a
+            // single island. Keep one representative for each span-count
+            // bucket before filling the remaining beam by overall score.
+            var sorted = offers.OrderByDescending(x => x.Score)
                 .ThenBy(x => string.Join(";", x.EnglishSpans.Select(
                         s => $"{s.Start:D4}-{s.End:D4}")), StringComparer.Ordinal)
                 .DistinctBy(x => string.Join(";", x.EnglishSpans.Select(
-                        s => $"{s.Start}-{s.End}")))
-                .Take(maxRoutes).ToList();
+                        s => $"{s.Start}-{s.End}"))).ToList();
+            var selected = new List<BoundaryRoute>(maxRoutes);
+            foreach (var group in sorted.GroupBy(r =>
+                Math.Min(r.EnglishSpans.Count, 4)))
+            {
+                selected.Add(group.First());
+                if (selected.Count == maxRoutes) break;
+            }
+            foreach (var offer in sorted)
+            {
+                if (selected.Count == maxRoutes) break;
+                if (!selected.Contains(offer)) selected.Add(offer);
+            }
+            dp[i] = selected.OrderByDescending(x => x.Score)
+                .ThenBy(x => string.Join(";", x.EnglishSpans.Select(
+                    s => $"{s.Start:D4}-{s.End:D4}")), StringComparer.Ordinal)
+                .ToList();
         }
         if (dp[0].Count == 0)
             throw new ArgumentException("No path satisfies mandatory ranges");
