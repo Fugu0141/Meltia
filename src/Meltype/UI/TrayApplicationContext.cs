@@ -86,11 +86,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         // Meltype IME (TSF) を入れたら、一度だけ動作モードを Meltype IME にする
         // (PC に登録されていても、このユーザーのキーボードの一覧に無ければ Win + Space で選べないので切り替えない)
         // (ARM64 の Windows には Meltype IME は対応していないので切り替えない)
-        if (
-#if MELTIA_PREVIEW
-            false &&
-#endif
-            !_engine.Settings.TsfIntroduced && Tip.TipServer.IsRegistered && Tip.TipServer.IsInUserLanguageList &&
+#if !MELTIA_PREVIEW
+        if (!_engine.Settings.TsfIntroduced && Tip.TipServer.IsRegistered && Tip.TipServer.IsInUserLanguageList &&
             System.Runtime.InteropServices.RuntimeInformation.OSArchitecture != System.Runtime.InteropServices.Architecture.Arm64)
         {
             var next = _engine.Settings.Clone();
@@ -100,6 +97,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             Diagnostics.Log.Info("Meltype IME が入っているので、動作モードを Meltype IME にしました。");
             Tip.TipServer.ActivateForSession();
         }
+#endif
 
         var menu = new ContextMenuStrip();
         _statusItem = new ToolStripMenuItem { Enabled = false };
