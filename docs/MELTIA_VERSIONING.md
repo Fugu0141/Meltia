@@ -7,12 +7,20 @@
 - **v0.5**: 独立 C# Boundary Core。UTF-16区間、Top-K、必須保護、編集・シャドーブリッジの基盤。
 - **v0.6**: 境界スコア・ランキングの実験的改良。辞書条件を揃えた47ケース・530ケース評価、過剰分割対策、Meltype参考候補の再評価、失敗段階の測定。2026-10-12の[v0.6相当の検証記録](MELTIA_RANKING_EXPERIMENT_20261012.md)。
 - **v0.7**: 未知英語の候補生成と複数英語区間の候補Recall改善。以前に誤って「H10」と表記した実装・テスト・評価の正式な開発版名称。[v0.7実装・検証記録](MELTIA_V07_UNKNOWN_LATIN_20261012.md)。
+- **v0.8**: v0.7の候補生成器を残し、日本語の音韻経路も同時探索する選択可能な境界デコーダ。[v0.8設計・検証記録](MELTIA_V08_PHONETIC_LATTICE_20261012.md)。
 
-この表は**開発上の実装段階**を区別するためのもの。GitHubのタグやリリースが存在することを示すものではなく、3つとも**Meltia独立IMEの正式リリース済みバージョンではない**。
+この表は**開発上の実装段階**を区別するためのもの。GitHubのタグやリリースが存在することを示すものではなく、いずれも**Meltia独立IMEの正式リリース済みバージョンではない**。
 
-### v0.7の技術的な状態
+### v0.8の技術的な状態
 
-- `src/Meltia.Core/Meltia.Core.csproj` の開発版メタデータを **`0.7.0-dev`** とし、Coreテストでも`0.7`を検査する。これはWindowsのMeltypeホストやインストーラーのバージョンではない。
+- `src/Meltia.Core/Meltia.Core.csproj` の開発版は **`0.8.0-dev`**。Meltype本体やインストーラーの版は更新しない。
+- `ExperimentalPhoneticLatticeDecoder` は既定OFF、評価用途のみ。v0.7方式は同じCore内に残し比較可能にする。
+- このDraft PRは [#7](https://github.com/Fugu0141/Meltia/pull/7)。**ベースはDraft PR #6の開発ブランチであり、mainではない**。
+- 日本語のみの誤英字選択、Gold候補検出率、Top-K、Top1、処理負荷を実測してから採用判断する。
+
+### v0.7の技術的な状態（歴史的な記録）
+
+- `src/Meltia.Core/Meltia.Core.csproj` の開発版メタデータを **`0.7.0-dev`** とし、v0.7開発時点ではCoreテストで`0.7`を検査した（v0.8側では`0.8`へ更新）。これはWindowsのMeltypeホストやインストーラーのバージョンではない。
 - 研究用スイッチ `ExperimentalUnknownLatinCandidates` で有効化する。既定値は無効。
 - 候補に格納する `Origin` は `v0.7-unknown-latin-provisional`、診断モデル名は `Meltia-v0.7-*`。機能識別子とバージョン名を一致させる。
 - 既存の候補と得点、UTF-16契約、IME本番の入力処理は変更しない。
