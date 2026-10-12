@@ -71,8 +71,8 @@ foreach (var gold in cases)
     try
     {
         var evidence = MeltypeLexiconEvidence.For(gold.Raw);
-        var withv0.7 = v07Independent.Analyze(gold.Raw, evidence);
-        predictions.Add(FromCore("Meltia-v0.7-lexicon", withv0.7));
+        var withV07 = v07Independent.Analyze(gold.Raw, evidence);
+        predictions.Add(FromCore("Meltia-v0.7-lexicon", withV07));
         var matched = experimental.Analyze(gold.Raw, evidence);
         predictions.Add(FromCore("Meltia-experimental-lexicon", matched));
     }
