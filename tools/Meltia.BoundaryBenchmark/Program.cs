@@ -33,6 +33,9 @@ var scenarios = new (string Name, string Raw, int Samples)[]
     ("long-overloaded-repeated-mixed",
         string.Concat(Enumerable.Repeat(
             "nihongocryptographynosemiconductordephotonicsga", 12)), 8),
+    ("Japanese-flank-in-Latin-prefix", "nihongocompiler", 20),
+    ("Japanese-flank-in-Latin-suffix", "compilernihongo", 20),
+    ("Japanese-flank-both-sides", "nihongocompilernihongo", 20),
 };
 var engines = new (string Version, MeltiaBoundaryEngine Engine)[]
 {
@@ -58,6 +61,14 @@ var engines = new (string Version, MeltiaBoundaryEngine Engine)[]
         ExperimentalUncertaintyReview: true,
         ExperimentalLongRunWindowing: true,
         ExperimentalDiverseCandidatePruning: true))),
+    ("v1.0-flank", new(new MeltiaBoundaryOptions(
+        ExperimentalUnknownLatinCandidates: true,
+        ExperimentalPhoneticLatticeDecoder: true,
+        ExperimentalContextualIslandScoring: true,
+        ExperimentalUncertaintyReview: true,
+        ExperimentalLongRunWindowing: true,
+        ExperimentalDiverseCandidatePruning: true,
+        ExperimentalJapaneseFlankScoring: true))),
 };
 var results = new List<ReportRow>();
 var count = 0;
@@ -75,6 +86,11 @@ foreach (var (name, raw, samples) in scenarios)
             left.EnglishSpans.SequenceEqual(right.EnglishSpans)).All(equal => equal))
         throw new InvalidOperationException(
             "v1.0 benchmark route or candidate regression: " + name);
+    // Phase 4 changes route scores/ranking, never edge enumeration.
+    if (!engines[3].Engine.Analyze(raw).Candidates.SequenceEqual(
+            engines[4].Engine.Analyze(raw).Candidates))
+        throw new InvalidOperationException(
+            "Flank scoring altered candidate enumeration in " + name);
     foreach (var (version, engine) in engines)
     {
         // Same immutable raw string for both modes, warm the JIT and caches.
@@ -184,6 +200,26 @@ var report = new
                 Math.Max(1L, results.Single(x =>
                     x.Scenario == selected.Scenario &&
                     x.Model == "v1.0-windowed").P50AllocatedBytes),
+        }),
+    FlankComparisons = results.Where(x => x.Model == "v1.0-flank").Select(
+        scored => new {
+            scored.Scenario,
+            scored.CandidateMedian,
+            scored.TruncatedSamples,
+            BeforeRegions = results.Single(x => x.Scenario == scored.Scenario &&
+                x.Model == "v1.0-diverse").SpeculativeStartRegionsMedian,
+            P50LatencyRatio = scored.P50Ms /
+                Math.Max(.000001, results.Single(x =>
+                    x.Scenario == scored.Scenario &&
+                    x.Model == "v1.0-diverse").P50Ms),
+            P95LatencyRatio = scored.P95Ms /
+                Math.Max(.000001, results.Single(x =>
+                    x.Scenario == scored.Scenario &&
+                    x.Model == "v1.0-diverse").P95Ms),
+            P50AllocationRatio = (double)scored.P50AllocatedBytes /
+                Math.Max(1L, results.Single(x =>
+                    x.Scenario == scored.Scenario &&
+                    x.Model == "v1.0-diverse").P50AllocatedBytes),
         }),
     WorkSink = count
 };
