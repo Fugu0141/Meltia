@@ -79,6 +79,35 @@ git switch feat/meltia-windows-preview-integration-20261012
 powershell -ExecutionPolicy Bypass -File .\tools\build-meltia-windows-preview.ps1
 ```
 
+### NU1101: Windows Runtime Packが取得できない場合
+
+リポジトリ直下の `nuget.config` はオフライン向けで
+`<packageSources><clear /></packageSources>` を使うため、
+自己完結型の`dotnet publish -r win-x64 --self-contained true`で必要となる
+Windows用ランタイムパッケージを取得できない場合がある。
+
+Meltia Previewでは本体設定を変えず、ビルドスクリプトの先頭で
+`tools/meltia-publish.nuget.config` を使った**明示的なrestore**を行い、
+その後 `--no-restore` でpublishする。
+初回は `https://api.nuget.org/v3/index.json` へのネット接続が必要。
+NuGetのユーザー全体の設定を変更する必要はない。
+
+ネットワークの制限などで自己完結型パッケージを復元できない場合は、
+開発PCに**.NET 10 Windows Desktop Runtime**がインストールされていれば
+ランタイムを同梱しないテスト用構成を試せる：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build-meltia-windows-preview.ps1 -FrameworkDependent
+```
+
+こちらは `artifacts/meltia-windows-preview-win-x64-framework-dependent.zip`
+に保存され、実行先PCにランタイムが必要。
+`-FrameworkDependent`は精度向上や正式IME登録とは無関係であり、
+通信エラーや他の依存関係の問題を必ず解決できるとは限らない。
+
+**以前の12件のNU1101はNuGet復元フェーズの失敗であり、C#コードのコンパイル結果ではない。**
+新しいビルドスクリプトによるWindows実機の成功結果は未取得。
+
 作成される予定のファイル：
 
 - `artifacts/meltia-windows-preview-win-x64/Meltia.exe`
