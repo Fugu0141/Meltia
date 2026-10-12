@@ -2,7 +2,7 @@
 
 **Meltia** は、[Meltype](https://github.com/yksr-melt/Meltype) を基に開発する、非公式・独立運営の日本語入力ソフトウェアプロジェクトです。日本語・英語が混在する入力の自然さと、IME の安定性の向上を目指します。
 
-> **現在は開発準備段階です。** このリポジトリのソースコードや実行ファイル内には、まだ `Meltype` の名前・識別子・インストール設定・自動更新設定が残っています。Meltia 独自の正式リリースはありません。本家の配布物と混同せず、現時点のビルドを日常用の Meltia としてインストールしないでください。
+> **現在は独立WindowsアプリのPreviewを実装中です。** `src/Meltia.Windows`にMeltypeコード再利用の実行ファイル構成を追加しましたが、Windowsビルド・実入力は未検証で、正式なTSF IME登録と配布版はありません。元のMeltype用インストーラーをMeltiaの名前で実行しないでください。
 
 ## 開発目標
 
@@ -11,7 +11,7 @@
 - **IME としての完成度** — 入力・確定・取り消し・学習・辞書との連携を検証
 - **検証可能な改善** — 精度だけでなく誤判定の種類、遅延、安定性も記録
 
-境界判定方式は [IncrementalBoundaryLab](https://github.com/Fugu0141/IncrementalBoundaryLab) で研究中です。独立したMeltia Coreでは、v0.5の基盤に続き、**[v1.0-devの不確実性レビュー](docs/MELTIA_V10_UNCERTAINTY_REVIEW_20261012.md)を研究用オプションとして実装**（v0.7候補生成・v0.8音韻ラティス・v0.9経路評価は維持）しています。[Meltypeとの比較アダプター](docs/MELTIA_SHADOW_COMPOSITION_BRIDGE.md)は読み取り専用です。**実際のIMEの入力・自動変換には未導入**で、Windows TSF上の実測精度・安定性も未検証です。
+境界判定方式は [IncrementalBoundaryLab](https://github.com/Fugu0141/IncrementalBoundaryLab) で研究中です。独立したMeltia Coreでは、v0.5の基盤に続き、**[v1.0-devの不確実性レビュー](docs/MELTIA_V10_UNCERTAINTY_REVIEW_20261012.md)を研究用オプションとして実装**（v0.7候補生成・v0.8音韻ラティス・v0.9経路評価は維持）しています。[Meltypeとの比較アダプター](docs/MELTIA_SHADOW_COMPOSITION_BRIDGE.md)を基に、**独立WindowsキーボードPreviewの表示判定にMeltia Coreを任意ONで接続**しました。Windows TSFとしてのMeltia専用登録、実入力での精度・安定性はまだ未検証です。
 
 ## 現在の状態と今後
 
@@ -19,9 +19,9 @@
 | --- | --- |
 | Meltype からのソース・Git 履歴の継承 | 完了 |
 | Meltia 用の説明・ライセンス方針 | 整備中 |
-| アプリ名・IME 登録・インストール先・自動更新の分離 | 未実施 |
+| アプリ名・IME 登録・インストール先・自動更新の分離 | Windowsプレビューの実行名・設定・起動時登録・更新停止は分離。正式TSF・インストーラーは未実装 |
 | Meltia 専用の安定版リリース | 未実施 |
-| 新しい境界判定アルゴリズムの統合 | 独立Coreはv1.0-dev研究段階、実入力への統合は未実施 |
+| 新しい境界判定アルゴリズムの統合 | WindowsキーボードPreviewに任意ONの表示判定フックを実装。実機打鍵試験・正式TSF統合は未完了 |
 
 詳細は [開発ロードマップ](docs/MELTIA_ROADMAP.md) を参照してください。
 
@@ -38,10 +38,27 @@
 - [v1.0 フェーズ2：96文字を超える日英混在入力の候補生成研究](docs/MELTIA_V10_LONG_RUN_PHASE2_20261012.md)
 - [v1.0 フェーズ3：候補上限128件での位置的多様性と1019件評価](docs/MELTIA_V10_DIVERSE_CANDIDATES_PHASE3_20261012.md)
 - [v1.0 フェーズ4：日本語吸収を抑制するTop1経路スコアリング・1067件評価](docs/MELTIA_V10_FLANK_RANKING_PHASE4_20261012.md)
+- [Meltia Windows Preview — 独立アプリのビルド・起動・安全性・残課題](docs/MELTIA_WINDOWS_PREVIEW.md)
 - [貢献方法](CONTRIBUTING.md)
 - [セキュリティ報告](SECURITY.md)
 - [サードパーティー通知](THIRD-PARTY-NOTICES.md)
 - [開発・ビルド手順（本家から継承、Meltia 用に未更新）](docs/DEVELOPMENT.md)
+
+## Meltia Windows Keyboard Preview（実機未検証）
+
+Meltypeのソースを土台に、変換ボックス・辞書・漢字変換・キー入力処理を
+再利用する独立実行ファイルの構成を追加しました。
+Windows + .NET SDK 10環境で手元でビルドできます。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build-meltia-windows-preview.ps1
+```
+
+MeltiaのネイティブTSF登録は行わず、最初は**キーボード型プレビュー**として
+動作させます。GitHub Actionsに依存しないスモークテストと、
+本家Meltypeのデータや自動更新を変更しない設計が含まれます。
+**ビルド結果・実際の入力動作はまだ確認できていません。**
+[手順と残課題はこちら](docs/MELTIA_WINDOWS_PREVIEW.md)。
 
 ## 開発者向け
 
