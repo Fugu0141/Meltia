@@ -29,7 +29,16 @@ internal static class Program
         // Meltype.exe --restore <バックアップ>: 動いている Meltype が終わるのを待ってから、バックアップを戻して起動する
         // (動いている Meltype が終わるときに学習データを書き戻すので、戻すのはその後)。
         var restore = args.FirstOrDefault() == "--restore" ? args.ElementAtOrDefault(1) : null;
-        if (!createdNew && (restore is null || !WaitForExit(mutex))) return 0;
+        if (!createdNew && (restore is null || !WaitForExit(mutex)))
+        {
+#if MELTIA_PREVIEW
+            MessageBox.Show(
+                "Meltype または Meltia がすでに動作しています。\n" +
+                "両方のキーボードフックを同時に起動しないため、Meltia Previewを開始しません。",
+                "Meltia Preview", MessageBoxButtons.OK, MessageBoxIcon.Information);
+#endif
+            return 0;
+        }
 
         ApplicationConfiguration.Initialize();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
