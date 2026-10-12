@@ -56,7 +56,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
             var raw = string.Concat(units.Select(x => x.Raw)) + pending;
             if (detector.Memory?.Get(raw.ToLowerInvariant()) is not null)
                 return null;
-            return MeltiaPreviewBoundary.Refine(units, pending, legacy);
+            // Stable preview-only lexical protection runs even when the
+            // experimental Core boundary model is switched off.
+            return MeltiaLexicalRecovery.TryRecover(
+                    units, pending, legacy, detector) ??
+                MeltiaPreviewBoundary.Refine(units, pending, legacy);
         };
 #endif
         _composition = new Composition.CompositionService(_invoker, detector, new Composition.CompositionOptions
