@@ -15,6 +15,9 @@ internal static class Program
 #if MELTIA_PREVIEW
         // Must precede the first AppPaths access in the shared Meltype.Core assembly.
         MeltiaPreviewSafety.Initialize();
+        // Offline integration smoke: no hook and no TSF registration.
+        if (args.FirstOrDefault() == "--meltia-selftest")
+            return MeltiaPreviewSelfTest.Run(args.ElementAtOrDefault(1));
 #endif
         // Meltype.exe --selftest [結果ファイル]: キーボードフックを掛けずに、主な機能が動くかだけを確かめる。
         if (args.FirstOrDefault() == "--selftest") return SelfTest.Run(args.ElementAtOrDefault(1));
