@@ -27,6 +27,10 @@
 `tests/Meltia.Core.Tests/Program.cs` では同じ6語それぞれについて
 明示的な英語ロック、明示的な日本語ロック、語彙証拠だけの場合の
 意図未確定性、原文保持、非自動確定を検査。
+**評価CLIでもA04の6つの対立ラベル付きペアを個別に検証**する。
+語彙証拠のみなら意図不明、明示英語ロックなら英語、明示日本語ロックなら日本語となることをチェックし、検証JSONの`AmbiguityPairs`に結果を出力する。
+文字列から意図を推測できない問題を、「自然にどちらも正解」という誤った精度評価に混ぜない。
+
 UTF-16絵文字の後にあるURLの必須保護も検査。
 
 実行：
@@ -45,6 +49,9 @@ dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
 - 同一プロセスでウォームアップ後、各入力を8〜28回独立に実行。
   **p50・p95・p99** の実行時間、呼び出しごとの
   `GC.GetAllocatedBytesForCurrentThread()` をJSONに記録。
+- 各入力について**v0.9とv1.0の候補・英語区間・得点が同一**かを事前に検証し、
+  p50・p95の経過時間比、p50割当量比もJSONに出力する。
+
 - 一貫して`AutoCommitAllowed=false`、候補128・経路8制約、
   原文保持、レビュー有無を検査する。
 
@@ -79,6 +86,7 @@ dotnet run --project tools/Meltia.BoundaryBenchmark/Meltia.BoundaryBenchmark.csp
 ## CIブロッカーの原因究明
 
 - [Issue #11](https://github.com/Fugu0141/Meltia/issues/11)
+- [品質強化PR #10](https://github.com/Fugu0141/Meltia/pull/10) の再実行でも開始前失敗が継続。単一ジョブを再実行しても改善せず、ジョブログなし。
 - [全体buildの例](https://github.com/Fugu0141/Meltia/actions/runs/38223660134)
 - [新しいShadow失敗の例](https://github.com/Fugu0141/Meltia/actions/runs/38226762557)
 
