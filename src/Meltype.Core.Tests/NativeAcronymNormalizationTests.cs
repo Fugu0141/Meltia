@@ -44,6 +44,16 @@ internal static class NativeAcronymNormalizationTests
     }
 
     [Test]
+    public static void MixedCaseScannerMatchesNonOverlappingRegexSemantics()
+    {
+        foreach (var (raw, expected) in new (string, bool)[] {
+            ("aAabBb", true), ("xXyyYz", true), ("aAaAa", false),
+            ("aAa", false), ("IME", false), ("aaaBBBaaa", false),
+            ("aAaaAa", true), ("aAaaA", false), ("", false) })
+            Assert.Equal(expected, CompositionDetector.HasMultipleMixedTriplets(raw), raw);
+    }
+
+    [Test]
     public static void AcronymRawSurvivesFollowingJapaneseAndOriginalInputIsNotRewritten()
     {
         foreach (var raw in new[] { "IMEwotsukau", "APIde", "kyouhaIMEwotsukau", "kaAI" })
