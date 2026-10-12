@@ -49,7 +49,15 @@ internal sealed class TrayApplicationContext : ApplicationContext
 #if MELTIA_PREVIEW
         // Bridges into the actual Windows keyboard composition pipeline.
         // The adapter is gated by explicit user opt-in and fail-closed checks.
-        detector.BoundaryRefinement = MeltiaPreviewBoundary.Refine;
+        detector.BoundaryRefinement = (units, pending, legacy) =>
+        {
+            // Explicit user corrections in Meltype's language memory outrank
+            // Meltia's experimental boundary score.
+            var raw = string.Concat(units.Select(x => x.Raw)) + pending;
+            if (detector.Memory?.Get(raw.ToLowerInvariant()) is not null)
+                return null;
+            return MeltiaPreviewBoundary.Refine(units, pending, legacy);
+        };
 #endif
         _composition = new Composition.CompositionService(_invoker, detector, new Composition.CompositionOptions
         {
