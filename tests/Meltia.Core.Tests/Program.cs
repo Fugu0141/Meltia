@@ -725,6 +725,28 @@ Check(phase3Long.Raw == longMixed &&
     phase3Long.Routes.Count <= MeltiaBoundaryEngine.MaxRoutes &&
     !phase3Long.AutoCommitAllowed,
     "v1.0 phase3 keeps UTF-16 raw, candidate limit and no auto-commit");
+var phase3EnglishLocked = phase3.Analyze(longMixed, new BoundaryEvidence(
+    ExplicitEnglish: [desiredLongSpan]));
+Check(phase3EnglishLocked.Routes.All(r =>
+        r.EnglishSpans.Contains(desiredLongSpan)) &&
+    phase3EnglishLocked.Candidates.Any(c =>
+        c.Span == desiredLongSpan && c.Mandatory) &&
+    !phase3EnglishLocked.AutoCommitAllowed,
+    "v1.0 phase3 never displaces a mandatory English range");
+var phase3JapaneseLocked = phase3.Analyze(longMixed, new BoundaryEvidence(
+    ExplicitJapanese: [desiredLongSpan]));
+Check(phase3JapaneseLocked.Candidates.All(c =>
+        !c.Span.Overlaps(desiredLongSpan)) &&
+    phase3JapaneseLocked.Routes.All(r =>
+        r.EnglishSpans.All(span => !span.Overlaps(desiredLongSpan))),
+    "v1.0 phase3 preserves a mandatory Japanese range");
+var phase3Protected = phase3.Analyze(
+    string.Concat(Enumerable.Repeat("nihongo", 15)) + "https://example.org/docs");
+var expectedUrl = new Utf16Span(105, 129);
+Check(phase3Protected.Candidates.Any(c =>
+        c.Span == expectedUrl && c.Mandatory) &&
+    phase3Protected.Routes.All(r => r.EnglishSpans.Contains(expectedUrl)),
+    "v1.0 phase3 preserves protected URL at the end of a long ASCII run");
 var rejectedPhase3 = false;
 try { _ = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalDiverseCandidatePruning: true)); }
