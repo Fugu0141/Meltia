@@ -9,6 +9,8 @@ void Check(bool condition, string title)
     Console.WriteLine("PASS " + title);
     passed++;
 }
+Check(typeof(MeltiaBoundaryEngine).Assembly.GetName().Version is { Major: 0, Minor: 7 },
+    "Meltia Core assembly development version is v0.7");
 bool Has(BoundaryResult result, params Utf16Span[] spans) =>
     result.Routes.Any(route => spans.All(s => route.EnglishSpans.Contains(s)));
 var japanese = engine.Analyze("nihongo", new BoundaryEvidence(EnglishWords:["go"]));
