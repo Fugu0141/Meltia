@@ -483,5 +483,37 @@ Check(v10Diagnostic.Review!.StableEnglishSpans.All(x =>
         v10Diagnostic.Review.ContestedEnglishSpans).Distinct().Count() ==
         v10Diagnostic.Routes[0].EnglishSpans.Count,
     "v1.0 review partitions all Top1 English spans without omission");
+// Incremental recomputation invariants: callers will eventually analyze
+// prefixes and edits from Windows input sessions, but this does not
+// pretend that real Windows TSF timing or IME integration was tested.
+var v10ReplayParts = new[] {
+    "kyouha", "strategy", "no", "requirement", "toiu",
+    "tokyo", "😀", ".", "API", "de", "https://a.co", " ", "nihongo"
+};
+var v10Replay = "";
+var v10PrefixSafe = true;
+foreach (var part in v10ReplayParts)
+{
+    v10Replay += part;
+    for (int i = 0; i <= v10Replay.Length; i++)
+    {
+        if (i > 0 && i < v10Replay.Length &&
+            char.IsHighSurrogate(v10Replay[i - 1]) &&
+            char.IsLowSurrogate(v10Replay[i])) continue;
+        var prefix = v10Replay[..i];
+        var current = v10.Analyze(prefix);
+        var rerun = v10.Analyze(prefix);
+        v10PrefixSafe &= current.Raw == prefix &&
+            !current.AutoCommitAllowed && current.Review is not null &&
+            current.Candidates.SequenceEqual(rerun.Candidates) &&
+            current.Routes.Count == rerun.Routes.Count &&
+            current.Routes.Zip(rerun.Routes, (a, b) =>
+                a.Score.Equals(b.Score) &&
+                a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(z => z);
+        if (!v10PrefixSafe) break;
+    }
+    if (!v10PrefixSafe) break;
+}
+Check(v10PrefixSafe, "v1.0 all legal incremental prefixes are read-only and deterministic");
 
 Console.WriteLine($"ALL PASS {passed}");
