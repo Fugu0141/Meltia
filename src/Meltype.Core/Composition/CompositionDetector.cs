@@ -1046,9 +1046,9 @@ public sealed partial class CompositionDetector
         for (var i = units.Count - 1; i >= 0; i--)
         {
             symbols[i] = symbols[i + 1] && IsAsciiSymbol(units[i]);
-            var raw = units[i].Raw;
-            onlyLaughterToNextNonLetter[i] = raw.Length == 0 || !char.IsAsciiLetter(raw[0]) ||
-                (raw is "w" or "W" && onlyLaughterToNextNonLetter[i + 1]);
+            var itemRaw = units[i].Raw;
+            onlyLaughterToNextNonLetter[i] = itemRaw.Length == 0 || !char.IsAsciiLetter(itemRaw[0]) ||
+                (itemRaw is "w" or "W" && onlyLaughterToNextNonLetter[i + 1]);
         }
 
         bool runFollowsJapanese = false;
@@ -1059,7 +1059,7 @@ public sealed partial class CompositionDetector
             if (!plainW)
                 runFollowsJapanese = false;
             else if (i == 0 || !(units[i - 1].Raw is "w" or "W" && units[i - 1].Kana == units[i - 1].Raw))
-                runFollowsJapanese = i > 0 && units[i - 1].Kana is [var kana, ..] && kana is >= 'ぁ' and <= 'ヺ';
+                runFollowsJapanese = i > 0 && units[i - 1].Kana is [var firstKana, ..] && firstKana is >= 'ぁ' and <= 'ヺ';
 
             var laughter = plainW && runFollowsJapanese && onlyLaughterToNextNonLetter[i + 1];
             unreadable[i + 1] = unreadable[i] + (unit.Raw.Length == 1 && unit.Kana == unit.Raw &&
