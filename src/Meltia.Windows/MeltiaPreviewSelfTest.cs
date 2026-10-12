@@ -18,7 +18,13 @@ internal static class MeltiaPreviewSelfTest
         try
         {
             var detector = CompositionDetector.CreateDefault();
-            detector.BoundaryRefinement = MeltiaPreviewBoundary.Refine;
+            detector.BoundaryRefinement = (units, pending, legacy) =>
+                detector.Memory?.Get((string.Concat(units.Select(x => x.Raw)) +
+                    pending).ToLowerInvariant()) is not null
+                    ? null
+                    : MeltiaLexicalRecovery.TryRecover(
+                          units, pending, legacy, detector) ??
+                      MeltiaPreviewBoundary.Refine(units, pending, legacy);
 
             Check("preview-keeps-separated-data", () =>
             {
@@ -65,6 +71,57 @@ internal static class MeltiaPreviewSelfTest
                 var proposal = MeltiaPreviewBoundary.Refine(units, "", host);
                 return proposal is null ||
                     string.Concat(proposal.Select(x => x.Raw)) == "nihongocompiler";
+            });
+            // These are actual CompositionText keystroke streams, not just
+            // direct calls into the experimental boundary Core. The default
+            // experimental toggle stays OFF for the lexical checks.
+            MeltiaPreviewBoundary.Enabled = false;
+            Check("commit-English-not-Japanese-romanization", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "commit") input.Append(c);
+                var pieces = input.Segments(final: true);
+                return pieces.Count == 1 && pieces[0].IsEnglish &&
+                    pieces[0].Raw == "commit";
+            });
+            Check("meltiawo-English-then-Japanese", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "meltiawotamesu") input.Append(c);
+                var pieces = input.Segments(final: true);
+                return pieces.Count == 2 &&
+                    pieces[0].IsEnglish && pieces[0].Raw == "meltia" &&
+                    !pieces[1].IsEnglish && pieces[1].Raw == "wotamesu" &&
+                    pieces[1].Kana == "をためす";
+            });
+            Check("capitalized-Meltia-word-preserves-raw", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "Meltiawotamesu") input.Append(c);
+                var pieces = input.Segments(final: true);
+                return pieces.Count == 2 &&
+                    pieces[0].IsEnglish && pieces[0].Raw == "Meltia" &&
+                    !pieces[1].IsEnglish && pieces[1].Kana == "をためす";
+            });
+            Check("Japanese-only-input-not-forced-to-English", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "nihongowotamesu") input.Append(c);
+                var pieces = input.Segments(final: true);
+                return pieces.All(x => !x.IsEnglish) &&
+                    string.Concat(pieces.Select(x => x.Raw)) == input.Raw;
+            });
+            Check("ambiguous-English-Japanese-words-not-forced", () =>
+            {
+                foreach (var word in new[] { "ime", "tokyo", "sake" })
+                {
+                    var input = new CompositionText(detector);
+                    foreach (var c in word) input.Append(c);
+                    if (MeltiaLexicalRecovery.TryRecover(
+                        input.Units, input.Pending, input.Segments(final: true),
+                        detector) is not null) return false;
+                }
+                return true;
             });
             foreach (var scenario in new[] {
                 "ime", "tokyo", "japaneseno",
