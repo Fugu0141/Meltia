@@ -9,8 +9,8 @@ void Check(bool condition, string title)
     Console.WriteLine("PASS " + title);
     passed++;
 }
-Check(typeof(MeltiaBoundaryEngine).Assembly.GetName().Version is { Major: 0, Minor: 9 },
-    "Meltia Core assembly development version is v0.9");
+Check(typeof(MeltiaBoundaryEngine).Assembly.GetName().Version is { Major: 1, Minor: 0 },
+    "Meltia Core assembly development version is v1.0");
 bool Has(BoundaryResult result, params Utf16Span[] spans) =>
     result.Routes.Any(route => spans.All(s => route.EnglishSpans.Contains(s)));
 var japanese = engine.Analyze("nihongo", new BoundaryEvidence(EnglishWords:["go"]));
@@ -422,5 +422,66 @@ catch (ArgumentException)
 }
 Check(invalidV09ModeRejected,
     "v0.9 rejects contradictory configuration without lattice decoder");
+
+
+// v1.0 remains a read-only boundary engine, and flags uncertainty rather
+// than claiming to infer the intended language from a romanizable spelling.
+var v10 = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true));
+var v09Final = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true));
+var v10Raw = "kinouhastrategynorequirementtoiu";
+var v10Diagnostic = v10.Analyze(v10Raw);
+var v09Diagnostic = v09.Analyze(v10Raw);
+Check(v10Diagnostic.Review is not null && !v10Diagnostic.AutoCommitAllowed,
+    "v1.0 review is opt-in diagnostic with no commit permission");
+Check(v09Diagnostic.Review is null &&
+      v10Diagnostic.Candidates.SequenceEqual(v09Diagnostic.Candidates) &&
+      v10Diagnostic.Routes.Count == v09Diagnostic.Routes.Count &&
+      v10Diagnostic.Routes.Zip(v09Diagnostic.Routes, (x, y) =>
+          x.Score.Equals(y.Score) &&
+          x.EnglishSpans.SequenceEqual(y.EnglishSpans)).All(z => z),
+    "v1.0 review preserves v0.9 Top1 TopK and candidate evidence");
+Check(v10.Analyze("tokyo", new BoundaryEvidence(
+    EnglishWords: ["tokyo"])).Review is { NeedsConfirmation: true,
+        Reason: "romanized-japanese-english-intent-unresolved" } t1 &&
+    t1.UnresolvedReadableEnglish.SequenceEqual([new Utf16Span(0, 5)]),
+    "v1.0 treats readable Tokyo English intent as unresolved");
+Check(v10.Analyze("ime", new BoundaryEvidence(
+    EnglishWords: ["ime"])).Review is { NeedsConfirmation: true } t2 &&
+    t2.UnresolvedReadableEnglish.SequenceEqual([new Utf16Span(0, 3)]),
+    "v1.0 treats lowercase ime as unresolved with lexical evidence");
+Check(v10.Analyze("tokyo", new BoundaryEvidence(
+    EnglishWords: ["tokyo"],
+    ExplicitEnglish: [new Utf16Span(0, 5)])).Review is { NeedsConfirmation: false } t3 &&
+    t3.UnresolvedReadableEnglish.Count == 0 &&
+    t3.StableEnglishSpans.SequenceEqual([new Utf16Span(0, 5)]),
+    "v1.0 explicit intent overrides ambiguity without losing mandatory lock");
+Check(v10.Analyze("nihongo", new BoundaryEvidence(
+    EnglishWords: ["go"])).Review is { UnresolvedReadableEnglish.Count: 0 },
+    "v1.0 does not mistake the go substring in nihongo for standalone English");
+Check(v10.Analyze("tokyo").Review is { NeedsConfirmation: false,
+        UnresolvedReadableEnglish.Count: 0 },
+    "v1.0 never invents English intent evidence for untagged Tokyo");
+Check(v10.Analyze("https://example.com").Review is { NeedsConfirmation: false } urlReview &&
+    urlReview.StableEnglishSpans.SequenceEqual([new Utf16Span(0, 19)]),
+    "v1.0 preserves protected URL despite any competing route");
+Check(v10.Analyze("nihongo").Routes[0].EnglishSpans.Count == 0 &&
+    v10.Analyze("japaneseno").Routes[0].EnglishSpans.Count == 0 &&
+    v10.Analyze("ime").Routes[0].EnglishSpans.Count == 0,
+    "v1.0 maintains Japanese-default lower-case ambiguity safety");
+Check(v10Diagnostic.Review!.StableEnglishSpans.All(x =>
+        v10Diagnostic.Routes[0].EnglishSpans.Contains(x)) &&
+    v10Diagnostic.Review.ContestedEnglishSpans.All(x =>
+        v10Diagnostic.Routes[0].EnglishSpans.Contains(x)) &&
+    v10Diagnostic.Review.StableEnglishSpans.Concat(
+        v10Diagnostic.Review.ContestedEnglishSpans).Distinct().Count() ==
+        v10Diagnostic.Routes[0].EnglishSpans.Count,
+    "v1.0 review partitions all Top1 English spans without omission");
 
 Console.WriteLine($"ALL PASS {passed}");
