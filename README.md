@@ -35,6 +35,7 @@
 - [v0.8 音韻ラティス・経路探索の実装と実測](docs/MELTIA_V08_PHONETIC_LATTICE_20261012.md)
 - [v0.9 複数英語区間の文脈的評価と追加290件の比較](docs/MELTIA_V09_CONTEXTUAL_ISLANDS_20261012.md)
 - [v1.0-dev 境界の不確実性レビューと867件評価](docs/MELTIA_V10_UNCERTAINTY_REVIEW_20261012.md)
+- [v1.0 フェーズ2：96文字を超える日英混在入力の候補生成研究](docs/MELTIA_V10_LONG_RUN_PHASE2_20261012.md)
 - [貢献方法](CONTRIBUTING.md)
 - [セキュリティ報告](SECURITY.md)
 - [サードパーティー通知](THIRD-PARTY-NOTICES.md)

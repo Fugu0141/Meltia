@@ -16,6 +16,7 @@
 - [v0.8 日本語音韻ラティスによる経路比較](../../docs/MELTIA_V08_PHONETIC_LATTICE_20261012.md)
 - [v0.9 助詞を挟む複数英語区間の経路評価](../../docs/MELTIA_V09_CONTEXTUAL_ISLANDS_20261012.md)
 - [v1.0-dev 境界の不確実性レビュー](../../docs/MELTIA_V10_UNCERTAINTY_REVIEW_20261012.md)
+- [v1.0 フェーズ2：長文の未知英語候補生成（既定OFF）](../../docs/MELTIA_V10_LONG_RUN_PHASE2_20261012.md)
 
 ```sh
 dotnet run --project src/Meltia.Cli -- kyouhaKingGnudeSPYAIRde
