@@ -81,6 +81,17 @@ public sealed partial class CompositionDetector
     /// </summary>
     public Func<bool>? UseScoredSegmentation { get; set; }
 
+    /// <summary>
+    /// Optional downstream boundary preview adapter. Null by default so all
+    /// original Meltype builds keep their existing segmentation behavior.
+    /// This runs on already computed segments; no key or commit is performed.
+    /// Returning null retains Meltype's decision. A thrown exception also
+    /// falls back rather than damaging a composition.
+    /// </summary>
+    public Func<IReadOnlyList<CompositionUnit>, string,
+        IReadOnlyList<CompositionSegment>, IReadOnlyList<CompositionSegment>?>?
+        BoundaryRefinement { get; set; }
+
     private static readonly bool ScoredByEnvironment = Environment.GetEnvironmentVariable("MELTYPE_SCORED") == "1";
 
     private bool ScoredSegmentation => ScoredByEnvironment || UseScoredSegmentation?.Invoke() == true;
@@ -153,6 +164,21 @@ public sealed partial class CompositionDetector
         if (level != DetectionLevel.Manual && !segments[0].IsEnglish && Memory?.Get(whole.ToLowerInvariant()) != false && IsUnknownEnglishWord(whole))
         {
             return [new CompositionSegment(true, "", whole)];
+        }
+        if (BoundaryRefinement is { } refine && level != DetectionLevel.Manual)
+        {
+            try
+            {
+                // A preview can only replace a safe, reversible segmentation.
+                // The adapter itself must verify raw UTF-16 coverage.
+                if (refine(units, pending, segments) is { } replacement)
+                    return replacement;
+            }
+            catch (Exception)
+            {
+                // Never lose a keystroke because an experimental algorithm failed.
+                // Meltype's proven path remains the fallback.
+            }
         }
         return segments;
     }
