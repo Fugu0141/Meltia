@@ -5,6 +5,7 @@ on:
       - 'src/Meltia.CompositionBridge/**'
       - 'tests/Meltia.CompositionBridge.Tests/**'
       - 'tests/Meltia.BoundaryEvaluation/**'
+      - 'tools/Meltia.BoundaryBenchmark/**'
       - 'src/Meltia.Core/**'
       - 'src/Meltype.Core/**'
       - '.github/workflows/meltia-composition-bridge.yml'
@@ -13,6 +14,7 @@ on:
       - 'src/Meltia.CompositionBridge/**'
       - 'tests/Meltia.CompositionBridge.Tests/**'
       - 'tests/Meltia.BoundaryEvaluation/**'
+      - 'tools/Meltia.BoundaryBenchmark/**'
       - 'src/Meltia.Core/**'
       - 'src/Meltype.Core/**'
       - '.github/workflows/meltia-composition-bridge.yml'
@@ -41,6 +43,12 @@ jobs:
       - name: Evaluate 290 additional synthetic vocabulary-shift and Japanese-negative cases
         run: |
           dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-generalization.json --suite generalization
+      - name: Evaluate 56 fixed adversarial ambiguity and mixed-script cases
+        run: |
+          dotnet run --project tests/Meltia.BoundaryEvaluation/Meltia.BoundaryEvaluation.csproj -c Release -- --output artifacts/meltia-boundary-adversarial.json --suite adversarial
+      - name: Measure independent Core p50/p95/p99 and allocated bytes
+        run: |
+          dotnet run --project tools/Meltia.BoundaryBenchmark/Meltia.BoundaryBenchmark.csproj -c Release -- --output artifacts/meltia-boundary-performance.json
       - name: Upload per-case boundary evaluation report even on evaluator failure
         if: always()
         uses: actions/upload-artifact@v4
