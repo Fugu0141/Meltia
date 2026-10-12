@@ -54,7 +54,12 @@ $exe = Join-Path $out "Meltia.exe"
 if (-not (Test-Path $exe)) { throw "Published Meltia.exe missing." }
 Copy-Item (Join-Path $root "LICENSE") (Join-Path $out "LICENSE") -Force
 Copy-Item (Join-Path $root "THIRD-PARTY-NOTICES.md") (Join-Path $out "THIRD-PARTY-NOTICES.md") -Force
+Copy-Item (Join-Path $root "docs/MELTIA_LICENSE_POLICY.md") (Join-Path $out "MELTIA_LICENSE_POLICY.md") -Force
 Copy-Item (Join-Path $root "docs/MELTIA_WINDOWS_PREVIEW.md") (Join-Path $out "MELTIA_WINDOWS_PREVIEW.md") -Force
+$releaseNotes = Join-Path $root "docs/MELTIA_PREVIEW_RELEASE_NOTES_v1.0.0-beta.1.md"
+if (Test-Path -LiteralPath $releaseNotes) {
+    Copy-Item $releaseNotes (Join-Path $out "PREVIEW_RELEASE_NOTES.md") -Force
+}
 
 if (-not $SkipSmokeTest) {
     $testPath = Join-Path $out "meltia-preview-selftest.json"
