@@ -38,7 +38,8 @@ public sealed record MeltiaBoundaryOptions(
     bool ExperimentalContextualIslandScoring = false,
     bool ExperimentalUncertaintyReview = false,
     bool ExperimentalLongRunWindowing = false,
-    bool ExperimentalDiverseCandidatePruning = false);
+    bool ExperimentalDiverseCandidatePruning = false,
+    bool ExperimentalJapaneseFlankScoring = false);
 
 /// <summary>
 /// v0.5 parallel boundary engine. No changes to Meltype composition/TSF or commit behavior.
@@ -71,6 +72,11 @@ public sealed class MeltiaBoundaryEngine
             !_options.ExperimentalUnknownLatinCandidates)
             throw new ArgumentException(
                 "Candidate diversity requires experimental unknown Latin candidates.",
+                nameof(options));
+        if (_options.ExperimentalJapaneseFlankScoring &&
+            !_options.ExperimentalPhoneticLatticeDecoder)
+            throw new ArgumentException(
+                "Japanese flank scoring requires the phonetic lattice decoder.",
                 nameof(options));
     }
 
@@ -253,7 +259,8 @@ public sealed class MeltiaBoundaryEngine
         var routes = _options.ExperimentalPhoneticLatticeDecoder
             ? MeltiaPhoneticLatticeDecoder.Decode(raw, candidates, hard,
                 japanese, perSpanCost, MaxRoutes,
-                _options.ExperimentalContextualIslandScoring)
+                _options.ExperimentalContextualIslandScoring,
+                _options.ExperimentalJapaneseFlankScoring)
             : BuildRoutes(raw.Length, candidates, hard, perSpanCost);
         var review = _options.ExperimentalUncertaintyReview
             ? MeltiaUncertaintyReview.Create(raw, routes, hard, evidence)
