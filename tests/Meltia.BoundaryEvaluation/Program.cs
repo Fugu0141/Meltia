@@ -7,10 +7,10 @@ using Meltia.BoundaryEvaluation;
 
 if ((args.Length != 2 && args.Length != 4) || args[0] != "--output" ||
     string.IsNullOrWhiteSpace(args[1]) ||
-    args.Length == 4 && (args[2] != "--suite" || args[3] is not ("core" or "robustness" or "generalization" or "adversarial" or "longrun")))
+    args.Length == 4 && (args[2] != "--suite" || args[3] is not ("core" or "robustness" or "generalization" or "adversarial" or "longrun" or "budget")))
 {
     Console.Error.WriteLine(
-        "Usage: dotnet run --project tests/Meltia.BoundaryEvaluation -- --output report.json [--suite core|robustness|generalization|adversarial|longrun]");
+        "Usage: dotnet run --project tests/Meltia.BoundaryEvaluation -- --output report.json [--suite core|robustness|generalization|adversarial|longrun|budget]");
     return 64;
 }
 string suite = args.Length == 4 ? args[3] : "core";
@@ -20,6 +20,7 @@ var cases = suite switch
     "generalization" => GeneralizationCorpus.Cases,
     "adversarial" => AdversarialCorpus.Cases,
     "longrun" => LongRunCorpus.Cases,
+    "budget" => CandidateBudgetCorpus.Cases,
     _ => GoldCorpus.Cases
 };
 
@@ -374,6 +375,7 @@ var report = new
         "generalization" => "meltia-v0.9-fresh-lexical-types-synthetic-v1",
         "adversarial" => "meltia-v1.0-fixed-intent-ambiguity-stress-v1",
         "longrun" => "meltia-v1.0-longrun-windowing-synthetic-v1",
+        "budget" => "meltia-v1.0-candidate-budget-synthetic-v1",
         _ => "meltia-synthetic-v1.1"
     },
     Suite = suite,
@@ -398,6 +400,7 @@ var report = new
         "Adversarial corpus: 56 hand-authored fixed synthetic intents including six identical-string contradictory gold pairs; never a blind natural-language benchmark",
         "Longrun: 60 synthetic scenarios with >96 contiguous ASCII characters, evaluates both baseline and strictly opt-in overlapping-window proposals",
         "Phase3 diverse: experimental start-region coverage only after 128-candidate pressure, always preserves user/protected and higher-priority lexicon and host candidates. No proven accuracy gain.",
+        "Budget stress: 36 synthetic fixed intent labels, includes long Japanese negatives, dense multi-island gold and separated candidate regions.",
         "Core 47 cases have already been studied and are DEVELOPMENT diagnostics, not a blind holdout",
         "Robustness suite: 530 synthetic inputs from H1/H9 previously used 54 OOV English words and 19 Japanese phonetic words, NOT natural holdout or Python parity"
     },
@@ -643,7 +646,7 @@ foreach (var row in records)
         var japaneseNegative = row.Category is
             "S11-japanese-only" or "R08-japanese-only" or
             "G06-japanese-only" or "A01-japanese-orthographic" or
-            "L04-long-japanese-only";
+            "L04-long-japanese-only" or "B03-japanese-negative";
         if ((noPruningNeeded || japaneseNegative) &&
             (!before.Candidates.SequenceEqual(after.Candidates!) ||
              !before.English.SequenceEqual(after.English) ||
@@ -828,7 +831,7 @@ static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
             candidateEdges += p.Candidates.Count;
         }
         goldSpans += row.GoldEnglish.Count;
-        if (row.Category is "S11-japanese-only" or "R08-japanese-only" or "G06-japanese-only" or "A01-japanese-orthographic" or "L04-long-japanese-only")
+        if (row.Category is "S11-japanese-only" or "R08-japanese-only" or "G06-japanese-only" or "A01-japanese-orthographic" or "L04-long-japanese-only" or "B03-japanese-negative")
         {
             japanese++;
             if (p.English.Count > 0) falseEnglish++;
