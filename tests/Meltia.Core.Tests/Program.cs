@@ -320,6 +320,13 @@ Check(Has(v08.Analyze("kinouhastrategywakaru"),
     new Utf16Span(7, 15)),
     "v0.8 retains unknown English between Japanese syllables in Top-K");
 var v08Multi = v08.Analyze("kinouhastrategynorequirementtoiu");
+Console.WriteLine("DIAG v0.8 multi candidateGold=" +
+    v08Multi.Candidates.Any(c => c.Span == new Utf16Span(7, 15)) + "," +
+    v08Multi.Candidates.Any(c => c.Span == new Utf16Span(17, 28)));
+foreach (var route in v08Multi.Routes)
+    Console.WriteLine("DIAG v0.8 multi score=" + route.Score.ToString("F2") +
+        " spans=" + string.Join(",", route.EnglishSpans.Select(
+            z => z.Start + "-" + z.End)));
 Check(Has(v08Multi, new Utf16Span(7, 15), new Utf16Span(17, 28)),
     "v0.8 supports two unknown English islands on one phonetic lattice");
 Check(v08.Analyze("tokyo").Routes[0].EnglishSpans.Count == 0 &&
