@@ -160,27 +160,33 @@ public sealed partial class CompositionDetector
         // 途中の区間 (… flow) だけを英語にすると「sたcこvえrflow」のようになってしまう。
         // ただし先頭が辞書の英単語として区切れている (github に push) ならその区切りを使う。
         var whole = Raw(units, 0, units.Count) + pending;
-        if (UnknownWordThenJapanese(units, pending, segments, level, whole) is { } split) return split;
-        if (level != DetectionLevel.Manual && !segments[0].IsEnglish && Memory?.Get(whole.ToLowerInvariant()) != false && IsUnknownEnglishWord(whole))
+        if (UnknownWordThenJapanese(units, pending, segments, level, whole) is { } split)
+            return RefineOrKeep(units, pending, split, level);
+        if (level != DetectionLevel.Manual && !segments[0].IsEnglish &&
+            Memory?.Get(whole.ToLowerInvariant()) != false && IsUnknownEnglishWord(whole))
+            return RefineOrKeep(units, pending,
+                [new CompositionSegment(true, "", whole)], level);
+        return RefineOrKeep(units, pending, segments, level);
+    }
+
+    private IReadOnlyList<CompositionSegment> RefineOrKeep(
+        IReadOnlyList<CompositionUnit> units, string pending,
+        IReadOnlyList<CompositionSegment> legacy, DetectionLevel level)
+    {
+        if (BoundaryRefinement is not { } refine || level == DetectionLevel.Manual)
+            return legacy;
+        try
         {
-            return [new CompositionSegment(true, "", whole)];
+            // A preview can only replace a safe, reversible segmentation.
+            // The adapter itself must verify raw UTF-16 coverage.
+            return refine(units, pending, legacy) ?? legacy;
         }
-        if (BoundaryRefinement is { } refine && level != DetectionLevel.Manual)
+        catch (Exception)
         {
-            try
-            {
-                // A preview can only replace a safe, reversible segmentation.
-                // The adapter itself must verify raw UTF-16 coverage.
-                if (refine(units, pending, segments) is { } replacement)
-                    return replacement;
-            }
-            catch (Exception)
-            {
-                // Never lose a keystroke because an experimental algorithm failed.
-                // Meltype's proven path remains the fallback.
-            }
+            // Never lose a keystroke because an experimental algorithm failed.
+            // Meltype's established route remains the fallback.
+            return legacy;
         }
-        return segments;
     }
 
     private List<CompositionSegment>? UnknownWordThenJapanese(IReadOnlyList<CompositionUnit> units, string pending, List<CompositionSegment> segments, DetectionLevel level, string whole)
