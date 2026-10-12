@@ -1,0 +1,149 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Release ONLY a Windows keyboard Preview built from the dedicated candidate branch.
+# Never package Meltype's original TIP, installer, or inherited brand images.
+name: Meltia Windows Preview v1.0.0-beta.1
+
+on:
+  push:
+    branches:
+      - release/v1.0.0-beta.1-preview
+  # workflow_dispatch is deliberately omitted: publication must be gated by a
+  # candidate-branch commit and all jobs succeeding, not a skip-tests switch.
+
+concurrency:
+  group: meltia-preview-v1.0.0-beta.1
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify-package:
+    name: Windows build, regression and redistributable verification
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate source
+        uses: actions/checkout@v4
+
+      - name: Install .NET SDK 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Run inherited OS-neutral composition regressions
+        shell: pwsh
+        run: |
+          dotnet run --project src/Meltype.Core.Tests/Meltype.Core.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw "Native composition regressions failed." }
+
+      - name: Run Meltia independent Core contracts
+        shell: pwsh
+        run: |
+          dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw "Meltia Core contracts failed." }
+
+      - name: Build FRAMEWORK-DEPENDENT Windows Preview and run real EXE smoke
+        shell: pwsh
+        run: |
+          ./tools/build-meltia-windows-preview.ps1 -FrameworkDependent
+
+      - name: Verify exact ZIP contents, license files and smoke evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = 'artifacts/meltia-windows-preview-win-x64-framework-dependent.zip'
+          if (!(Test-Path -LiteralPath $zip)) { throw "No preview ZIP: failing rather than publishing." }
+          Add-Type -AssemblyName System.IO.Compression
+          $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip).Path)
+          try {
+            $files = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+            $required = @('Meltia.exe', 'LICENSE', 'THIRD-PARTY-NOTICES.md',
+              'MELTIA_LICENSE_POLICY.md', 'PREVIEW_RELEASE_NOTES.md',
+              'MELTIA_WINDOWS_PREVIEW.md', 'meltia-preview-selftest.json')
+            foreach ($name in $required) {
+              if ($files -notcontains $name) { throw "Missing required preview file: $name" }
+            }
+            $forbidden = @('Meltype.exe', 'Register-Tip.ps1', 'meltype-ime.ps1',
+              'hostfxr.dll', 'coreclr.dll', 'hostpolicy.dll')
+            foreach ($name in $forbidden) {
+              if ($files -contains $name) { throw "Forbidden inherited/runtime file: $name" }
+            }
+            foreach ($file in $files) {
+              if ($file -match '(?i)\.(ico|png|jpg|jpeg|svg|iss)$') {
+                throw "Unreviewed image or installer asset in ZIP: $file"
+              }
+              if ($file -match '(?i)(^|/)(native/tip|tip/|mozc/|mac/|linux/)') {
+                throw "Non-preview component bundled: $file"
+              }
+            }
+          } finally { $archive.Dispose() }
+          $report = Get-Content 'artifacts/meltia-windows-preview-win-x64-framework-dependent/meltia-preview-selftest.json' -Raw | ConvertFrom-Json
+          if (!$report.Passed -or $report.Version -ne '1.0.0-beta.1') {
+            throw "Self-test must pass and describe beta.1 before publishing."
+          }
+          if (@($report.Cases | Where-Object { !$_.passed }).Count -gt 0) {
+            throw "Some self-test cases failed."
+          }
+          $notice = Get-Content 'THIRD-PARTY-NOTICES.md' -Raw
+          $license = Get-Content 'LICENSE' -Raw
+          if (!$license.Contains('GNU GENERAL PUBLIC LICENSE') -or
+              !$notice.Contains('CC BY-SA 4.0') -or
+              !$notice.Contains('SCOWL') -or
+              !$notice.Contains('Unicode')) {
+            throw 'Required inherited GPL/data notices not present.'
+          }
+
+      - name: Create SHA-256 checksum
+        shell: pwsh
+        run: |
+          $zip = Get-Item 'artifacts/meltia-windows-preview-win-x64-framework-dependent.zip'
+          $checksum = (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$checksum  $($zip.Name)" | Set-Content -Path "$($zip.FullName).sha256" -Encoding utf8
+
+      - name: Upload verified preview for audit (even before a Release exists)
+        uses: actions/upload-artifact@v4
+        with:
+          name: meltia-v1.0.0-beta.1-verified
+          path: |
+            artifacts/meltia-windows-preview-win-x64-framework-dependent.zip
+            artifacts/meltia-windows-preview-win-x64-framework-dependent.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-prerelease:
+    name: Publish GitHub Pre-release only after verification
+    needs: verify-package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: meltia-v1.0.0-beta.1-verified
+          path: release-assets
+      - name: Publish immutable candidate as a prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: v1.0.0-beta.1
+        run: |
+          set -euo pipefail
+          test -f release-assets/meltia-windows-preview-win-x64-framework-dependent.zip
+          test -f release-assets/meltia-windows-preview-win-x64-framework-dependent.zip.sha256
+          (cd release-assets && sha256sum -c meltia-windows-preview-win-x64-framework-dependent.zip.sha256)
+          # Do not silently replace an existing public tag or mutate previous assets.
+          if gh release view "$RELEASE_TAG" --json tagName >/dev/null 2>&1; then
+            echo "::error::Release $RELEASE_TAG already exists; refusing to overwrite it."
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" \
+            release-assets/meltia-windows-preview-win-x64-framework-dependent.zip \
+            release-assets/meltia-windows-preview-win-x64-framework-dependent.zip.sha256 \
+            --target "$GITHUB_SHA" \
+            --title 'Meltia v1.0.0-beta.1 — Windows Keyboard Preview' \
+            --notes-file docs/MELTIA_PREVIEW_RELEASE_NOTES_v1.0.0-beta.1.md \
+            --prerelease \
+            --latest=false
