@@ -33,7 +33,8 @@ public sealed record MeltiaBoundaryOptions(
     bool ExperimentalStrongHostAdvisory = false,
     bool ExperimentalFragmentationPenalty = false,
     bool ExperimentalUnknownLatinCandidates = false,
-    bool ExperimentalPhoneticLatticeDecoder = false);
+    bool ExperimentalPhoneticLatticeDecoder = false,
+    bool ExperimentalContextualIslandScoring = false);
 
 /// <summary>
 /// v0.5 parallel boundary engine. No changes to Meltype composition/TSF or commit behavior.
@@ -222,7 +223,8 @@ public sealed class MeltiaBoundaryEngine
         // to v0.7 or the installed Meltype input/composition path.
         var routes = _options.ExperimentalPhoneticLatticeDecoder
             ? MeltiaPhoneticLatticeDecoder.Decode(raw, candidates, hard,
-                japanese, perSpanCost, MaxRoutes)
+                japanese, perSpanCost, MaxRoutes,
+                _options.ExperimentalContextualIslandScoring)
             : BuildRoutes(raw.Length, candidates, hard, perSpanCost);
         return new BoundaryResult(raw, candidates, routes, bySpan.Count > MaxCandidates);
     }
