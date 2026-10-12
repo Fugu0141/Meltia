@@ -52,6 +52,17 @@ var v09WithHost = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalUnknownLatinCandidates: true,
     ExperimentalPhoneticLatticeDecoder: true,
     ExperimentalContextualIslandScoring: true));
+var v10Independent = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true));
+var v10WithHost = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalStrongHostAdvisory: true,
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true));
 var detector = CompositionDetector.CreateDefault();
 var records = new List<CaseRecord>();
 foreach (var gold in cases)
@@ -75,6 +86,8 @@ foreach (var gold in cases)
             v08Independent.Analyze(gold.Raw)));
         predictions.Add(FromCore("Meltia-v0.9-independent",
             v09Independent.Analyze(gold.Raw)));
+        predictions.Add(FromCore("Meltia-v1.0-independent",
+            v10Independent.Analyze(gold.Raw)));
         var experiment = experimental.Analyze(gold.Raw);
         predictions.Add(FromCore("Meltia-experimental-independent", experiment));
     }
@@ -84,6 +97,7 @@ foreach (var gold in cases)
         predictions.Add(Error("Meltia-v0.7-independent", ex));
         predictions.Add(Error("Meltia-v0.8-independent", ex));
         predictions.Add(Error("Meltia-v0.9-independent", ex));
+        predictions.Add(Error("Meltia-v1.0-independent", ex));
     }
 
     try
@@ -104,6 +118,8 @@ foreach (var gold in cases)
             v08Independent.Analyze(gold.Raw, evidence)));
         predictions.Add(FromCore("Meltia-v0.9-lexicon",
             v09Independent.Analyze(gold.Raw, evidence)));
+        predictions.Add(FromCore("Meltia-v1.0-lexicon",
+            v10Independent.Analyze(gold.Raw, evidence)));
         var matched = experimental.Analyze(gold.Raw, evidence);
         predictions.Add(FromCore("Meltia-experimental-lexicon", matched));
     }
@@ -113,6 +129,7 @@ foreach (var gold in cases)
         predictions.Add(Error("Meltia-v0.7-lexicon", ex));
         predictions.Add(Error("Meltia-v0.8-lexicon", ex));
         predictions.Add(Error("Meltia-v0.9-lexicon", ex));
+        predictions.Add(Error("Meltia-v1.0-lexicon", ex));
     }
 
     try
@@ -147,6 +164,9 @@ foreach (var gold in cases)
         predictions.Add(FromCore("Meltia-v0.9-shadow",
             MeltypeBoundaryShadowBridge.CompareSegments(
                 gold.Raw, segments, v09WithHost).Meltia));
+        predictions.Add(FromCore("Meltia-v1.0-shadow",
+            MeltypeBoundaryShadowBridge.CompareSegments(
+                gold.Raw, segments, v10WithHost).Meltia));
         var v07SharedShadow = MeltypeBoundaryShadowBridge.CompareSegments(
             gold.Raw, segments, v07WithHost,
             englishWords: matchedEvidence.EnglishWords,
@@ -161,6 +181,11 @@ foreach (var gold in cases)
         predictions.Add(FromCore("Meltia-v0.9-shadow-lexicon",
             MeltypeBoundaryShadowBridge.CompareSegments(
                 gold.Raw, segments, v09WithHost,
+                englishWords: matchedEvidence.EnglishWords,
+                properNames: matchedEvidence.ProperNames).Meltia));
+        predictions.Add(FromCore("Meltia-v1.0-shadow-lexicon",
+            MeltypeBoundaryShadowBridge.CompareSegments(
+                gold.Raw, segments, v10WithHost,
                 englishWords: matchedEvidence.EnglishWords,
                 properNames: matchedEvidence.ProperNames).Meltia));
         predictions.Add(FromCore("Meltia-penalty-only-shadow",
@@ -188,6 +213,8 @@ foreach (var gold in cases)
         predictions.Add(Error("Meltia-v0.8-shadow-lexicon", ex));
         predictions.Add(Error("Meltia-v0.9-shadow", ex));
         predictions.Add(Error("Meltia-v0.9-shadow-lexicon", ex));
+        predictions.Add(Error("Meltia-v1.0-shadow", ex));
+        predictions.Add(Error("Meltia-v1.0-shadow-lexicon", ex));
         predictions.Add(Error("Meltia-penalty-only-shadow", ex));
         predictions.Add(Error("Meltia-host-only-shadow", ex));
         predictions.Add(Error("Meltia-experimental-shadow-lexicon", ex));
@@ -207,7 +234,9 @@ string[] models = [
     "Meltia-v0.8-independent", "Meltia-v0.8-lexicon",
     "Meltia-v0.8-shadow", "Meltia-v0.8-shadow-lexicon",
     "Meltia-v0.9-independent", "Meltia-v0.9-lexicon",
-    "Meltia-v0.9-shadow", "Meltia-v0.9-shadow-lexicon"
+    "Meltia-v0.9-shadow", "Meltia-v0.9-shadow-lexicon",
+    "Meltia-v1.0-independent", "Meltia-v1.0-lexicon",
+    "Meltia-v1.0-shadow", "Meltia-v1.0-shadow-lexicon"
 ];
 var overall = models.ToDictionary(
     model => model, model => Aggregate(records, model));
@@ -220,7 +249,7 @@ var byCategory = cases.Select(x => x.Group).Distinct()
 var report = new
 {
     Schema = "meltia/boundary-evaluation-v1",
-    EngineExperimentalFeatureVersion = "0.9",
+    EngineExperimentalFeatureVersion = "1.0-dev",
     EvidenceLevel = "B-offline-CSharp-synthetic-intent",
     GoldStatus = "synthetic-intent-labeled-not-human-verified",
     CorpusVersion = suite switch
@@ -247,6 +276,7 @@ var report = new
         "v0.8: opt-in dynamic-programming lattice with zero-cost readable romaji paths and scored unknown-letter fallback; candidate generator unchanged",
         "v0.9: opt-in pairwise route evidence for two nonphonetic English islands separated by a Japanese 2-letter particle; no user text changes",
         "Generalization: 40 lexical types not in old 54-word list, 18 Japanese romanized strings; 290 synthetic templates, NOT an independent blind holdout",
+        "v1.0: opt-in uncertainty review, near-tied TopK boundary agreement and explicit lexical-intent ambiguity; Top1 route scores deliberately unchanged",
         "Core 47 cases have already been studied and are DEVELOPMENT diagnostics, not a blind holdout",
         "Robustness suite: 530 synthetic inputs from H1/H9 previously used 54 OOV English words and 19 Japanese phonetic words, NOT natural holdout or Python parity"
     },
@@ -317,7 +347,9 @@ foreach (var model in new[] {
     "Meltia-v0.8-independent", "Meltia-v0.8-lexicon",
     "Meltia-v0.8-shadow", "Meltia-v0.8-shadow-lexicon",
     "Meltia-v0.9-independent", "Meltia-v0.9-lexicon",
-    "Meltia-v0.9-shadow", "Meltia-v0.9-shadow-lexicon"
+    "Meltia-v0.9-shadow", "Meltia-v0.9-shadow-lexicon",
+    "Meltia-v1.0-independent", "Meltia-v1.0-lexicon",
+    "Meltia-v1.0-shadow", "Meltia-v1.0-shadow-lexicon"
 })
 {
     if (overall[model].JapaneseOnlyFalseEnglishCases > priorJapanese)
@@ -412,6 +444,28 @@ foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-le
 }
 Console.WriteLine("PASS v0.9 Top1/TopK nonregression on " + suite +
     " across all evidence conditions");
+// v1.0 changes only the optional review signal. Check each result, not
+// just aggregate scores, so no accidental boundary/score drift can pass.
+foreach (var row in records)
+{
+    foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-lexicon" })
+    {
+        var old = row.Predictions.Single(x => x.Model == "Meltia-v0.9-" + condition);
+        var latest = row.Predictions.Single(x => x.Model == "Meltia-v1.0-" + condition);
+        if (old.Error is not null || latest.Error is not null) continue;
+        if (latest.Review is null || !old.English.SequenceEqual(latest.English) ||
+            !old.Candidates!.SequenceEqual(latest.Candidates!) ||
+            old.Routes.Count != latest.Routes.Count ||
+            !old.Routes.Zip(latest.Routes,
+                (a, b) => a.SequenceEqual(b)).All(x => x))
+        {
+            Console.Error.WriteLine("v1.0 TOP1/TOPK/CANDIDATE PARITY REGRESSION " +
+                row.Id + " " + condition);
+            return 8;
+        }
+    }
+}
+Console.WriteLine("PASS v1.0 candidate and path parity against v0.9 on " + suite);
 var errors = overall.Values.Sum(x => x.Errors);
 if (errors > 0)
 {
@@ -428,7 +482,7 @@ static string Show(IReadOnlyList<Utf16Span> spans) =>
 static Prediction FromCore(string model, BoundaryResult result) =>
     new(model, result.Routes[0].EnglishSpans.ToArray(),
         result.Routes.Select(r => (IReadOnlyList<Utf16Span>)r.EnglishSpans.ToArray()).ToArray(),
-        result.Candidates.Select(c => c.Span).ToArray(), null);
+        result.Candidates.Select(c => c.Span).ToArray(), null, result.Review);
 
 static Prediction Error(string model, Exception exception) =>
     new(model, [], [], null, exception.GetType().Name + ": " + exception.Message);
@@ -545,7 +599,8 @@ static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
 
 internal sealed record Prediction(string Model, IReadOnlyList<Utf16Span> English,
     IReadOnlyList<IReadOnlyList<Utf16Span>> Routes,
-    IReadOnlyList<Utf16Span>? Candidates, string? Error);
+    IReadOnlyList<Utf16Span>? Candidates, string? Error,
+    BoundaryReview? Review = null);
 
 internal sealed record CaseRecord(string Id, string Category, string Raw,
     IReadOnlyList<Utf16Span> GoldEnglish, IReadOnlyList<Prediction> Predictions);
