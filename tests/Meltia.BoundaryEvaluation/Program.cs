@@ -78,6 +78,21 @@ var v10WindowWithHost = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalContextualIslandScoring: true,
     ExperimentalUncertaintyReview: true,
     ExperimentalLongRunWindowing: true));
+var v10DiverseIndependent = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true,
+    ExperimentalLongRunWindowing: true,
+    ExperimentalDiverseCandidatePruning: true));
+var v10DiverseWithHost = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalStrongHostAdvisory: true,
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true,
+    ExperimentalLongRunWindowing: true,
+    ExperimentalDiverseCandidatePruning: true));
 var detector = CompositionDetector.CreateDefault();
 var records = new List<CaseRecord>();
 foreach (var gold in cases)
@@ -105,6 +120,8 @@ foreach (var gold in cases)
             v10Independent.Analyze(gold.Raw)));
         predictions.Add(FromCore("Meltia-v1.0-windowed-independent",
             v10WindowIndependent.Analyze(gold.Raw)));
+        predictions.Add(FromCore("Meltia-v1.0-diverse-independent",
+            v10DiverseIndependent.Analyze(gold.Raw)));
         var experiment = experimental.Analyze(gold.Raw);
         predictions.Add(FromCore("Meltia-experimental-independent", experiment));
     }
@@ -116,6 +133,7 @@ foreach (var gold in cases)
         predictions.Add(Error("Meltia-v0.9-independent", ex));
         predictions.Add(Error("Meltia-v1.0-independent", ex));
         predictions.Add(Error("Meltia-v1.0-windowed-independent", ex));
+        predictions.Add(Error("Meltia-v1.0-diverse-independent", ex));
     }
 
     try
@@ -140,6 +158,8 @@ foreach (var gold in cases)
             v10Independent.Analyze(gold.Raw, evidence)));
         predictions.Add(FromCore("Meltia-v1.0-windowed-lexicon",
             v10WindowIndependent.Analyze(gold.Raw, evidence)));
+        predictions.Add(FromCore("Meltia-v1.0-diverse-lexicon",
+            v10DiverseIndependent.Analyze(gold.Raw, evidence)));
         var matched = experimental.Analyze(gold.Raw, evidence);
         predictions.Add(FromCore("Meltia-experimental-lexicon", matched));
     }
@@ -151,6 +171,7 @@ foreach (var gold in cases)
         predictions.Add(Error("Meltia-v0.9-lexicon", ex));
         predictions.Add(Error("Meltia-v1.0-lexicon", ex));
         predictions.Add(Error("Meltia-v1.0-windowed-lexicon", ex));
+        predictions.Add(Error("Meltia-v1.0-diverse-lexicon", ex));
     }
 
     try
@@ -191,6 +212,9 @@ foreach (var gold in cases)
         predictions.Add(FromCore("Meltia-v1.0-windowed-shadow",
             MeltypeBoundaryShadowBridge.CompareSegments(
                 gold.Raw, segments, v10WindowWithHost).Meltia));
+        predictions.Add(FromCore("Meltia-v1.0-diverse-shadow",
+            MeltypeBoundaryShadowBridge.CompareSegments(
+                gold.Raw, segments, v10DiverseWithHost).Meltia));
         var v07SharedShadow = MeltypeBoundaryShadowBridge.CompareSegments(
             gold.Raw, segments, v07WithHost,
             englishWords: matchedEvidence.EnglishWords,
@@ -215,6 +239,11 @@ foreach (var gold in cases)
         predictions.Add(FromCore("Meltia-v1.0-windowed-shadow-lexicon",
             MeltypeBoundaryShadowBridge.CompareSegments(
                 gold.Raw, segments, v10WindowWithHost,
+                englishWords: matchedEvidence.EnglishWords,
+                properNames: matchedEvidence.ProperNames).Meltia));
+        predictions.Add(FromCore("Meltia-v1.0-diverse-shadow-lexicon",
+            MeltypeBoundaryShadowBridge.CompareSegments(
+                gold.Raw, segments, v10DiverseWithHost,
                 englishWords: matchedEvidence.EnglishWords,
                 properNames: matchedEvidence.ProperNames).Meltia));
         predictions.Add(FromCore("Meltia-penalty-only-shadow",
@@ -246,6 +275,8 @@ foreach (var gold in cases)
         predictions.Add(Error("Meltia-v1.0-shadow-lexicon", ex));
         predictions.Add(Error("Meltia-v1.0-windowed-shadow", ex));
         predictions.Add(Error("Meltia-v1.0-windowed-shadow-lexicon", ex));
+        predictions.Add(Error("Meltia-v1.0-diverse-shadow", ex));
+        predictions.Add(Error("Meltia-v1.0-diverse-shadow-lexicon", ex));
         predictions.Add(Error("Meltia-penalty-only-shadow", ex));
         predictions.Add(Error("Meltia-host-only-shadow", ex));
         predictions.Add(Error("Meltia-experimental-shadow-lexicon", ex));
@@ -269,7 +300,9 @@ string[] models = [
     "Meltia-v1.0-independent", "Meltia-v1.0-lexicon",
     "Meltia-v1.0-shadow", "Meltia-v1.0-shadow-lexicon",
     "Meltia-v1.0-windowed-independent", "Meltia-v1.0-windowed-lexicon",
-    "Meltia-v1.0-windowed-shadow", "Meltia-v1.0-windowed-shadow-lexicon"
+    "Meltia-v1.0-windowed-shadow", "Meltia-v1.0-windowed-shadow-lexicon",
+    "Meltia-v1.0-diverse-independent", "Meltia-v1.0-diverse-lexicon",
+    "Meltia-v1.0-diverse-shadow", "Meltia-v1.0-diverse-shadow-lexicon"
 ];
 var overall = models.ToDictionary(
     model => model, model => Aggregate(records, model));
@@ -361,6 +394,7 @@ var report = new
         "v1.0: opt-in uncertainty review, near-tied TopK boundary agreement and explicit lexical-intent ambiguity; Top1 route scores deliberately unchanged",
         "Adversarial corpus: 56 hand-authored fixed synthetic intents including six identical-string contradictory gold pairs; never a blind natural-language benchmark",
         "Longrun: 60 synthetic scenarios with >96 contiguous ASCII characters, evaluates both baseline and strictly opt-in overlapping-window proposals",
+        "Phase3 diverse: experimental start-region coverage only after 128-candidate pressure, always preserves user/protected and higher-priority lexicon and host candidates. No proven accuracy gain.",
         "Core 47 cases have already been studied and are DEVELOPMENT diagnostics, not a blind holdout",
         "Robustness suite: 530 synthetic inputs from H1/H9 previously used 54 OOV English words and 19 Japanese phonetic words, NOT natural holdout or Python parity"
     },
@@ -588,6 +622,50 @@ foreach (var row in records)
     }
 }
 Console.WriteLine("PASS v1.0 windowing short-run identity on " + suite);
+
+// Candidate pruning is a separate experiment. Without actual truncation
+// it must not change candidates or routes. Japanese-only negative controls
+// are checked separately even if long.
+foreach (var row in records)
+{
+    foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-lexicon" })
+    {
+        var before = row.Predictions.Single(x =>
+            x.Model == "Meltia-v1.0-windowed-" + condition);
+        var after = row.Predictions.Single(x =>
+            x.Model == "Meltia-v1.0-diverse-" + condition);
+        if (before.Error is not null || after.Error is not null) continue;
+        var noPruningNeeded = before.Candidates!.Count < MeltiaBoundaryEngine.MaxCandidates;
+        var japaneseNegative = row.Category is
+            "S11-japanese-only" or "R08-japanese-only" or
+            "G06-japanese-only" or "A01-japanese-orthographic" or
+            "L04-long-japanese-only";
+        if ((noPruningNeeded || japaneseNegative) &&
+            (!before.Candidates.SequenceEqual(after.Candidates!) ||
+             !before.English.SequenceEqual(after.English) ||
+             before.Routes.Count != after.Routes.Count ||
+             !before.Routes.Zip(after.Routes,
+                 (a, b) => a.SequenceEqual(b)).All(x => x)))
+        {
+            Console.Error.WriteLine("v1.0 DIVERSITY REGRESSION " +
+                suite + " " + row.Id + " " + condition);
+            return 11;
+        }
+    }
+}
+Console.WriteLine("PASS phase3 nontruncated and Japanese-only candidate/route parity");
+foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-lexicon" })
+{
+    var baseline = overall["Meltia-v1.0-windowed-" + condition];
+    var diverse = overall["Meltia-v1.0-diverse-" + condition];
+    Console.WriteLine("PHASE3 " + suite + " " + condition +
+        " deltaTop1=" + (diverse.ExactCases - baseline.ExactCases) +
+        " deltaTopK=" + (diverse.TopKExactCases - baseline.TopKExactCases) +
+        " deltaGoldCandidateHits=" +
+            ((diverse.GoldCandidateHits ?? 0) - (baseline.GoldCandidateHits ?? 0)) +
+        " deltaCandidateEdges=" +
+            ((diverse.CandidateEdges ?? 0) - (baseline.CandidateEdges ?? 0)));
+}
 var errors = overall.Values.Sum(x => x.Errors);
 if (errors > 0)
 {
