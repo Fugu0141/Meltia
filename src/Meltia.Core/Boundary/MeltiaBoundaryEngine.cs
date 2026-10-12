@@ -14,7 +14,8 @@ public sealed record BoundaryCandidate(Utf16Span Span, string Origin, double Sco
 public sealed record BoundaryRoute(IReadOnlyList<Utf16Span> EnglishSpans, double Score);
 public sealed record BoundaryResult(
     string Raw, IReadOnlyList<BoundaryCandidate> Candidates,
-    IReadOnlyList<BoundaryRoute> Routes, bool Truncated)
+    IReadOnlyList<BoundaryRoute> Routes, bool Truncated,
+    BoundaryReview? Review = null)
 {
     // v0.5 is an advisory engine. It must never commit to the user's application.
     public bool AutoCommitAllowed => false;
@@ -34,7 +35,8 @@ public sealed record MeltiaBoundaryOptions(
     bool ExperimentalFragmentationPenalty = false,
     bool ExperimentalUnknownLatinCandidates = false,
     bool ExperimentalPhoneticLatticeDecoder = false,
-    bool ExperimentalContextualIslandScoring = false);
+    bool ExperimentalContextualIslandScoring = false,
+    bool ExperimentalUncertaintyReview = false);
 
 /// <summary>
 /// v0.5 parallel boundary engine. No changes to Meltype composition/TSF or commit behavior.
@@ -235,7 +237,11 @@ public sealed class MeltiaBoundaryEngine
                 japanese, perSpanCost, MaxRoutes,
                 _options.ExperimentalContextualIslandScoring)
             : BuildRoutes(raw.Length, candidates, hard, perSpanCost);
-        return new BoundaryResult(raw, candidates, routes, bySpan.Count > MaxCandidates);
+        var review = _options.ExperimentalUncertaintyReview
+            ? MeltiaUncertaintyReview.Create(raw, routes, hard, evidence)
+            : null;
+        return new BoundaryResult(raw, candidates, routes,
+            bySpan.Count > MaxCandidates, review);
     }
 
     private double ExperimentalHostScore(string raw, Utf16Span span)
