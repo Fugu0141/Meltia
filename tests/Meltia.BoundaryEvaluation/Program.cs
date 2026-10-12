@@ -240,6 +240,8 @@ string[] models = [
 ];
 var overall = models.ToDictionary(
     model => model, model => Aggregate(records, model));
+var reviewMetrics = models.Where(x => x.StartsWith("Meltia-v1.0-", StringComparison.Ordinal))
+    .ToDictionary(model => model, model => AggregateReviews(records, model));
 var byCategory = cases.Select(x => x.Group).Distinct()
     .OrderBy(x => x, StringComparer.Ordinal)
     .ToDictionary(group => group,
@@ -285,6 +287,7 @@ var report = new
     GoldEnglishSpans = records.Sum(x => x.GoldEnglish.Count),
     Categories = byCategory,
     Overall = overall,
+    ReviewMetrics = reviewMetrics,
     Cases = records,
 };
 var json = JsonSerializer.Serialize(report, new JsonSerializerOptions(JsonSerializerDefaults.Web)
@@ -321,6 +324,15 @@ foreach (var model in models)
             " expected=" + Show(item.GoldEnglish) + " actual=" + Show(pred.English) +
             (pred.Error is null ? "" : " error=" + pred.Error));
     }
+}
+foreach (var (model, measure) in reviewMetrics)
+{
+    Console.WriteLine(model + " review=" + measure.Reviewed +
+        " confirmation=" + measure.NeedsConfirmation +
+        " confirmationWrong=" + measure.ConfirmationTop1Wrong +
+        " nonConfirmationWrong=" + measure.NoConfirmationTop1Wrong +
+        " noConfirmationTop1Correct=" + measure.NoConfirmationTop1Correct +
+        " unresolvedReadable=" + measure.UnresolvedReadableCases);
 }
 Console.WriteLine("CATEGORY | case count | model | Top1 | TopK | gold candidate recall");
 foreach (var category in byCategory)
@@ -532,6 +544,28 @@ static string FailureStage(CaseRecord row, Prediction p)
     return "route-or-topk-missing";
 }
 
+static ReviewMetrics AggregateReviews(IEnumerable<CaseRecord> sample, string model)
+{
+    int reviewed = 0, needs = 0, flaggedWrong = 0, clearWrong = 0,
+        clearCorrect = 0, unresolvedReadable = 0;
+    foreach (var row in sample)
+    {
+        var prediction = row.Predictions.Single(p => p.Model == model);
+        if (prediction.Error is not null || prediction.Review is null) continue;
+        reviewed++;
+        var flagged = prediction.Review.NeedsConfirmation;
+        var correct = prediction.English.SequenceEqual(row.GoldEnglish);
+        if (flagged) needs++;
+        if (prediction.Review.UnresolvedReadableEnglish.Count > 0)
+            unresolvedReadable++;
+        if (flagged && !correct) flaggedWrong++;
+        if (!flagged && !correct) clearWrong++;
+        if (!flagged && correct) clearCorrect++;
+    }
+    return new ReviewMetrics(reviewed, needs, flaggedWrong,
+        clearWrong, clearCorrect, unresolvedReadable);
+}
+
 static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
 {
     int n = 0, exact = 0, topK = 0, regionExact = 0, regionTopK = 0;
@@ -601,6 +635,11 @@ internal sealed record Prediction(string Model, IReadOnlyList<Utf16Span> English
     IReadOnlyList<IReadOnlyList<Utf16Span>> Routes,
     IReadOnlyList<Utf16Span>? Candidates, string? Error,
     BoundaryReview? Review = null);
+
+internal sealed record ReviewMetrics(
+    int Reviewed, int NeedsConfirmation, int ConfirmationTop1Wrong,
+    int NoConfirmationTop1Wrong, int NoConfirmationTop1Correct,
+    int UnresolvedReadableCases);
 
 internal sealed record CaseRecord(string Id, string Category, string Raw,
     IReadOnlyList<Utf16Span> GoldEnglish, IReadOnlyList<Prediction> Predictions);
