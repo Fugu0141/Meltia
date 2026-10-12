@@ -9,8 +9,8 @@ void Check(bool condition, string title)
     Console.WriteLine("PASS " + title);
     passed++;
 }
-Check(typeof(MeltiaBoundaryEngine).Assembly.GetName().Version is { Major: 0, Minor: 7 },
-    "Meltia Core assembly development version is v0.7");
+Check(typeof(MeltiaBoundaryEngine).Assembly.GetName().Version is { Major: 0, Minor: 8 },
+    "Meltia Core assembly development version is v0.8");
 bool Has(BoundaryResult result, params Utf16Span[] spans) =>
     result.Routes.Any(route => spans.All(s => route.EnglishSpans.Contains(s)));
 var japanese = engine.Analyze("nihongo", new BoundaryEvidence(EnglishWords:["go"]));
@@ -300,5 +300,65 @@ for (int i = 0; i < 120; i++)
     if (!v07PropertyOk) break;
 }
 Check(v07PropertyOk, "v0.7 120 seeded mixed Japanese-English-emoji invariant cases");
+
+
+// v0.8: the Japanese complement must have valid phonetic paths whenever
+// possible. V0.7 is deliberately kept as the reference branch/engine.
+var v08 = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true));
+var v07Snapshot = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true));
+Check(!v08.Analyze("nihongo").Routes[0].EnglishSpans.Any(),
+    "v0.8 preserves fully readable Japanese-only input");
+Check(!v08.Analyze("dokoniakerusonomamakyouno").Routes[0].EnglishSpans.Any(),
+    "v0.8 phonetic path does not invent an English island in Japanese-only control");
+Check(v08.Analyze("strategy").Routes[0].EnglishSpans
+      .SequenceEqual([new Utf16Span(0, 8)]),
+    "v0.8 selects a standalone unreadable unknown English word");
+Check(Has(v08.Analyze("kinouhastrategywakaru"),
+    new Utf16Span(7, 15)),
+    "v0.8 retains unknown English between Japanese syllables in Top-K");
+var v08Multi = v08.Analyze("kinouhastrategynorequirementtoiu");
+Check(Has(v08Multi, new Utf16Span(7, 15), new Utf16Span(17, 28)),
+    "v0.8 supports two unknown English islands on one phonetic lattice");
+Check(v08.Analyze("tokyo").Routes[0].EnglishSpans.Count == 0 &&
+    v08.Analyze("IME", new BoundaryEvidence(
+        ExplicitEnglish: [new Utf16Span(0, 3)])).Routes[0].EnglishSpans
+        .SequenceEqual([new Utf16Span(0, 3)]),
+    "v0.8 honors ambiguous Japanese and explicit English locks");
+Check(v08.Analyze("https://example.com").Routes[0].EnglishSpans
+        .SequenceEqual([new Utf16Span(0, 19)]),
+    "v0.8 keeps protected URLs mandatory");
+Check(v08.Analyze("ka😀strategy").Routes.All(route =>
+    route.EnglishSpans.All(span => !(span.Start > 0 &&
+        char.IsHighSurrogate("ka😀strategy"[span.Start - 1]) &&
+        char.IsLowSurrogate("ka😀strategy"[span.Start]))),
+    "v0.8 does not split surrogate pairs");
+Check(v08.Analyze("kinouhastrategywakaru").Candidates
+    .SequenceEqual(v07Snapshot.Analyze("kinouhastrategywakaru").Candidates),
+    "v0.8 changes the decoder only, not v0.7 candidate generation");
+Check(v08Multi.Routes.Count <= MeltiaBoundaryEngine.MaxRoutes &&
+    v08Multi.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates &&
+    !v08Multi.AutoCommitAllowed,
+    "v0.8 maintains bounded routes and read-only contract");
+var v08Seed = new Random(20261018);
+var v08Ok = true;
+for (int k = 0; k < 120; ++k)
+{
+    var typed = string.Concat(Enumerable.Range(0, v08Seed.Next(1, 9))
+        .Select(_ => h10Bits[v08Seed.Next(h10Bits.Length)]));
+    var x = v08.Analyze(typed);
+    var y = v08.Analyze(typed);
+    v08Ok &= x.Candidates.SequenceEqual(y.Candidates) &&
+        x.Routes.Count == y.Routes.Count &&
+        x.Routes.Zip(y.Routes, (a, b) =>
+            a.Score.Equals(b.Score) &&
+            a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(ok => ok) &&
+        x.Routes.Count is > 0 and <= MeltiaBoundaryEngine.MaxRoutes &&
+        !x.AutoCommitAllowed;
+    if (!v08Ok) break;
+}
+Check(v08Ok, "v0.8 deterministic 120-case seeded mixed-script lattice evaluation");
 
 Console.WriteLine($"ALL PASS {passed}");
