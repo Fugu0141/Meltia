@@ -7,10 +7,10 @@ using Meltia.BoundaryEvaluation;
 
 if ((args.Length != 2 && args.Length != 4) || args[0] != "--output" ||
     string.IsNullOrWhiteSpace(args[1]) ||
-    args.Length == 4 && (args[2] != "--suite" || args[3] is not ("core" or "robustness" or "generalization")))
+    args.Length == 4 && (args[2] != "--suite" || args[3] is not ("core" or "robustness" or "generalization" or "adversarial")))
 {
     Console.Error.WriteLine(
-        "Usage: dotnet run --project tests/Meltia.BoundaryEvaluation -- --output report.json [--suite core|robustness|generalization]");
+        "Usage: dotnet run --project tests/Meltia.BoundaryEvaluation -- --output report.json [--suite core|robustness|generalization|adversarial]");
     return 64;
 }
 string suite = args.Length == 4 ? args[3] : "core";
@@ -18,6 +18,7 @@ var cases = suite switch
 {
     "robustness" => RobustnessCorpus.Cases,
     "generalization" => GeneralizationCorpus.Cases,
+    "adversarial" => AdversarialCorpus.Cases,
     _ => GoldCorpus.Cases
 };
 
@@ -258,6 +259,7 @@ var report = new
     {
         "robustness" => "meltia-H1-vocabulary-robustness-v1",
         "generalization" => "meltia-v0.9-fresh-lexical-types-synthetic-v1",
+        "adversarial" => "meltia-v1.0-fixed-intent-ambiguity-stress-v1",
         _ => "meltia-synthetic-v1.1"
     },
     Suite = suite,
@@ -279,6 +281,7 @@ var report = new
         "v0.9: opt-in pairwise route evidence for two nonphonetic English islands separated by a Japanese 2-letter particle; no user text changes",
         "Generalization: 40 lexical types not in old 54-word list, 18 Japanese romanized strings; 290 synthetic templates, NOT an independent blind holdout",
         "v1.0: opt-in uncertainty review, near-tied TopK boundary agreement and explicit lexical-intent ambiguity; Top1 route scores deliberately unchanged",
+        "Adversarial corpus: 56 hand-authored fixed synthetic intents including six identical-string contradictory gold pairs; never a blind natural-language benchmark",
         "Core 47 cases have already been studied and are DEVELOPMENT diagnostics, not a blind holdout",
         "Robustness suite: 530 synthetic inputs from H1/H9 previously used 54 OOV English words and 19 Japanese phonetic words, NOT natural holdout or Python parity"
     },
@@ -597,7 +600,7 @@ static Metrics Aggregate(IEnumerable<CaseRecord> sample, string model)
             candidateEdges += p.Candidates.Count;
         }
         goldSpans += row.GoldEnglish.Count;
-        if (row.Category is "S11-japanese-only" or "R08-japanese-only" or "G06-japanese-only")
+        if (row.Category is "S11-japanese-only" or "R08-japanese-only" or "G06-japanese-only" or "A01-japanese-orthographic")
         {
             japanese++;
             if (p.English.Count > 0) falseEnglish++;
