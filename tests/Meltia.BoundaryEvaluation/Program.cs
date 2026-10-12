@@ -7,10 +7,10 @@ using Meltia.BoundaryEvaluation;
 
 if ((args.Length != 2 && args.Length != 4) || args[0] != "--output" ||
     string.IsNullOrWhiteSpace(args[1]) ||
-    args.Length == 4 && (args[2] != "--suite" || args[3] is not ("core" or "robustness" or "generalization" or "adversarial" or "longrun" or "budget")))
+    args.Length == 4 && (args[2] != "--suite" || args[3] is not ("core" or "robustness" or "generalization" or "adversarial" or "longrun" or "budget" or "flank")))
 {
     Console.Error.WriteLine(
-        "Usage: dotnet run --project tests/Meltia.BoundaryEvaluation -- --output report.json [--suite core|robustness|generalization|adversarial|longrun|budget]");
+        "Usage: dotnet run --project tests/Meltia.BoundaryEvaluation -- --output report.json [--suite core|robustness|generalization|adversarial|longrun|budget|flank]");
     return 64;
 }
 string suite = args.Length == 4 ? args[3] : "core";
@@ -21,6 +21,7 @@ var cases = suite switch
     "adversarial" => AdversarialCorpus.Cases,
     "longrun" => LongRunCorpus.Cases,
     "budget" => CandidateBudgetCorpus.Cases,
+    "flank" => FlankScoringCorpus.Cases,
     _ => GoldCorpus.Cases
 };
 
@@ -414,6 +415,7 @@ var report = new
         "adversarial" => "meltia-v1.0-fixed-intent-ambiguity-stress-v1",
         "longrun" => "meltia-v1.0-longrun-windowing-synthetic-v1",
         "budget" => "meltia-v1.0-candidate-budget-synthetic-v1",
+        "flank" => "meltia-v1.0-phonetic-flank-scoring-synthetic-v1",
         _ => "meltia-synthetic-v1.1"
     },
     Suite = suite,
@@ -440,6 +442,7 @@ var report = new
         "Phase3 diverse: experimental start-region coverage only after 128-candidate pressure, always preserves user/protected and higher-priority lexicon and host candidates. No proven accuracy gain.",
         "Budget stress: 36 synthetic fixed intent labels, includes long Japanese negatives, dense multi-island gold and separated candidate regions.",
         "Phase4 flank: speculative-only route re-scoring for English edges that absorb long readable Japanese prefixes or suffixes; never changes edge generation.",
+        "Flank corpus: 48 deliberate synthetic pairs including proper-name-like whole-English counterexamples that this heuristic might harm; NOT real usage evidence.",
         "Core 47 cases have already been studied and are DEVELOPMENT diagnostics, not a blind holdout",
         "Robustness suite: 530 synthetic inputs from H1/H9 previously used 54 OOV English words and 19 Japanese phonetic words, NOT natural holdout or Python parity"
     },
