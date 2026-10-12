@@ -18,11 +18,14 @@ internal static class MeltiaPreviewSafety
             is { Length: > 0 } custom ? custom : defaultPath;
         var normalized = Path.GetFullPath(directory);
         var meltype = Path.GetFullPath(Path.Combine(local, "Meltype"));
+        var normalizedMeltype = meltype.TrimEnd(Path.DirectorySeparatorChar) +
+            Path.DirectorySeparatorChar;
         if (string.Equals(normalized.TrimEnd(Path.DirectorySeparatorChar),
                 meltype.TrimEnd(Path.DirectorySeparatorChar),
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith(normalizedMeltype, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(
-                "Meltia Preview cannot use Meltype's data directory.");
+                "Meltia Preview cannot use Meltype's data directory or any child folder.");
         // This setting is intentionally process-local, never written to the
         // user's Windows environment. Original Meltype remains unchanged.
         Environment.SetEnvironmentVariable("MELTYPE_DATA_DIR", normalized);
