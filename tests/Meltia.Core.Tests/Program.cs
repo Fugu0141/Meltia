@@ -556,4 +556,78 @@ Check(mixedWithUrlResult.Raw == mixedWithUrl &&
     !mixedWithUrlResult.AutoCommitAllowed,
     "v1.0 protected URL after a surrogate pair survives Top-K and never commits");
 
+
+// v1.0 phase 2: short inputs must be fully equivalent to v1.0 without
+// windowing. For >96 ASCII runs, the older v0.7 generator returned no
+// unknown-Latin candidates at all; overlapping windows restore coverage.
+var phase2 = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true,
+    ExperimentalLongRunWindowing: true));
+var phase2Legacy = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalUnknownLatinCandidates: true,
+    ExperimentalPhoneticLatticeDecoder: true,
+    ExperimentalContextualIslandScoring: true,
+    ExperimentalUncertaintyReview: true));
+var shortLongParity = true;
+foreach (var shortSample in new[] {
+    "kyouhaphotonicswotukau", "kyouhaKingGnudeSPYAIRde",
+    "nihongodearigatou", "tokyo", "ime", "https://example.org/docs"
+})
+{
+    var before = phase2Legacy.Analyze(shortSample);
+    var after = phase2.Analyze(shortSample);
+    shortLongParity &= before.Candidates.SequenceEqual(after.Candidates) &&
+        before.Routes.Count == after.Routes.Count &&
+        before.Routes.Zip(after.Routes, (a, b) =>
+            a.Score.Equals(b.Score) &&
+            a.EnglishSpans.SequenceEqual(b.EnglishSpans)).All(x => x);
+}
+Check(shortLongParity,
+    "v1.0 long-run opt-in preserves short-run candidate and route equality");
+
+var longRomaji = string.Concat(Enumerable.Repeat("nihongo", 20));
+var longRomajiResult = phase2.Analyze(longRomaji);
+Check(longRomajiResult.Candidates.Count == 0 &&
+    longRomajiResult.Routes[0].EnglishSpans.Count == 0 &&
+    !longRomajiResult.AutoCommitAllowed,
+    "v1.0 long Japanese-only romanized stream never proposes English");
+
+var longMixed = string.Concat(Enumerable.Repeat("nihongo", 16)) +
+    "neuroscience" + string.Concat(Enumerable.Repeat("nihongo", 5));
+var desiredLongSpan = new Utf16Span(112, 124);
+var legacyLong = phase2Legacy.Analyze(longMixed);
+var tiledLong = phase2.Analyze(longMixed);
+Check(longMixed.Length > 96 && legacyLong.Candidates.Count == 0 &&
+    tiledLong.Candidates.Any(c => c.Span == desiredLongSpan) &&
+    tiledLong.Raw == longMixed && !tiledLong.AutoCommitAllowed,
+    "v1.0 long-run tiling recovers a precise English candidate previously omitted");
+Check(tiledLong.Candidates.Count <= MeltiaBoundaryEngine.MaxCandidates &&
+    tiledLong.Routes.Count <= MeltiaBoundaryEngine.MaxRoutes,
+    "v1.0 windowed generation respects hard candidate and route caps");
+
+var blockedLong = phase2.Analyze(longMixed, new BoundaryEvidence(
+    ExplicitJapanese: [desiredLongSpan]));
+Check(blockedLong.Candidates.All(c => !c.Span.Overlaps(desiredLongSpan)) &&
+    blockedLong.Routes.All(r =>
+        r.EnglishSpans.All(span => !span.Overlaps(desiredLongSpan))),
+    "v1.0 long-run opt-in cannot override an explicit Japanese lock");
+
+var longRunOptionRejected = false;
+try { _ = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
+    ExperimentalLongRunWindowing: true)); }
+catch (ArgumentException) { longRunOptionRejected = true; }
+Check(longRunOptionRejected,
+    "v1.0 long-run option rejects missing unknown-Latin candidate generator");
+
+var unicodeLong = "😀" + longMixed + "。";
+var unicodeLongResult = phase2.Analyze(unicodeLong);
+Check(unicodeLongResult.Raw == unicodeLong &&
+    unicodeLongResult.Candidates.Any(c =>
+        c.Span == new Utf16Span(desiredLongSpan.Start + 2, desiredLongSpan.End + 2)) &&
+    unicodeLongResult.Candidates.All(c => c.Span.Start >= 2 && c.Span.End <= unicodeLong.Length - 1),
+    "v1.0 tiling keeps absolute UTF-16 boundaries after an emoji");
+
 Console.WriteLine($"ALL PASS {passed}");
