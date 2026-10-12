@@ -153,7 +153,7 @@ internal static class MeltiaPreviewSelfTest
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
             File.WriteAllText(fullPath, JsonSerializer.Serialize(new {
                 Product = "Meltia Windows Keyboard Preview",
-                Version = "1.0.0-dev",
+                Version = "1.0.0-beta.1",
                 Passed = failed == 0,
                 Cases = cases
             }, new JsonSerializerOptions { WriteIndented = true }));
