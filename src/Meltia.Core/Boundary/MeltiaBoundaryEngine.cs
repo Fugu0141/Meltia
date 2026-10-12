@@ -48,8 +48,17 @@ public sealed class MeltiaBoundaryEngine
     public const int MaxRoutes = 8;
     private readonly MeltiaBoundaryOptions _options;
 
-    public MeltiaBoundaryEngine(MeltiaBoundaryOptions? options = null) =>
+    public MeltiaBoundaryEngine(MeltiaBoundaryOptions? options = null)
+    {
         _options = options ?? new MeltiaBoundaryOptions();
+        // Otherwise "v0.9 enabled" silently runs the v0.7 decoder and the
+        // caller may mistake its accuracy or behavior for v0.9 evidence.
+        if (_options.ExperimentalContextualIslandScoring &&
+            !_options.ExperimentalPhoneticLatticeDecoder)
+            throw new ArgumentException(
+                "v0.9 contextual scoring requires the phonetic lattice decoder.",
+                nameof(options));
+    }
 
     // Short uppercase text can be valid Japanese romaji (e.g. KURU).
     // Only these conventional technical acronyms override that ambiguity
