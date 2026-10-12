@@ -37,6 +37,18 @@ var results = new List<ReportRow>();
 var count = 0;
 foreach (var (name, raw, samples) in scenarios)
 {
+    // v1.0 adds review metadata but must not change the actual routes.
+    // Check complete score/candidate/path parity before measuring performance.
+    var oldResult = engines[0].Engine.Analyze(raw);
+    var newResult = engines[1].Engine.Analyze(raw);
+    if (oldResult.Review is not null || newResult.Review is null ||
+        !oldResult.Candidates.SequenceEqual(newResult.Candidates) ||
+        oldResult.Routes.Count != newResult.Routes.Count ||
+        !oldResult.Routes.Zip(newResult.Routes, (left, right) =>
+            left.Score.Equals(right.Score) &&
+            left.EnglishSpans.SequenceEqual(right.EnglishSpans)).All(equal => equal))
+        throw new InvalidOperationException(
+            "v1.0 benchmark route or candidate regression: " + name);
     foreach (var (version, engine) in engines)
     {
         // Same immutable raw string for both modes, warm the JIT and caches.
@@ -83,6 +95,19 @@ var report = new
     Measurement = "Stopwatch elapsed time per offline Analyze call; GC.GetAllocatedBytesForCurrentThread; warmed process, non-TSF",
     Caveat = "Runner load, process startup and JIT effects mean p95/p99 are exploratory; cannot infer Windows IME keystroke tail latency.",
     Rows = results,
+    Comparisons = results.Where(x => x.Model == "v1.0-review").Select(
+        updated => new {
+            updated.Scenario,
+            P50LatencyRatio = updated.P50Ms /
+                Math.Max(results.Single(x => x.Scenario == updated.Scenario &&
+                    x.Model == "v0.9-reference").P50Ms, .000001),
+            P95LatencyRatio = updated.P95Ms /
+                Math.Max(results.Single(x => x.Scenario == updated.Scenario &&
+                    x.Model == "v0.9-reference").P95Ms, .000001),
+            P50AllocationRatio = (double)updated.P50AllocatedBytes /
+                Math.Max(1L, results.Single(x => x.Scenario == updated.Scenario &&
+                    x.Model == "v0.9-reference").P50AllocatedBytes),
+        }),
     WorkSink = count
 };
 var file = Path.GetFullPath(args[1]);
