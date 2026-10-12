@@ -985,11 +985,34 @@ public sealed partial class CompositionDetector
         _preparedApostrophes = apostrophes;
         var unreadable = new int[units.Count + 1];
         var symbols = new bool[units.Count + 1];
+        var onlyLaughterToNextNonLetter = new bool[units.Count + 1];
         symbols[units.Count] = true;
+        onlyLaughterToNextNonLetter[units.Count] = true;
+        // IsLaughter previously walked backwards over each 'w' run and forwards
+        // over the following letters for every unit. Precompute the right-hand
+        // condition once so a long chat-style 'wwww...' run stays linear.
+        for (var i = units.Count - 1; i >= 0; i--)
+        {
+            symbols[i] = symbols[i + 1] && IsAsciiSymbol(units[i]);
+            var raw = units[i].Raw;
+            onlyLaughterToNextNonLetter[i] = raw.Length == 0 || !char.IsAsciiLetter(raw[0]) ||
+                (raw is "w" or "W" && onlyLaughterToNextNonLetter[i + 1]);
+        }
+
+        bool runFollowsJapanese = false;
         for (var i = 0; i < units.Count; i++)
-            unreadable[i + 1] = unreadable[i] + (units[i] is { Raw.Length: 1 } unit && unit.Kana == unit.Raw &&
-                char.IsAsciiLetter(unit.Raw[0]) && !IsLaughter(units, i) ? 1 : 0);
-        for (var i = units.Count - 1; i >= 0; i--) symbols[i] = symbols[i + 1] && IsAsciiSymbol(units[i]);
+        {
+            var unit = units[i];
+            var plainW = unit.Raw is "w" or "W" && unit.Kana == unit.Raw;
+            if (!plainW)
+                runFollowsJapanese = false;
+            else if (i == 0 || !(units[i - 1].Raw is "w" or "W" && units[i - 1].Kana == units[i - 1].Raw))
+                runFollowsJapanese = i > 0 && units[i - 1].Kana is [var kana, ..] && kana is >= 'ぁ' and <= 'ヺ';
+
+            var laughter = plainW && runFollowsJapanese && onlyLaughterToNextNonLetter[i + 1];
+            unreadable[i + 1] = unreadable[i] + (unit.Raw.Length == 1 && unit.Kana == unit.Raw &&
+                char.IsAsciiLetter(unit.Raw[0]) && !laughter ? 1 : 0);
+        }
         _preparedUnreadable = unreadable;
         _preparedSymbolSuffix = symbols;
         var raw = new StringBuilder();
