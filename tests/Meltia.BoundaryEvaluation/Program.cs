@@ -243,6 +243,49 @@ var overall = models.ToDictionary(
     model => model, model => Aggregate(records, model));
 var reviewMetrics = models.Where(x => x.StartsWith("Meltia-v1.0-", StringComparison.Ordinal))
     .ToDictionary(model => model, model => AggregateReviews(records, model));
+// The A04 adversarial cases intentionally have contradictory intents for
+// identical input bytes. Report the impossibility explicitly, then require
+// correct classification when a user actually supplies the language lock.
+var ambiguityChecks = new List<object>();
+if (suite == "adversarial")
+{
+    var pairs = cases.Where(x => x.Group == "A04-intent-ambiguous")
+        .GroupBy(x => x.Raw, StringComparer.Ordinal).ToArray();
+    if (pairs.Length != 6)
+        throw new InvalidOperationException("Missing identical-input ambiguity pairs");
+    foreach (var pair in pairs)
+    {
+        if (pair.Count() != 2 || pair.Select(x =>
+                x.EnglishSpans.Count).Distinct().Count() != 2)
+            throw new InvalidOperationException("Ambiguity pair labels are not contradictory");
+        var raw = pair.Key;
+        var lockSpan = new Utf16Span(0, raw.Length);
+        var english = v10Independent.Analyze(raw, new BoundaryEvidence(
+            EnglishWords: [raw], ExplicitEnglish: [lockSpan]));
+        var japanese = v10Independent.Analyze(raw, new BoundaryEvidence(
+            EnglishWords: [raw], ExplicitJapanese: [lockSpan]));
+        var withoutLock = v10Independent.Analyze(raw, new BoundaryEvidence(
+            EnglishWords: [raw]));
+        if (!english.Routes[0].EnglishSpans.SequenceEqual([lockSpan]) ||
+            japanese.Routes[0].EnglishSpans.Count != 0 ||
+            withoutLock.Review is not { NeedsConfirmation: true } ||
+            withoutLock.Review.UnresolvedReadableEnglish.Count != 1 ||
+            english.AutoCommitAllowed || japanese.AutoCommitAllowed)
+        {
+            Console.Error.WriteLine("v1.0 A04 AMBIGUOUS INTENT LOCK FAILURE " + raw);
+            return 9;
+        }
+        ambiguityChecks.Add(new {
+            Raw = raw,
+            EnglishLockCorrect = true,
+            JapaneseLockCorrect = true,
+            WithoutUserIntentUnresolved = true,
+            FundamentalTop1Indeterminacy = true
+        });
+    }
+    Console.WriteLine("PASS v1.0 6 identical-input gold contradiction pairs; " +
+        "explicit Japanese/English locks both work");
+}
 var byCategory = cases.Select(x => x.Group).Distinct()
     .OrderBy(x => x, StringComparer.Ordinal)
     .ToDictionary(group => group,
@@ -291,6 +334,7 @@ var report = new
     Categories = byCategory,
     Overall = overall,
     ReviewMetrics = reviewMetrics,
+    AmbiguityPairs = ambiguityChecks,
     Cases = records,
 };
 var json = JsonSerializer.Serialize(report, new JsonSerializerOptions(JsonSerializerDefaults.Web)
