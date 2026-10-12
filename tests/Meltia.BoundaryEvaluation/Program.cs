@@ -752,6 +752,17 @@ foreach (var (condition, impact) in phase4Impact)
         " topKLost=" + impact.LostTopK +
         " japaneseFalseBefore=" + impact.JapaneseFalseBefore +
         " japaneseFalseAfter=" + impact.JapaneseFalseAfter);
+foreach (var (condition, impact) in phase4Impact)
+{
+    if (impact.JapaneseFalseAfter > impact.JapaneseFalseBefore)
+    {
+        Console.Error.WriteLine("PHASE4 JAPANESE NEGATIVE REGRESSION " +
+            suite + " " + condition + " " +
+            impact.JapaneseFalseAfter + " > " + impact.JapaneseFalseBefore);
+        return 13;
+    }
+}
+Console.WriteLine("PASS phase4 Japanese-only Top1 negative nonregression on " + suite);
 
 var errors = overall.Values.Sum(x => x.Errors);
 if (errors > 0)
