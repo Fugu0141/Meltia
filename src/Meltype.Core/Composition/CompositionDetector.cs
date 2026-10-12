@@ -100,11 +100,11 @@ public sealed partial class CompositionDetector
         // 区間分けは units[i..j] の生文字列・かなを何度も作る。1 回の Segment 呼び出しの間だけ、
         // 連結した原文と各位置のオフセットを使い回す (内容・順序は同じで、文字列を毎回連結しない)。
         Prepare(units);
-        var token = Raw(units, 0, units.Count) + pending;
+        var token = _preparedRaw + pending;
         // Structured Latin tokens are opaque; their components are not Japanese readings.
         if (!kanaInput && token.All(c => c is >= '!' and <= '~') &&
             (token.Contains('@') && token.Any(char.IsAsciiLetter) || token.Contains('_') || token.Contains("://", StringComparison.Ordinal) ||
-             System.Text.RegularExpressions.Regex.Matches(token, "[a-z][A-Z][a-z]").Count >= 2))
+             HasMultipleMixedTriplets(token)))
             return [new CompositionSegment(true, "", token)];
         // A romaji token can cross an English boundary (reflect + sa becomes tsa).
         // Recognize an unambiguous English verb before parsing its Japanese conjugation.
@@ -155,6 +155,26 @@ public sealed partial class CompositionDetector
             return [new CompositionSegment(true, "", whole)];
         }
         return segments;
+    }
+
+    // Equivalent to Regex.Matches(raw, "[a-z][A-Z][a-z]").Count >= 2.
+    // Regex matches do not overlap, so skip all three characters after a hit.
+    // This test runs on each keystroke and must not allocate a Regex/MatchCollection.
+    internal static bool HasMultipleMixedTriplets(ReadOnlySpan<char> raw)
+    {
+        var count = 0;
+        for (var i = 0; i + 2 < raw.Length;)
+        {
+            if (raw[i] is >= 'a' and <= 'z' &&
+                raw[i + 1] is >= 'A' and <= 'Z' &&
+                raw[i + 2] is >= 'a' and <= 'z')
+            {
+                if (++count == 2) return true;
+                i += 3;
+            }
+            else i++;
+        }
+        return false;
     }
 
     private List<CompositionSegment>? UnknownWordThenJapanese(IReadOnlyList<CompositionUnit> units, string pending, List<CompositionSegment> segments, DetectionLevel level, string whole)
