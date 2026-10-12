@@ -37,7 +37,8 @@ public sealed record MeltiaBoundaryOptions(
     bool ExperimentalPhoneticLatticeDecoder = false,
     bool ExperimentalContextualIslandScoring = false,
     bool ExperimentalUncertaintyReview = false,
-    bool ExperimentalLongRunWindowing = false);
+    bool ExperimentalLongRunWindowing = false,
+    bool ExperimentalDiverseCandidatePruning = false);
 
 /// <summary>
 /// v0.5 parallel boundary engine. No changes to Meltype composition/TSF or commit behavior.
@@ -65,6 +66,11 @@ public sealed class MeltiaBoundaryEngine
             !_options.ExperimentalUnknownLatinCandidates)
             throw new ArgumentException(
                 "Long-run windowing requires experimental unknown Latin candidates.",
+                nameof(options));
+        if (_options.ExperimentalDiverseCandidatePruning &&
+            !_options.ExperimentalUnknownLatinCandidates)
+            throw new ArgumentException(
+                "Candidate diversity requires experimental unknown Latin candidates.",
                 nameof(options));
     }
 
@@ -220,12 +226,17 @@ public sealed class MeltiaBoundaryEngine
             .OrderBy(x => x.Span.Start).ThenBy(x => x.Span.End).ToList();
         if (mandatoryCandidates.Count > MaxCandidates)
             throw new ArgumentException("Too many mandatory ranges");
-        var remaining = bySpan.Values.Where(x => !x.Mandatory)
-            // Preserve previously ranked host/lexicon candidates before
-            // admitting speculative v0.7 edges under the bounded candidate cap.
-            .OrderBy(x => x.Origin == "v0.7-unknown-latin-provisional" ? 1 : 0)
-            .ThenByDescending(x => x.Score).ThenBy(x => x.Span.Start).ThenBy(x => x.Span.End)
-            .Take(MaxCandidates - mandatoryCandidates.Count).ToList();
+        var remaining = _options.ExperimentalDiverseCandidatePruning
+            ? MeltiaDiverseCandidateSelector.Select(
+                bySpan.Values.Where(x => !x.Mandatory),
+                MaxCandidates - mandatoryCandidates.Count).ToList()
+            : bySpan.Values.Where(x => !x.Mandatory)
+                // Preserve previously ranked host/lexicon candidates before
+                // admitting speculative v0.7 edges under the bounded cap.
+                .OrderBy(x => x.Origin == "v0.7-unknown-latin-provisional" ? 1 : 0)
+                .ThenByDescending(x => x.Score)
+                .ThenBy(x => x.Span.Start).ThenBy(x => x.Span.End)
+                .Take(MaxCandidates - mandatoryCandidates.Count).ToList();
         var candidates = mandatoryCandidates.Concat(remaining)
             .OrderBy(x => x.Span.Start).ThenBy(x => x.Span.End).ToArray();
         // The original 0.3/span favors chaining many small lexical hits;
