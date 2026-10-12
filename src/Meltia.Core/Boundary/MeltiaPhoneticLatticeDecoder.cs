@@ -23,11 +23,18 @@ internal static class MeltiaPhoneticLatticeDecoder
         IReadOnlyList<Utf16Span> explicitJapanese,
         double englishSpanCost,
         int maxRoutes,
-        bool contextualIslandScoring = false)
+        bool contextualIslandScoring = false,
+        bool experimentalJapaneseFlankScoring = false)
     {
         var starts = candidates.GroupBy(x => x.Span.Start)
             .ToDictionary(x => x.Key, x => x.ToArray());
         var required = mandatory.ToDictionary(x => x.Start, x => x);
+        // Compute the scoring-only adjustment once per candidate instead of
+        // repeating the romaji DP for every expanded route.
+        var flankAdjustments = experimentalJapaneseFlankScoring
+            ? candidates.ToDictionary(x => x.Span,
+                x => MeltiaBoundaryFlankScoring.Adjustment(raw, x))
+            : null;
         var dp = new List<BoundaryRoute>[raw.Length + 1];
         dp[raw.Length] = [new BoundaryRoute([], 0)];
         // Mandatory ranges must never be consumed by a phonetic transition.
@@ -105,7 +112,8 @@ internal static class MeltiaPhoneticLatticeDecoder
                                 raw, edge.Span, tail.EnglishSpans[0]) : 0;
                         offers.Add(new BoundaryRoute(spans,
                             edge.Score + tail.Score - englishSpanCost +
-                            bridgeBonus));
+                            bridgeBonus +
+                            (flankAdjustments is null ? 0 : flankAdjustments[edge.Span])));
                     }
                 }
             // A pure score-only top-eight beam drops almost every two/three
