@@ -14,7 +14,7 @@
     <AssemblyName>Meltia</AssemblyName>
     <RootNamespace>Meltype</RootNamespace>
     <DefineConstants>$(DefineConstants);MELTIA_PREVIEW</DefineConstants>
-    <Version>1.0.0-dev</Version>
+    <Version>1.0.0-beta.1</Version>
     <Product>Meltia Windows Keyboard Preview</Product>
     <Authors>Meltia contributors; Yukishiro (original Meltype)</Authors>
     <Copyright>Copyright (C) 2026 original Meltype and Meltia contributors. GPL-3.0-or-later</Copyright>
