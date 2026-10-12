@@ -41,7 +41,12 @@ internal static class MeltiaUnknownLatinCandidates
             // phonetic Japanese. This preserves all-romaji long negatives.
             if (MeltiaRomaji.CanRead(run.Value)) continue;
 
-            var seen = new HashSet<Utf16Span>();
+            // A span may be hypothesized in two overlapping windows with
+            // different nearby Japanese evidence. Do not make the result
+            // depend on which arbitrary window happened to be visited first.
+            // Keep the strongest *provisional* explanation for each exact
+            // absolute span; this does not constitute user intent.
+            var bestBySpan = new Dictionary<Utf16Span, BoundaryCandidate>();
             int previousStart = -1;
             for (int offset = 0; offset < run.Length; offset += LongRunStride)
             {
@@ -51,9 +56,13 @@ internal static class MeltiaUnknownLatinCandidates
                 foreach (var candidate in GenerateWindow(
                     raw.Substring(run.Index + start, MaxScanRun),
                     run.Index + start))
-                    if (seen.Add(candidate.Span))
-                        yield return candidate;
+                    if (!bestBySpan.TryGetValue(candidate.Span, out var old) ||
+                        candidate.Score > old.Score)
+                        bestBySpan[candidate.Span] = candidate;
             }
+            foreach (var candidate in bestBySpan.Values
+                .OrderBy(x => x.Span.Start).ThenBy(x => x.Span.End))
+                yield return candidate;
         }
     }
 
