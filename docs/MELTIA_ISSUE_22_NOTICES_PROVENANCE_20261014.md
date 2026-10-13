@@ -48,6 +48,7 @@ PR #20 で `CompositionController.cs` から `CompositionController.Conversion.c
 - コード中のリテラル、文字列の部分一致、識別子名だけでの偽装、値のない SPDX コメントを拒否する回帰ケースを追加。
 - 新規ファイルにある shebang 後の正しい SPDX/Copyright ヘッダーは従来通り許可。
 - 変更範囲は通知 bot とテストに限定する。GitHub 上の追加レビューコメントはなく、修正は関連領域の自主監査として実施した。
+- 検証：出自ユニットテスト **12件**および notice 本体の自己テストが [notices-test](https://github.com/Fugu0141/Meltia/actions/runs/38427137754) で成功。[pr-checks](https://github.com/Fugu0141/Meltia/actions/runs/38427137750) と [notices](https://github.com/Fugu0141/Meltia/actions/runs/38427131761) も同じ HEAD `5fed1c1` で成功。
 
 ## 非対象・注意
 
