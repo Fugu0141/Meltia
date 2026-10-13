@@ -169,6 +169,19 @@ public sealed class CompositionText
                 foreach (var letter in _pending.ToString()) _units.Add(new CompositionUnit(letter.ToString(), letter.ToString()));
                 _pending.Clear();
             }
+            // An English word ending in "t" followed by Japanese "ha" must not
+            // become one "tha" (てゃ) romaji unit. Preserve the already
+            // recognized English word's final t as its own raw unit so the
+            // subsequent Japanese syllable can be segmented on a valid edge.
+            // This is analogous to the existing t+s boundary guard above.
+            if (_pending.Length >= 1 && _pending[^1] is 't' or 'T' &&
+                c is 'h' or 'H' && _pending.ToString().All(char.IsAsciiLetter) &&
+                EndsWithEnglishWordFromUnit(_units.Count, _pending.ToString()))
+            {
+                foreach (var letter in _pending.ToString())
+                    _units.Add(new CompositionUnit(letter.ToString(), letter.ToString()));
+                _pending.Clear();
+            }
             _pending.Append(c);
             SplitUnitAfterNumber(final: false);
             Normalize(final: false);
