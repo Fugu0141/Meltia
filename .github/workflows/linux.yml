@@ -1,6 +1,8 @@
 name: linux
 
 # Linux 版 (linux/、IBus) をビルドして、テスター向けの zip を実行結果 (Artifacts) に置く。
+# PRではIBus/Mozc実統合を同一HEADで検証し、Windowsの実キーE2Eとは分ける。
+# 手動のOS別受け入れ試験: docs/MELTIA_OS_E2E_VERIFICATION.md
 # Actions の画面から手動で実行するか、Linux 版・Mozc のヘルパー・共通部分を変えて push したとき。タグ (v*) ならリリースにも添付する。
 # Mozc のビルドは初回 30〜40 分かかるので、Bazel の結果をキャッシュして次から速くする。
 on:
