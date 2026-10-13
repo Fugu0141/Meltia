@@ -189,6 +189,22 @@ for (int family = 0; family < categories.Length; family++)
                     hostObservedTop1++;
                     familyHostTop1++;
                 }
+                // Backspace is syllable-aware in Japanese and letter-aware in
+                // English. It may erase >1 raw character, but must never
+                // change any earlier bytes. Re-typing restores exact raw.
+                var originalRaw = composition.Raw;
+                composition.RemoveLast();
+                var afterBackspace = composition.Raw;
+                if (afterBackspace.Length >= originalRaw.Length ||
+                    !originalRaw.StartsWith(afterBackspace, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Backspace changed earlier raw input");
+                foreach (var letter in originalRaw[afterBackspace.Length..])
+                    composition.Append(letter);
+                if (composition.Raw != originalRaw)
+                    throw new InvalidOperationException("Re-typing after Backspace lost input");
+                composition.Clear();
+                if (!composition.IsEmpty || composition.Raw.Length != 0)
+                    throw new InvalidOperationException("Clear left stale composition");
                 familyKeystrokes++;
                 keystrokeChecks++;
             }
