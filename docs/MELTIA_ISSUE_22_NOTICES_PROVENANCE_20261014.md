@@ -11,7 +11,7 @@ PR #20 で `CompositionController.cs` から `CompositionController.Conversion.c
 1. PR の `pulls/{number}/files` の削除行で、追加先と最低8行の連続した実装行の一致を確認し、変更された移動元ファイルの候補を選ぶ。GitHub が `renamed` として報告した場合は `previous_filename` も候補にする。
 2. 候補の**PR base SHA** にあるファイルを GitHub API の `contents` から読み、先頭8行に追加先と**同一の Copyright 表示**があることを確認する。PR head のファイルやコードは実行しない。
 3. 追加先の実装行（空行、コメント、using/namespace/partial class の外枠、単独の波括弧は除く）が、base のコード内の連続した8行以上のブロックで**すべて**カバーされる場合のみ、原著名義の表示を認める。新規の処理を混在させた場合は認めない。SPDX/Copyright 欠落は引き続き検出する。
-4. 小さい移動、整形差、GitHub patch 欠落、巨大ファイル、base 取得不可などで移動を証明できない場合は保守的に警告を維持する。著作権を自動で上書きしたり削除したりはしない。候補の base 読み取りは最大24ファイル、1ファイル1MBまで。
+4. 小さい移動、整形差、GitHub patch 欠落、巨大ファイル、base 取得不可などで移動を証明できない場合は保守的に警告を維持する。特に追加ソースの `patch` が欠落・空文字の場合は**検証不能の警告**を出し、SPDX/Copyright/出自が適切だと誤って判定しない。既存ソースの変更で `patch` が無い場合は元から追加行を判定できない制約がある。著作権を自動で上書きしたり削除したりはしない。候補の base 読み取りは最大24ファイル、1ファイル1MBまで。
 5. `pull_request_target` は**引き続き default branch の bot のみをチェックアウト**し、PR コードを実行しない。別の `pull_request` ワークフローでコードを実行する自己テストは read-only、永続的な資格情報なし。
 
 この照合は自動的な出自の証拠検査であり、著作権の法的判断そのものではない。
@@ -53,3 +53,9 @@ PR #20 で `CompositionController.cs` から `CompositionController.Conversion.c
 ## 非対象・注意
 
 IME の変換、境界判定、学習、辞書、Windows アプリ等には一切変更しない。ライセンス方針自体も変更しない。誤警告の対処として、原著者の名義を削除・置換してはならない。
+
+## PR #31 再レビュー対応：patch 不在時の保守的判定（2026-10-14）
+
+- レビュー指摘のとおり、従来の `if (!file.patch) continue` では追加されたソースファイルが未検証のまま警告ゼロ件になる可能性があった。`status=added` のソース拡張子を対象に、`patch=null`・プロパティ無し・空文字のケースで**検証不能警告**を返す。
+- 対象外拡張子の文書等は従来通り警告しない。出自の確認に失敗した場合も、原著作権の表示を自動変更させることはない。読み取れた場合の既存の SPDX/Copyright・部分移動照合は変更しない。
+- `node .github/bot/notices.mjs --self-test` に4件の境界回帰を追加。PR HEAD の read-only Actions による再実行結果を確認し、最終判断をする。
