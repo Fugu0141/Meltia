@@ -27,7 +27,7 @@ Windows Preview の `MeltiaLexicalRecovery` は、(1) 正規の英語辞書に�
 
 | テスト | 受け入れ条件 |
 | --- | --- |
-| `changesuru` / 実験境界 OFF と ON | 一文字ごとに Raw が完全保存され、最終的に `change`（英）+ `suru`（日・`する`）、最終表示 `changeする` |
+| `changesuru` / 実験境界 OFF と ON | 一文字ごとに Raw が完全保存され、最終キー入力直後の `Segments(final:false)` が `change`（英）+ `suru`（日・`する`）となり、`RenderSegments(final:false, convert:null)` が `changeする`。確定用 `final:true` でも同じ区間・表示 |
 | `Changesuru` | 先頭大文字 `Change` を維持して `Changeする` |
 | `chakusuru`, `nihongosuru`, `tokyosuru` | 新たな語彙保護が発火しない |
 | `changesurux`, `changezuru` | 完成した `suru` 以外に拡張しない |
@@ -53,3 +53,9 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-meltia-windows-preview.ps
 実験境界 OFF/ON で、Chrome とメモ帳に `changesuru`、`Changesuru`、`change`、`commitha`、`meltiawotamesu`、`nihongosuru` を順次入力し、未確定表示・確定後表示・原文保持をそれぞれ確認する。実キー結果はこの文書へ追記する。
 
 コード・テストの作成には生成AIを使用。静的コード／辞書を確認したが、実行環境の限界と未実施項目を上記に区別している。
+
+## 7. PR #33 レビュー対応（2026-10-14）
+
+- 未確定表示を検証するため、OFF / ON の両ケースで最終 `u` 入力直後の `Segments(final:false)` の区間・生キー列と `RenderSegments(final:false, convert:null)` の `changeする` を直接検証する。従来の `final:true` の確認も保持する。
+- 負例は補助処理済みの `input.Segments()` を再投入せず、補助処理を登録していない別の `CompositionDetector` で基準セグメントを作る。その基準に対して `TryRecover` が追加補正しないことと、Preview の実際の確定区間が基準と同じことを確認する。
+- 語彙判定、ネイティブCore、辞書は変更しない。GitHub Actions の最新 HEAD に対する結果と実機 E2E は別途確認する。
