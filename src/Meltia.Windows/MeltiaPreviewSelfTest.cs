@@ -205,7 +205,7 @@ internal static class MeltiaPreviewSelfTest
             {
                 foreach (var rawInput in new[] {
                     "chakusuru", "nihongosuru", "tokyosuru",
-                    "changesurux", "changezuru"
+                    "changesu", "changesur", "changesurux", "changezuru"
                 })
                 {
                     var input = new CompositionText(detector);
