@@ -19,9 +19,26 @@ PR #20 で `CompositionController.cs` から `CompositionController.Conversion.c
 ## 検証
 
 - PR #20 の移動元: `src/Meltype.Core/Composition/CompositionController.cs`（PR base）。移動先の実装行は大部分が一致し、ファイル外枠を除けば実装の移動を確認できる。
-- `node --test .github/bot/notices-provenance.test.mjs` — ローカル Node.js v22 で **8/8 成功**（部分分割の再現、新規実装・混在実装・出自不一致・削除差分なし・短い一致・別種ファイル等の回帰）。
+- `node --test .github/bot/notices-provenance.test.mjs` — **11/11 成功（GitHub Actions）**。部分分割の再現、新規実装・混在実装・出自不一致・削除差分なし・短い一致・別種ファイルに加え、文字列リテラルの誤検出と、rename された移動元の照合を検証。
 - `node .github/bot/notices.mjs --self-test` — 既存の検査に加え、新規ファイルの SPDX 欠落・Copyright 欠落・双方欠落・著作権名義の混在・部分分割の検査を追加。PR CI で確認する。
 - `.github/workflows/notices-test.yml` — PR HEAD 上の両テストを read-only で実行する。PR 作成後はその HEAD の Actions 結果を確認する。
+
+## PR #31 レビュー対応（2026-10-14）
+
+[PR #31 のレビュー](https://github.com/Fugu0141/Meltia/pull/31)において、追加した self-test の文字列リテラルを通知 bot が著作権行として誤検出している点が指摘された。
+
+- `copyrightOf()` を共通の `notices-provenance.mjs` にまとめ、**行頭のコメント記号の直後**に著作権行がある場合だけ認識する。引用符の中や通常のコード行に含まれる文字列は著作権ヘッダーとみなさない。移動元 base ファイルの著作権照合にも同じ関数を用いる。
+- テストデータは実行時に連結し、**まだ main に存在する旧版 bot** からも誤認識されない形にする。元著作者の表示そのものは変更・削除しない。
+- `status=renamed` の移動元について、GitHub の `previous_filename` を base パスとして照合する。変更差分に移動したコードが含まれている場合だけ候補とし、base のコード照合を省略しない。
+- 追加の回帰テストは「単一行・複数行の著作権コメントを認識」「コード文字列は無視」「rename したファイルを移動元とする」「base の文字列リテラルを原著ヘッダーと誤認しない」。既存の著作権の新規偽装・混在検出は維持。
+
+コード修正時点の同一 HEAD `2e9a3098` では以下がすべて success：
+
+- [notices-test（11件の出自テスト＋ bot の自己テスト）](https://github.com/Fugu0141/Meltia/actions/runs/38425408580)
+- [pr-checks](https://github.com/Fugu0141/Meltia/actions/runs/38425408445)
+- [notices](https://github.com/Fugu0141/Meltia/actions/runs/38425404460)
+
+なお、以前の PR #31 の bot 誤警告は、今回のコミットに伴う `pull_request_target` の再実行で `✅ ライセンス・著作権の表記を確認しました` へ更新された。これは既存 default-branch bot での誤警告解消を確認したものだが、改良済み bot の動作確認は上記 read-only CI の自己テストを用いる。
 
 ## 非対象・注意
 
