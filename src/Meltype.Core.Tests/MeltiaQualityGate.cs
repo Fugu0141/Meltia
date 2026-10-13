@@ -56,6 +56,26 @@ internal static class MeltiaQualityGate
         ("long", "orehajapanesenotokyotoomoimasu"),
     ];
 
+    // Independently specified document/commit oracles (not unlabeled fuzz samples).
+    // Keys include explicit Enter and Backspace operations.
+    private sealed record OracleCase(string Category, string Keys, string Document,
+        string[] Commits, string? BeforeEnterView = null, string? FinalView = null);
+
+    private static readonly OracleCase[] Oracles =
+    [
+        new("japanese", "kyouha\n", "きょうは", ["きょうは"], "きょうは"),
+        new("japanese-preedit", "kyouha", "", [], FinalView: "きょうは"),
+        new("english", "seeyouagain\n", "seeyouagain", ["seeyouagain"]),
+        new("english-space", "google ", "google ", ["google "]),
+        new("mixed", "kyouhagoogledekensaku \n", "今日はgoogleで検索", ["今日はgoogleで検索"]),
+        new("acronym", "IME\n", "IME", ["IME"]),
+        new("acronym", "API\n", "API", ["API"]),
+        new("protected-url", "https://example.com\n", "https://example.com", ["https://example.com"]),
+        new("protected-email", "alice@example.com\n", "alice@example.com", ["alice@example.com"]),
+        new("editing", "kyouhab\b\n", "きょうは", ["きょうは"], "きょうは"),
+        new("pass-through", "/review", "/review", []),
+    ];
+
     public static int Run(string[] args)
     {
         var path = args.ElementAtOrDefault(0) ?? "meltia-quality-report.json";
@@ -75,6 +95,7 @@ internal static class MeltiaQualityGate
         var processedFrames = 0L;
         var determinismRuns = 0;
         var safetyCases = 0;
+        var oracleCases = 0;
         var guardRefusals = 0;
         var jsonSamples = 0;
         var quality = new Quality.Result(new(), new(), new());
@@ -131,6 +152,26 @@ internal static class MeltiaQualityGate
 
         try
         {
+            foreach (var oracle in Oracles)
+            {
+                oracleCases++;
+                var actual = Execute(oracle.Keys, appendEnter: false);
+                if (actual.Failure is not null)
+                {
+                    Fail($"oracle {oracle.Category}: {actual.Failure}");
+                    continue;
+                }
+                if (!string.Equals(actual.Document, oracle.Document, StringComparison.Ordinal))
+                    Fail($"oracle {oracle.Category}: document for '{oracle.Keys}' expected '{oracle.Document}', got '{actual.Document}'");
+                if (!actual.CommitTexts.SequenceEqual(oracle.Commits, StringComparer.Ordinal))
+                    Fail($"oracle {oracle.Category}: commits for '{oracle.Keys}' expected [{string.Join(", ", oracle.Commits)}], got [{string.Join(", ", actual.CommitTexts)}]");
+                if (actual.GuardRefusals != 0)
+                    Fail($"oracle {oracle.Category}: {actual.GuardRefusals} unexpected Expect guard refusal(s)");
+                if (oracle.BeforeEnterView is not null && actual.BeforeEnterView != oracle.BeforeEnterView)
+                    Fail($"oracle {oracle.Category}: pre-commit view for '{oracle.Keys}' expected '{oracle.BeforeEnterView}', got '{actual.BeforeEnterView}'");
+                if (actual.FinalView != oracle.FinalView)
+                    Fail($"oracle {oracle.Category}: final view for '{oracle.Keys}' expected '{oracle.FinalView ?? "(none)"}', got '{actual.FinalView ?? "(none)"}'");
+            }
             foreach (var (group, input) in Focused) Check(input, group, repeated: true);
             var samples = new List<string>();
             const string alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-+#@/: ";
@@ -180,7 +221,7 @@ internal static class MeltiaQualityGate
                 verdict = "Safety plus existing gold; randomized fuzz has no gold labels." },
             evidence = new
             {
-                safetyCases, uniqueInputs = uniqueInputs.Count,
+                safetyCases, oracleCases, uniqueInputs = uniqueInputs.Count,
                 distinctGoldKeys = quality.Cases.Select(c => c.Key)
                     .Distinct(StringComparer.Ordinal).Count(),
                 goldCases = quality.Total, manuallyReviewedNewGoldCases = 0,
@@ -217,7 +258,7 @@ internal static class MeltiaQualityGate
             Console.Error.WriteLine($"Report writing failed: {ex.Message}");
             return 2;
         }
-        Console.WriteLine($"Meltia QA: safety {safetyCases} ({uniqueInputs.Count} distinct), " +
+        Console.WriteLine($"Meltia QA: oracle {oracleCases}, safety {safetyCases} ({uniqueInputs.Count} distinct), " +
                           $"gold {quality.Pass}/{quality.Total}, failures {failureCount}");
         Console.WriteLine($"Replay checks: {determinismRuns}; frames {processedFrames:N0}; " +
                           $"latency p95 {Percentile(latencies, 0.95):F3} ms/input");
@@ -226,9 +267,14 @@ internal static class MeltiaQualityGate
         return failureCount == 0 ? 0 : 1;
     }
 
-    private sealed record ReplayResult(string Signature, int Frames, int GuardRefusals, string? Failure);
+    private sealed record ReplayResult(string Signature, int Frames, int GuardRefusals,
+        string? Failure, string Document = "", string? BeforeEnterView = null,
+        string? FinalView = null, string[]? Committed = null)
+    {
+        public IReadOnlyList<string> CommitTexts => Committed ?? [];
+    }
 
-    private static ReplayResult Execute(string input)
+    private static ReplayResult Execute(string input, bool appendEnter = true)
     {
         try
         {
@@ -240,12 +286,17 @@ internal static class MeltiaQualityGate
             var document = "";
             var guardRefusals = 0;
             var frames = 0;
-            foreach (var c in input + "\n")
+            var commits = new List<string>();
+            string? lastView = null;
+            string? beforeEnterView = null;
+            foreach (var c in appendEnter ? input + "\n" : input)
             {
-                var character = c is '\n' or ' ' ? (char?)null : c;
+                if (c == '\n') beforeEnterView = lastView;
+                var character = c is '\n' or ' ' or '\b' ? (char?)null : c;
                 var result = session.HandleKey(KeyCode(c), character,
                     char.IsAsciiLetterUpper(c), false, false, false);
                 frames++;
+                lastView = result.View?.Text;
                 signature.Append(result.Consumed ? 'Y' : 'N')
                     .Append('{').Append(result.View?.Text ?? "(none)").Append('}');
                 foreach (var edit in result.Commits)
@@ -263,7 +314,8 @@ internal static class MeltiaQualityGate
                              !document.EndsWith(edit.Expect, StringComparison.Ordinal)))
                         {
                             guardRefusals++;
-                            continue;
+                            return new ReplayResult(signature.ToString(), frames, guardRefusals,
+                                $"Expect guard refused edit (expected suffix '{edit.Expect}', delete {edit.DeleteBefore}, document '{document}')");
                         }
                         if (edit.DeleteBefore > document.Length)
                             return new ReplayResult(signature.ToString(), frames, guardRefusals,
@@ -271,11 +323,20 @@ internal static class MeltiaQualityGate
                         document = document[..^edit.DeleteBefore];
                     }
                     document += edit.Text;
+                    commits.Add(edit.Text);
                 }
-                if (!result.Consumed) document += c;
+                if (!result.Consumed)
+                {
+                    // Backspace is an edit at the host, not a literal U+0008.
+                    if (c == '\b')
+                    {
+                        if (document.Length > 0) document = document[..^1];
+                    }
+                    else document += c;
+                }
             }
             return new ReplayResult(signature.Append('|').Append(document).ToString(), frames,
-                guardRefusals, null);
+                guardRefusals, null, document, beforeEnterView, lastView, commits.ToArray());
         }
         catch (Exception ex)
         {
@@ -286,6 +347,7 @@ internal static class MeltiaQualityGate
     private static int KeyCode(char c) => c switch
     {
         '\n' => VirtualKeys.Return,
+        '\b' => VirtualKeys.Back,
         ' ' => VirtualKeys.Space,
         ',' => VirtualKeys.OemComma,
         '.' => VirtualKeys.OemPeriod,
