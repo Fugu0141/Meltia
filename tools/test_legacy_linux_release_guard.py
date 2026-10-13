@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO = "Fugu0141/Meltia"
 TAG = "v1.0.0-beta.1"
 TAG_SHA = "7894860d9a8b0960bf6a25d27fec5c0712deb059"
+RELEASE_ID = 410669509
 OLD_PATH = ".github/workflows/linux.yml"
 NEW_PATH = ".github/workflows/linux-artifacts.yml"
 WINDOWS_ASSETS = {
@@ -26,6 +27,10 @@ WINDOWS_ASSETS = {
         "sha256:e53039c79bcd04103dd05dd52fa766b4b788af075dca0c30c1b440df1c794ef7",
     "meltia-windows-preview-win-x64-framework-dependent.zip.sha256":
         "sha256:f660ab08da8bc035d36425f2911ed557526948a2928b450d7e312fd3414fb208",
+}
+WINDOWS_ASSET_IDS = {
+    "meltia-windows-preview-win-x64-framework-dependent.zip": 633960588,
+    "meltia-windows-preview-win-x64-framework-dependent.zip.sha256": 633960585,
 }
 FORBIDDEN = (
     re.compile(r"^\s*contents:\s*write\b", re.MULTILINE),
@@ -56,25 +61,45 @@ def api_get(path):
         return json.load(response)
 
 
+def verify_live_snapshot(tag, release, workflows):
+    """Validate a read-only API snapshot; runtime checks must survive python -O."""
+    if tag.get("object", {}).get("sha") != TAG_SHA:
+        raise RuntimeError("Public tag target moved!")
+    if release.get("id") != RELEASE_ID or release.get("tag_name") != TAG:
+        raise RuntimeError("Public beta Release identity changed!")
+    if release.get("draft") is not False:
+        raise RuntimeError("Published beta Release is no longer published")
+    assets = {
+        asset["name"]: (asset.get("id"), asset.get("digest"))
+        for asset in release.get("assets", [])
+    }
+    expected = {
+        name: (WINDOWS_ASSET_IDS[name], digest)
+        for name, digest in WINDOWS_ASSETS.items()
+    }
+    if len(release.get("assets", [])) != len(expected) or assets != expected:
+        raise RuntimeError("Public Release asset IDs/names/digests changed!")
+    old = [w for w in workflows.get("workflows", [])
+           if w.get("path") == OLD_PATH]
+    if len(old) != 1 or not isinstance(old[0].get("id"), int):
+        raise RuntimeError(
+            "Cannot identify the old workflow ID/state. Do not claim risk is blocked."
+        )
+    if old[0].get("state") != "disabled_manually":
+        raise RuntimeError(
+            f"Old Linux workflow must be disabled_manually; observed {old[0].get('state')!r}"
+        )
+    return old[0]["id"], len(assets)
+
+
 def verify_live():
-    """Read-only remote audit; fail closed if legacy workflow state is unknown."""
+    """Read-only remote audit; never dispatch, re-run or write any release."""
     tag = api_get(f"/repos/{REPO}/git/ref/tags/{TAG}")
-    assert tag["object"]["sha"] == TAG_SHA, "Public tag target moved!"
     release = api_get(f"/repos/{REPO}/releases/tags/{TAG}")
-    assert release["tag_name"] == TAG
-    assert not release["draft"], "Published beta Release is no longer published"
-    assets = {a["name"]: a.get("digest") for a in release["assets"]}
-    assert assets == WINDOWS_ASSETS, "Public Release asset names/digests changed!"
     workflows = api_get(f"/repos/{REPO}/actions/workflows?per_page=100")
-    old = [w for w in workflows["workflows"] if w["path"] == OLD_PATH]
-    assert len(old) == 1, (
-        "Cannot identify the old workflow ID/state. Do not claim risk is blocked."
-    )
-    assert old[0]["state"] == "disabled_manually", (
-        f"Old Linux workflow must be disabled_manually; observed {old[0]['state']!r}"
-    )
-    print(f"PASS: legacy workflow ID={old[0]['id']} disabled; "
-          f"tag SHA and {len(assets)} published Windows assets unchanged.")
+    workflow_id, asset_count = verify_live_snapshot(tag, release, workflows)
+    print(f"PASS: legacy workflow ID={workflow_id} disabled; "
+          f"tag SHA and {asset_count} published Windows assets unchanged.")
     print(f"INFO: existing release immutable={release.get('immutable')!r}; "
           "changing the repository setting alone is not retroactive.")
 
@@ -120,6 +145,63 @@ class LegacyLinuxGuardTests(unittest.TestCase):
         self.assertTrue(hazards("push:\n  tags: ['v*']"))
         self.assertFalse(hazards("permissions:\n  contents: read\n"
                                  "uses: actions/upload-artifact@sha"))
+
+
+    @staticmethod
+    def _live_fixture():
+        tag = {"object": {"sha": TAG_SHA}}
+        release = {
+            "id": RELEASE_ID,
+            "tag_name": TAG,
+            "draft": False,
+            "assets": [
+                {"name": name, "id": WINDOWS_ASSET_IDS[name], "digest": digest}
+                for name, digest in WINDOWS_ASSETS.items()
+            ],
+        }
+        workflows = {"workflows": [
+            {"path": OLD_PATH, "id": 12345, "state": "disabled_manually"}
+        ]}
+        return tag, release, workflows
+
+    def test_live_gate_accepts_intact_snapshot(self):
+        self.assertEqual(verify_live_snapshot(*self._live_fixture()), (12345, 2))
+
+    def test_live_gate_rejects_active_or_missing_workflow(self):
+        tag, release, workflows = self._live_fixture()
+        workflows["workflows"][0]["state"] = "active"
+        with self.assertRaisesRegex(RuntimeError, "disabled_manually"):
+            verify_live_snapshot(tag, release, workflows)
+        workflows["workflows"] = []
+        with self.assertRaisesRegex(RuntimeError, "Cannot identify"):
+            verify_live_snapshot(tag, release, workflows)
+
+    def test_live_gate_rejects_moved_tag(self):
+        tag, release, workflows = self._live_fixture()
+        tag["object"]["sha"] = "different"
+        with self.assertRaisesRegex(RuntimeError, "tag target moved"):
+            verify_live_snapshot(tag, release, workflows)
+
+    def test_live_gate_rejects_replaced_release_or_asset(self):
+        tag, release, workflows = self._live_fixture()
+        release["id"] += 1
+        with self.assertRaisesRegex(RuntimeError, "identity changed"):
+            verify_live_snapshot(tag, release, workflows)
+        release["id"] = RELEASE_ID
+        release["assets"][0]["id"] += 1
+        with self.assertRaisesRegex(RuntimeError, "asset IDs/names/digests changed"):
+            verify_live_snapshot(tag, release, workflows)
+
+    def test_live_gate_rejects_added_asset_or_draft(self):
+        tag, release, workflows = self._live_fixture()
+        release["assets"].append({"name": "Meltype-linux.zip", "id": 1,
+                                  "digest": "sha256:unexpected"})
+        with self.assertRaisesRegex(RuntimeError, "asset IDs/names/digests changed"):
+            verify_live_snapshot(tag, release, workflows)
+        release["assets"].pop()
+        release["draft"] = True
+        with self.assertRaisesRegex(RuntimeError, "no longer published"):
+            verify_live_snapshot(tag, release, workflows)
 
 
 if __name__ == "__main__":
