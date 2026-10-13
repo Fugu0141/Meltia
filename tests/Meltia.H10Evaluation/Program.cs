@@ -175,6 +175,18 @@ Console.WriteLine("Mode                      CandRecall    TopK    Top1    JA->E
 foreach (var s in new [] { oldSummary, newSummary })
     Console.WriteLine($"{s.Model,-25} {s.CandidateCoverage,3}/{s.Count,-3} {s.TopKExact,3}/{s.Count,-3} " +
         $"{s.Top1Exact,3}/{s.Count,-3} {s.JapaneseFalseEnglish,3}/{s.JapaneseOnly,-3} {s.BoundaryF1:F3}");
+foreach (var family in stats)
+{
+    var a = summaries[family]["v1.0-flank-independent"];
+    var b = summaries[family]["H10-dual-channel"];
+    Console.WriteLine($"FAMILY {family,-12} Top1 {a.Top1Exact}/{a.Count} -> " +
+        $"{b.Top1Exact}/{b.Count}; pure-JA false English {a.JapaneseFalseEnglish} -> " +
+        $"{b.JapaneseFalseEnglish}");
+}
+foreach (var c in diagnostics.Where(x => !x.After.Top1Exact))
+    Console.WriteLine($"H10_ERROR {c.Id}: {c.Raw} | {c.After.Failure} " +
+        $"| expected {string.Join(",", c.Gold.Select(s => $"{s.Start}-{s.End}"))} " +
+        $"| top1 {string.Join(",", c.After.Top1.Select(s => $"{s.Start}-{s.End}"))}");
 Console.WriteLine("Report: " + Path.GetFullPath(output));
 return 0;
 
