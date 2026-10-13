@@ -87,7 +87,19 @@ internal static class MeltiaPreviewSelfTest
             Check("commit-ha-English-then-particle", () =>
             {
                 var input = new CompositionText(detector);
-                foreach (var c in "commitha") input.Append(c);
+                var beforeH = "";
+                var afterH = "";
+                foreach (var c in "commitha")
+                {
+                    if (c == 'h')
+                        beforeH = "beforeH[" + input.Pending + "] " +
+                            string.Join("|", input.Units.Select(u => u.Raw + ":" + u.Kana)) +
+                            " known(commit)=" + detector.IsKnownEnglishWord("commit");
+                    input.Append(c);
+                    if (c == 'h')
+                        afterH = "afterH[" + input.Pending + "] " +
+                            string.Join("|", input.Units.Select(u => u.Raw + ":" + u.Kana));
+                }
                 var pieces = input.Segments(final: true);
                 var ok = pieces.Count == 2 &&
                     pieces[0].IsEnglish && pieces[0].Raw == "commit" &&
@@ -96,7 +108,7 @@ internal static class MeltiaPreviewSelfTest
                     input.RenderSegments(final: true, convert: null) == "commitは";
                 if (!ok)
                     throw new InvalidOperationException(
-                        "units=" + string.Join("|", input.Units.Select(u => u.Raw + ":" + u.Kana)) +
+                        beforeH + "; " + afterH + "; units=" + string.Join("|", input.Units.Select(u => u.Raw + ":" + u.Kana)) +
                         "; pending=" + input.Pending +
                         "; segments=" + string.Join("|", pieces.Select(p => p.Raw + ":" + p.Kana + ":" + (p.IsEnglish ? "EN" : "JA"))) +
                         "; display=" + input.RenderSegments(final: true, convert: null));
