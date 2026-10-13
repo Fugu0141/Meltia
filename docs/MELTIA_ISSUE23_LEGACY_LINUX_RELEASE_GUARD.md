@@ -83,4 +83,13 @@ gh workflow list --all -R Fugu0141/Meltia
 
 参考: [GitHub workflowのDisable](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)、[過去runのRe-runと権限](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)。
 
+## 2026-10-14 再レビュー（HEAD `0e9cf71`）への対応
+
+- レビューではSPDX/Copyrightは解消済み、最新HEADの `legacy-linux-release-guard` 5件と strict quality（Windows / Ubuntu）は成功と確認された。一方、`linux-artifact-ci` / `build` / `pr-checks` はDraftや変更対象条件によりskipしており、古いコミットの成功を最新HEADの成功として扱わない。
+- 最新 `main` `32ac40618b5298d1362a1a33b22ff602729b69ec` を、本PR専用ブランチに **二親のmerge commit** `8d9b6cdede82a40817f6aa82177dd05d77c42a9c` で取り込んだ。main側の唯一の追加コミットは Issue #28 のセッション空挿入修正であり、今回のIssue #23の対象ファイルとの変更重複はない。
+- GitHub compare（取り込み直後）: `main...fix/issue-23-legacy-linux-release-guard` は **ahead 6 / behind 0**、差分はIssue #23の7ファイルのみ。Issue #28のソース・テスト・Markdownには一切手を加えない。
+- `8d9b6cd` で `legacy-linux-release-guard` 成功、`meltia-strict-quality` は確認時実行中、`linux-artifact-ci` / `build` / `pr-checks` はDraft/paths条件によりskipと記録する。すべてを成功とみなしてマージしない。
+- 固定タグ `v1.0.0-beta.1` は従来どおり `7894860d9a8b0960bf6a25d27fec5c0712deb059`、既存ReleaseはID `410669509` で2点のWindows ZIP/sha256資産のdigestが変わっていない（GitHub APIをread-onlyで再確認）。
+- **管理者セキュリティゲートは未達**。GitHubワークフロー管理APIの変更を行える接続を使っていないため、旧IDの `disabled_manually` は独立確認していない。過去実行のRe-runについても保証は得られていない。危険な旧runを試行しない。管理者が旧IDの状態・日時・根拠を記録し、`--live` 成功を確認するまでIssue #23はOpen/PR #30はDraftのままとする。
+
 **管理設定を実際に確認するまでは、過去refによるRelease書き換えが防止済みとは宣言しない。**
