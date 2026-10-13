@@ -93,3 +93,14 @@ gh workflow list --all -R Fugu0141/Meltia
 - **管理者セキュリティゲートは未達**。GitHubワークフロー管理APIの変更を行える接続を使っていないため、旧IDの `disabled_manually` は独立確認していない。過去実行のRe-runについても保証は得られていない。危険な旧runを試行しない。管理者が旧IDの状態・日時・根拠を記録し、`--live` 成功を確認するまでIssue #23はOpen/PR #30はDraftのままとする。
 
 **管理設定を実際に確認するまでは、過去refによるRelease書き換えが防止済みとは宣言しない。**
+
+## 2026-10-14 追加修正 — 読み取り専用監査のfail-closed強化
+
+- [PR #30](https://github.com/Fugu0141/Meltia/pull/30) の `tools/test_legacy_linux_release_guard.py` は `--live` の安全性判定を `assert` から明示的な `RuntimeError` に変更した。Python の `-O` 最適化オプションで検査が無効化されない。
+- 読み取り専用監査は既存タグ SHA、Release ID `410669509`、公開状態、2アセットの名前・Digestに加え、アセット ID（`633960588` / `633960585`）の変化も拒否する。追加の Linux ZIP やアセット差し替えがあれば失敗する。
+- 正常なAPI応答・旧workflow `active` / 見つからない状態・タグ移動・Release/Asset差し替え・アセット追加/下書き化を模擬した **5 件の追加回帰テスト**を導入（計10件）。これらはネットワークアクセスや過去ワークフロー実行を伴わない。
+- GitHub公開APIで読み取れる範囲のタグ・Release/資産は変更されていない。一方、旧workflow IDの管理画面状態と歴史的runのRe-run遮断は未確認であり、`--live` の合格は**実施済みと扱わない**。
+- 旧タグの歴史的ファイル名が文書で誤って `linux-artifacts.yml` と書き換わっていたため、`docs/MELTIA_OS_E2E_VERIFICATION.md` を `linux.yml` に訂正した。新CIのファイル名は `linux-artifacts.yml` のまま。
+- 最新 `main` が調査時点で旧PRの基点から28コミット進んでいる。並列作業へ影響しないよう、本対応では `main` をブランチへ機械的に統合していない。最終レビュー・マージ前に差分とCIを再確認する。
+
+**未完了**: 管理者による旧workflow IDのDisable（`disabled_manually` の実測）、歴史的run Re-runの遮断根拠、`--live` の実行成功、および最新HEADの必要CI確認。Issue #23はOpen、PRはDraftを維持する。
