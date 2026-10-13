@@ -125,7 +125,17 @@ public sealed class CompositionText
             var lastTyped = _pending.Length > 0 ? _pending[^1] : _units.Count > 0 && _units[^1].Raw.Length > 0 ? _units[^1].Raw[^1] : '\0';
             if (char.IsAsciiLetterUpper(c) && char.IsAsciiLetterUpper(lastTyped))
             {
+                // The first vowel in an acronym has already been read as kana (I -> い, A -> あ).
+                // Once the next uppercase letter arrives, restore the entire trailing uppercase
+                // run as literal text. Preserve Raw so an independent boundary engine can still
+                // inspect exactly what the user typed (IME, API, AI).
                 Normalize(final: true);
+                for (var i = _units.Count - 1; i >= 0; i--)
+                {
+                    var unit = _units[i];
+                    if (unit.Raw.Length == 0 || !unit.Raw.All(char.IsAsciiLetterUpper)) break;
+                    if (unit.Kana != unit.Raw) _units[i] = unit with { Kana = unit.Raw };
+                }
                 _units.Add(new CompositionUnit(c.ToString(), c.ToString()));
                 return;
             }

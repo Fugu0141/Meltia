@@ -307,10 +307,20 @@ class PrivateDaemonTests(unittest.TestCase):
                     consumed = self.key({"Enter": self.IBus.KEY_Return,
                                          "Space": self.IBus.KEY_space,
                                          "Tab": self.IBus.KEY_Tab}[action])
-                    self.assertEqual(action != "Tab", consumed)
+                    if action == "Tab":
+                        # With real Mozc/predictions, Tab can begin or select
+                        # conversion instead of passing through. Do not assert
+                        # it must be unconsumed: verify the protected span
+                        # survives the preedit and the final Enter commit.
+                        if consumed:
+                            self.assertIn("「" + token + "」", self.client.preedit,
+                                          self.client.describe())
+                            self.assertTrue(self.key(self.IBus.KEY_Return))
+                    else:
+                        self.assertTrue(consumed)
                     if action == "Space":
                         self.assertTrue(self.key(self.IBus.KEY_Return))
-                if action == "Space":
+                if action in ("Space", "Tab"):
                     protected = "「" + token + "」"
                     self.assertEqual(1, self.client.document.count(protected), self.client.describe())
                     before, after = self.client.document.split(protected)

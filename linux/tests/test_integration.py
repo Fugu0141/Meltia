@@ -168,9 +168,20 @@ class IntegrationTests(unittest.TestCase):
                     if action is None:
                         self.engine.do_focus_out()
                     else:
-                        self.special(action)
+                        consumed = self.special(action)
                         if action == IBus.KEY_space:
-                            self.special(IBus.KEY_Return)
+                            # Space starts Japanese conversion; Enter commits it.
+                            self.assertTrue(self.special(IBus.KEY_Return))
+                        elif action == IBus.KEY_Tab and not self.engine.document:
+                            # Real Mozc can provide a prediction for trailing
+                            # "ashita". Tab selects/cycles that candidate without
+                            # committing. Unlike the fake-converter Core test,
+                            # integration must check the uncommitted protected
+                            # token, then explicitly accept the selection.
+                            self.assertTrue(consumed, "Tab must be handled when it selects a prediction")
+                            self.assertIn("「" + token + "」", self.engine.marked,
+                                          "Tab must not drop or modify a protected span")
+                            self.assertTrue(self.special(IBus.KEY_Return))
                     self.assertIn("「" + token + "」", self.engine.document)
                     self.assertNotIn("kyouha", self.engine.document)
                     self.assertNotIn("ashita", self.engine.document)

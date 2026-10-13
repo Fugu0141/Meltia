@@ -1,13 +1,26 @@
 name: linux
 
 # Linux 版 (linux/、IBus) をビルドして、テスター向けの zip を実行結果 (Artifacts) に置く。
-# Actions の画面から手動で実行するか、Linux 版・Mozc のヘルパー・共通部分を変えて push したとき。タグ (v*) ならリリースにも添付する。
+# PRではIBus/Mozc実統合を同一HEADで検証し、Windowsの実キーE2Eとは分ける。
+# 手動のOS別受け入れ試験: docs/MELTIA_OS_E2E_VERIFICATION.md
+# Actionsから手動で実行するか、対象コードを変更したPR/mainで実行する。
+# このワークフローは配布を行わず、検証用ZIPをActions Artifactにのみ保存する。
+# Meltiaの既存v*リリースは変更しない。将来のLinux公開は別途レビューした専用手順で行う。
 # Mozc のビルドは初回 30〜40 分かかるので、Bazel の結果をキャッシュして次から速くする。
 on:
   workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'linux/**'
+      - 'native/mozc/**'
+      - 'src/Meltype.Core/**'
+      - 'src/Meltype.Core.Tests/**'
+      - 'dictionaries/**'
+      - 'tools/test-native-boundaries.py'
+      - '.github/workflows/linux.yml'
   push:
-    branches: ['**']
-    tags: ['v*']
+    branches: [main]
     paths:
       - 'linux/**'
       - 'native/mozc/**'
@@ -25,13 +38,14 @@ concurrency:
 
 jobs:
   app:
+    # Expensive Mozc integration runs on review-ready PRs; drafts can test locally.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    # タグ時の softprops/action-gh-release 用。permissions は式が使えないため常に write。
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
       # IBus のエンジン (Python) の書き間違いを、時間のかかるビルドの前に見つける
       - name: Check Python
         run: python3 -c "import ast; ast.parse(open('linux/ibus-engine-meltype', encoding='utf-8').read())"
@@ -81,8 +95,8 @@ jobs:
         run: timeout 120 xvfb-run -a dbus-run-session -- python3 linux/tests/test_daemon.py linux/build/Meltype-linux
       - name: Package
         run: |
-          # タグ (v1.0.0) なら Meltype-1.0.0-linux.zip、それ以外はテスト版の名前
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then name="Meltype-${GITHUB_REF_NAME#v}-linux.zip"; else name="Meltype-linux-test-$(date +%Y%m%d-%H%M).zip"; fi
+          # 検証用ZIPのみ作る。タグ名を配布アーカイブ名に使わない。
+          name="Meltype-linux-test-${GITHUB_SHA:0:12}.zip"
           (cd linux/build && zip -qr "$name" Meltype-linux)
           ls -la linux/build
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -90,7 +104,3 @@ jobs:
           name: meltype-linux
           path: linux/build/Meltype-*.zip
           retention-days: 14
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@e598afbe1493e6b1bafb1f389cabb956eab91231 # v3.0.3
-        with:
-          files: linux/build/Meltype-*.zip
