@@ -1,0 +1,30 @@
+# Notices rule tests run on PR code with read-only access; no secrets or write token.
+# The existing pull_request_target notifier still checks out only default-branch code.
+name: notices-test
+
+on:
+  pull_request:
+    paths:
+      - '.github/bot/notices.mjs'
+      - '.github/bot/notices-provenance.mjs'
+      - '.github/bot/notices-provenance.test.mjs'
+      - '.github/workflows/notices-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Check existing notice self-tests
+        run: node .github/bot/notices.mjs --self-test
+      - name: Check provenance regression tests
+        run: node --test .github/bot/notices-provenance.test.mjs
