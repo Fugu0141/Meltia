@@ -104,3 +104,10 @@ gh workflow list --all -R Fugu0141/Meltia
 - 最新 `main` が調査時点で旧PRの基点から28コミット進んでいる。並列作業へ影響しないよう、本対応では `main` をブランチへ機械的に統合していない。最終レビュー・マージ前に差分とCIを再確認する。
 
 **未完了**: 管理者による旧workflow IDのDisable（`disabled_manually` の実測）、歴史的run Re-runの遮断根拠、`--live` の実行成功、および最新HEADの必要CI確認。Issue #23はOpen、PRはDraftを維持する。
+
+## 2026-10-14 再レビュー後のmain追従
+
+- [PR #30の再レビュー](https://github.com/Fugu0141/Meltia/pull/30) で、`9b60616` 時点のコード・回帰テストに新たな必須修正がないことを確認した。残るP1は **GitHub管理者による旧workflow IDのDisable**、歴史的runのRe-runで既存Releaseを変更できない安全性の根拠、`--live` の実環境での成功である。
+- PRの分岐元 `32ac40618b5298d1362a1a33b22ff602729b69ec` から `main` が28コミット進んでいたため、`5b55e7b42a97c99981bc2099f0f770a624db674c` を対象にPR専用ブランチへ統合する。競合するREADMEは最新mainのIssue #22・#32の参照を保持し、Issue #23のリンクを追加する。他のIssueで変更したファイルは上書きしない。
+- **安全ゲート未完了**。公開タグ・Release/Assetsは変更せず、危険な旧workflowをDispatch/Re-runせず、PRはDraft/未マージ、Issue #23はOpenを維持する。
+- 統合HEADの `legacy-linux-release-guard`（固定歴史SHA＋モック検証10件）、`meltia-strict-quality`、必要なLinux/Windows Build/PR checksはGitHub Actionsの同じHEADで区別して確認する。Draft/paths条件によるskippedを成功として扱わない。
