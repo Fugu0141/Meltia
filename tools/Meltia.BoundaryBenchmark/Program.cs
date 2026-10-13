@@ -131,7 +131,7 @@ foreach (var (name, raw, samples) in scenarios)
         Array.Sort(regions);
         results.Add(new ReportRow(name, version, raw.Length, samples,
             Median(elapsed), Percentile(elapsed, .95), Percentile(elapsed, .99),
-            Median(allocated), Percentile(allocated, .95),
+            MedianLong(allocated), PercentileLong(allocated, .95),
             candidates[samples / 2], candidates[^1], truncated,
             regions[samples / 2]));
     }
@@ -235,10 +235,10 @@ Console.WriteLine("Wrote " + file);
 return 0;
 
 static double Median(double[] values) => Percentile(values, .50);
-static long Median(long[] values) => Percentile(values, .50);
+static long MedianLong(long[] values) => PercentileLong(values, .50);
 static double Percentile(double[] values, double p) =>
     values[(int)Math.Ceiling((values.Length - 1) * p)];
-static long Percentile(long[] values, double p) =>
+static long PercentileLong(long[] values, double p) =>
     values[(int)Math.Ceiling((values.Length - 1) * p)];
 
 internal sealed record ReportRow(string Scenario, string Model, int Utf16Length,
