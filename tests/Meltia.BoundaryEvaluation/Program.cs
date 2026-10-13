@@ -636,6 +636,17 @@ foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-le
                     " category=" + row.Category +
                     " lostTop1=" + lostTop1 + " lostTopK=" + lostTopK +
                     " raw=" + row.Raw[..Math.Min(row.Raw.Length, 110)]);
+                static string Spans(IEnumerable<Utf16Span> spans) =>
+                    string.Join(",", spans.Select(s => s.Start + "-" + s.End));
+                Console.Error.WriteLine("    gold=" + Spans(row.GoldEnglish));
+                Console.Error.WriteLine("    beforeTop1=" + Spans(before.English) +
+                    " afterTop1=" + Spans(after.English));
+                for (int route = 0; route < Math.Max(before.Routes.Count, after.Routes.Count); route++)
+                {
+                    Console.Error.WriteLine("    rank=" + route +
+                        " v0.8=" + (route < before.Routes.Count ? Spans(before.Routes[route]) : "(none)") +
+                        " v0.9=" + (route < after.Routes.Count ? Spans(after.Routes[route]) : "(none)"));
+                }
             }
         }
         return 7;
