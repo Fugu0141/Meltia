@@ -64,6 +64,48 @@ try { prototype.Analyze("abcdef", new BoundaryEvidence(
 catch (ArgumentException) { rejected = true; }
 Check(rejected, "contradictory locks rejected");
 
+// Edit consistency oracle: session edit operations must match a full decode.
+var session = new H10PrototypeSession(prototype);
+session.Insert("kyouha🌸commitniiku");
+var full = prototype.Analyze(session.Raw);
+Check(session.Analyze().Routes[0].EnglishSpans.SequenceEqual(
+    full.Routes[0].EnglishSpans), "session append/full reanalysis consistency");
+session.MoveCaret(6); // after kyouha, before the surrogate pair
+session.DeleteForward(); // delete the full surrogate pair
+Check(session.Raw == "kyouhacommitniiku" &&
+    session.Analyze().Routes[0].EnglishSpans.SequenceEqual(
+        prototype.Analyze("kyouhacommitniiku").Routes[0].EnglishSpans),
+    "UTF-16 forward deletion and full reanalysis consistency");
+session.MoveCaret(session.Raw.Length);
+session.Backspace();
+session.Insert("u");
+Check(session.Analyze().Routes[0].EnglishSpans.SequenceEqual(
+    prototype.Analyze(session.Raw).Routes[0].EnglishSpans),
+    "backspace/retype produces the same route");
+var editSeed = new Random(20261014);
+for (int iteration = 0; iteration < 120; iteration++)
+{
+    var positions = Enumerable.Range(0, session.Raw.Length + 1)
+        .Where(x => x == 0 || x == session.Raw.Length ||
+            !(char.IsHighSurrogate(session.Raw[x - 1]) &&
+              char.IsLowSurrogate(session.Raw[x]))).ToArray();
+    session.MoveCaret(positions[editSeed.Next(positions.Length)]);
+    switch (editSeed.Next(3))
+    {
+        case 0:
+            if (session.Raw.Length < 200)
+                session.Insert(new [] { "ni", "github", "to", "🌸", "A" }
+                    [editSeed.Next(5)]);
+            break;
+        case 1: session.Backspace(); break;
+        default: session.DeleteForward(); break;
+    }
+    var a = session.Analyze();
+    var b = prototype.Analyze(session.Raw);
+    Check(a.Raw == b.Raw && a.Routes[0].EnglishSpans.SequenceEqual(
+        b.Routes[0].EnglishSpans), "seeded edited state matches full decode");
+}
+
 // All 47 diagnostic cases are copied unchanged from IncrementalBoundaryLab
 // H10's issue-source snapshot. The data includes intentionally contradictory
 // intent for identical raw input, and must NOT be used as a learned dictionary.
