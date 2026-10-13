@@ -187,6 +187,14 @@ foreach (var c in diagnostics.Where(x => !x.After.Top1Exact))
     Console.WriteLine($"H10_ERROR {c.Id}: {c.Raw} | {c.After.Failure} " +
         $"| expected {string.Join(",", c.Gold.Select(s => $"{s.Start}-{s.End}"))} " +
         $"| top1 {string.Join(",", c.After.Top1.Select(s => $"{s.Start}-{s.End}"))}");
+foreach (var entry in timings)
+{
+    var samples = entry.Value.Order().ToArray();
+    double P(double quantile) => samples[Math.Min(samples.Length - 1,
+        (int)Math.Ceiling(quantile * samples.Length) - 1)];
+    Console.WriteLine($"TIMING {entry.Key}: samples={samples.Length}, " +
+        $"p50={P(.50):F4}ms, p95={P(.95):F4}ms, p99={P(.99):F4}ms");
+}
 Console.WriteLine("Report: " + Path.GetFullPath(output));
 return 0;
 
