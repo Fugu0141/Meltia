@@ -10,7 +10,8 @@ namespace Meltype;
 /// Unlike a global English dictionary switch, this requires either a
 /// product name or a listed word with orthographic English evidence.
 /// The inferred prefix may only be followed by a complete readable Japanese
-/// particle phrase, and no user-learned Japanese decision may be displaced.
+/// particle phrase or the exact light verb "suru" (する), and no user-learned
+/// Japanese decision may be displaced.
 /// </summary>
 internal static class MeltiaLexicalRecovery
 {
@@ -47,7 +48,8 @@ internal static class MeltiaLexicalRecovery
         }
 
         // Do not eat an incomplete Japanese suffix. Only a finished particle
-        // followed by fully readable romaji may be split away from English.
+        // phrase or the exact light verb "suru" may be split away from English.
+        // Requiring the full verb avoids guessing "su"/"sur" during English typing.
         if (pending.Length != 0) return null;
         var boundaries = new HashSet<int> { 0 };
         var position = 0;
@@ -71,7 +73,8 @@ internal static class MeltiaLexicalRecovery
 
             var suffix = raw[end..];
             if (!JapaneseParticles.Any(p =>
-                suffix.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+                suffix.StartsWith(p, StringComparison.OrdinalIgnoreCase)) &&
+                !suffix.Equals("suru", StringComparison.Ordinal))
                 continue;
 
             var reading = detector.Romaji.Analyze(suffix.ToLowerInvariant());
