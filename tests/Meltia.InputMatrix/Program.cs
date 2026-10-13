@@ -342,8 +342,25 @@ static TestCase MakeCase(int family, int number, Random source, int seed)
             J(rng.Next(3) == 0 ? "😀" : Ja());
             break;
         case 8:
-            J(Ja()); E(Short()); J(Particle()); E(Short());
-            J(Particle()); J(Ja());
+            // Known short-term counterexamples for the v0.9 7-character
+            // corroboration guard: include these in EVERY seed and tier.
+            if (number == 0)
+            {
+                J("kyouha"); E("GitHub"); J("de"); E("Python"); J("wotukau");
+            }
+            else if (number == 1)
+            {
+                J("kyouha"); E("Linux"); J("de"); E("Docker"); J("wotukau");
+            }
+            else if (number == 2)
+            {
+                J("kyouha"); E("SPYAIR"); J("de"); E("GitHub"); J("wotamesu");
+            }
+            else
+            {
+                J(Ja()); E(Short()); J(Particle()); E(Short());
+                J(Particle()); J(Ja());
+            }
             break;
         case 9:
             for (var k = 0; k < 12 + rng.Next(12); k++) J(Ja());
