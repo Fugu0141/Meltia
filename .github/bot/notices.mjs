@@ -173,10 +173,10 @@ function selfTest() {
   ];
   // Reproduction: a partial split moves exact method bodies out of the base file.
   const original = Array.from({ length: 20 }, (_, i) => `    var v${i} = Convert(${i});`);
-  const source = '// SPDX-License-Identifier: GPL-3.0-or-later\\n// Copyright (C) 2026 Yukishiro\\n' + original.join('\\n');
+  const source = '// SPDX-License-Identifier: GPL-3.0-or-later\n// Copyright (C) 2026 Yukishiro\n' + original.join('\n');
   const moved = ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026 Yukishiro', 'public sealed partial class Split', '{', ...original, '}'];
   const fresh = file('Split.cs', 'added', moved);
-  const deleted = { filename: 'Original.cs', status: 'modified', patch: original.map(l => '-'+l).join('\\n') };
+  const deleted = { filename: 'Original.cs', status: 'modified', patch: original.map(l => '-'+l).join('\n') };
   const inherited = new Map([['Original.cs', source]]);
   const provenanceCases = [
     ['移動元が一致する partial 分割', [fresh, deleted], inherited, 0],
