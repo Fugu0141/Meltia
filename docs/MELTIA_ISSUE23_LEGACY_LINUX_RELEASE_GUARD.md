@@ -68,8 +68,19 @@ gh workflow list --all -R Fugu0141/Meltia
 - [x] 古い tag YAML のRelease書き込み経路の静的再現
 - [x] コード変更と回帰テストの追加（GitHub CI結果は別途確認）
 - [ ] 旧ワークフロー ID に対する **管理者 Disable の実施と実測**
-- [ ] PR の回帰CI / Linux CI の結果を記録
+- [x] PR の回帰CI / Linux CI の結果を記録（レビュー時点のhead `0c95a9c` で5件の回帰テスト、Linux CI、strict quality、build、PR checksが成功。レビュー指摘によるヘッダー修正後の回帰テストも成功。最終headの他ジョブはActionsで再確認）
 - [ ] 過去 run の Re-run への運用上の制限・確認結果を記録
 - [ ] `--live` による公開Release不変・旧workflow無効化の確認
+
+## 2026-10-14 レビュー対応と検証結果
+
+- [PR #30](https://github.com/Fugu0141/Meltia/pull/30) で指摘された新規Pythonテストのライセンス・著作権ヘッダーを追加した。先頭は shebang、`# SPDX-License-Identifier: GPL-3.0-or-later`、`# Copyright (C) 2026 Fugu0141` の順にする。
+- レビュー対象head `0c95a9c` の `legacy-linux-release-guard`（5テスト）、`linux-artifact-ci`、`meltia-strict-quality`（Linux/Windows）、`build`、`pr-checks` は GitHub Actions で成功済み。
+- ヘッダー修正コミット `a6c18f6` でも `legacy-linux-release-guard` は成功。変更対象はテストファイルのヘッダー3行のみで、ランタイムアルゴリズムやZIP生成処理を変えない。
+- 新規コード/テストの作成と修正では生成AI（ChatGPT）を補助的に使用。GitHubのコードレビューとActionsで確認した事項のみ「検証済み」と記録する。
+- GitHubの公式文書では **Disable は新しいトリガーを停止するための操作** とされ、Re-run は元の SHA/ref/actor 権限を使用する。Disable によって古い実行が再実行できなくなるとは保証されていないため、`disabled_manually` だけでIssue受け入れ条件を満たしたと結論しない。確認不能な場合はGitHub Supportに運用上の保証を問い合わせるか、既存のCI/Releaseへの影響を評価した上で別の管理ポリシーを設計する。
+- 2026-10-14現在、旧workflowの管理者Disable実施と `--live` 監査結果は **未確認**。リリース書込み試験のために過去タグのワークフローを実行しない。
+
+参考: [GitHub workflowのDisable](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)、[過去runのRe-runと権限](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)。
 
 **管理設定を実際に確認するまでは、過去refによるRelease書き換えが防止済みとは宣言しない。**
