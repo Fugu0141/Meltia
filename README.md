@@ -2,7 +2,7 @@
 
 **Meltia** は、[Meltype](https://github.com/yksr-melt/Meltype) を基に開発する、非公式・独立運営の日本語入力ソフトウェアプロジェクトです。日本語・英語が混在する入力の自然さと、IME の安定性の向上を目指します。
 
-> **現在は独立WindowsアプリのPreviewを実装中です。** `src/Meltia.Windows`にMeltypeコード再利用の実行ファイル構成を追加しましたが、Windowsビルド・実入力は未検証で、正式なTSF IME登録と配布版はありません。元のMeltype用インストーラーをMeltiaの名前で実行しないでください。
+> **現在は独立WindowsアプリのPreviewを実装中です。** `src/Meltia.Windows`にMeltypeコード再利用の実行ファイル構成を追加しましたが、GitHub ActionsのWindowsビルド・無フックセルフテストは成功していますが、実キー入力のWindows E2Eは未検証で、正式なTSF IME登録と安定配布版はありません。元のMeltype用インストーラーをMeltiaの名前で実行しないでください。
 
 ## 開発目標
 
@@ -39,6 +39,7 @@
 - [v1.0 フェーズ3：候補上限128件での位置的多様性と1019件評価](docs/MELTIA_V10_DIVERSE_CANDIDATES_PHASE3_20261012.md)
 - [v1.0 フェーズ4：日本語吸収を抑制するTop1経路スコアリング・1067件評価](docs/MELTIA_V10_FLANK_RANKING_PHASE4_20261012.md)
 - [Meltia Windows Preview — 独立アプリのビルド・起動・安全性・残課題](docs/MELTIA_WINDOWS_PREVIEW.md)
+- [2026-10-13 Windows実機入力フィードバック・改修の検証計画](docs/MELTIA_WINDOWS_FIELD_TEST_20261013.md)
 - [貢献方法](CONTRIBUTING.md)
 - [セキュリティ報告](SECURITY.md)
 - [サードパーティー通知](THIRD-PARTY-NOTICES.md)
@@ -57,7 +58,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-meltia-windows-preview.ps
 MeltiaのネイティブTSF登録は行わず、最初は**キーボード型プレビュー**として
 動作させます。GitHub Actionsに依存しないスモークテストと、
 本家Meltypeのデータや自動更新を変更しない設計が含まれます。
-**ビルド結果・実際の入力動作はまだ確認できていません。**
+**GitHub ActionsでWindowsビルド・無フックセルフテストは成功していますが、修正後の実際のキー入力は未確認です。**
 [手順と残課題はこちら](docs/MELTIA_WINDOWS_PREVIEW.md)。
 
 ## 開発者向け
