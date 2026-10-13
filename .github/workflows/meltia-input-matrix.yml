@@ -61,7 +61,7 @@ jobs:
       - name: Check synthetic matrix invariants, classification and raw-key replay
         shell: bash
         env:
-          MATRIX_TIER: ${{ github.event_name == 'workflow_dispatch' && inputs.tier || (github.event_name == 'schedule' && 'full' || 'smoke') }}
+          MATRIX_TIER: ${{ github.event_name == 'workflow_dispatch' && inputs.tier || (github.event_name == 'schedule' && 'full' || 'full') }}
           MATRIX_SEED: ${{ github.event_name == 'workflow_dispatch' && inputs.seed || '20261013' }}
         run: |
           set -euo pipefail
