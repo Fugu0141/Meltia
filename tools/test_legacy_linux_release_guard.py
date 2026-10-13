@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Fugu0141
 """Issue #23: historical Linux Release publisher isolation and regression tests.
 
 Safe by default: tests never dispatch historical workflows or write releases.
