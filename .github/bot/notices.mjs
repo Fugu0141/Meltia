@@ -8,7 +8,7 @@
 // 見つけたら Pull Request にコメントする (直ったらコメントを「直りました」に書き換える)。
 // Pull Request のコードは動かさない。GitHub の API で、変更 (patch) の足された行を文字列として読むだけ。
 import fs from 'node:fs';
-import { copyrightOf, movedCopyrightIsProven, sourcePathsFor } from './notices-provenance.mjs';
+import { copyrightOf, spdxOf, movedCopyrightIsProven, sourcePathsFor } from './notices-provenance.mjs';
 
 const api = process.env.GITHUB_API_URL ?? 'https://api.github.com';
 const repo = process.env.GITHUB_REPOSITORY;
@@ -60,7 +60,7 @@ function check(files, author, baseFiles = new Map()) {
       if (!file.patch) continue;
       const head = added.slice(0, HeaderLines);
       const problems = [];
-      if (!head.some(l => l.includes('SPDX-License-Identifier'))) problems.push('`SPDX-License-Identifier: GPL-3.0-or-later` がありません');
+      if (!head.some(l => spdxOf(l))) problems.push('`SPDX-License-Identifier: GPL-3.0-or-later` がありません');
       const copyrights = head.map(copyrightOf).filter(Boolean);
       if (!copyrights.length) problems.push('`Copyright (C) <年> <あなたの名前>` がありません');
       if (!isOwner) for (const copyright of copyrights.filter(c => OwnerName.test(c))) {
@@ -173,6 +173,9 @@ function selfTest() {
     ['自己名義と原著名義の混在', [file('e.cs', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026 someone', inheritedHeader, 'class X {}'])], 'someone', 1],
     ['コード中の文字列リテラルは著作権表示ではない', [file('e.mjs', 'modified', [`const notice = "${inheritedHeader}";`])], 'someone', 0],
     ['新規ファイルの文字列リテラルはヘッダーの代わりにならない', [file('f.mjs', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', `const notice = "${inheritedHeader}";`])], 'someone', 1],
+    ['SPDX という文字列リテラルはヘッダーの代わりにならない', [file('g.mjs', 'added', ['// Copyright (C) 2026 someone', 'const license = "SPDX-License-Identifier: GPL-3.0-or-later";'])], 'someone', 1],
+    ['SPDX のコメント行は識別', [file('g.sh', 'added', ['#!/bin/sh', '# SPDX-License-Identifier: GPL-3.0-or-later', '# Copyright (C) 2026 someone'])], 'someone', 0],
+    ['SPDX の名前だけ書いても有効なヘッダーでない', [file('g.mjs', 'added', ['// SPDX-License-Identifier:', '// Copyright (C) 2026 someone'])], 'someone', 1],
     ['複数行コメント中の著作権表示を検出', [file('e.cs', 'modified', [` * ${inheritedHeader.slice(3)}`])], 'someone', 1],
   ];
   // Reproduction: a partial split moves exact method bodies out of the base file.
