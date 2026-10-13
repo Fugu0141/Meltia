@@ -618,6 +618,26 @@ foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-le
             suite + " " + condition +
             " Top1=" + newer.ExactCases + "/" + older.ExactCases +
             " TopK=" + newer.TopKExactCases + "/" + older.TopKExactCases);
+        // Show actionable per-case losses without weakening the quality gate.
+        // Aggregate counts alone hide which ambiguous inputs actually regressed.
+        foreach (var row in records)
+        {
+            var before = row.Predictions.Single(x => x.Model == "Meltia-v0.8-" + condition);
+            var after = row.Predictions.Single(x => x.Model == "Meltia-v0.9-" + condition);
+            var lostTop1 = before.Error is null &&
+                before.English.SequenceEqual(row.GoldEnglish) &&
+                !after.English.SequenceEqual(row.GoldEnglish);
+            var lostTopK = before.Error is null &&
+                before.Routes.Any(route => route.SequenceEqual(row.GoldEnglish)) &&
+                !after.Routes.Any(route => route.SequenceEqual(row.GoldEnglish));
+            if (lostTop1 || lostTopK)
+            {
+                Console.Error.WriteLine("  REGRESSED case=" + row.Id +
+                    " category=" + row.Category +
+                    " lostTop1=" + lostTop1 + " lostTopK=" + lostTopK +
+                    " raw=" + row.Raw[..Math.Min(row.Raw.Length, 110)]);
+            }
+        }
         return 7;
     }
 }
