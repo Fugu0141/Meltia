@@ -181,6 +181,16 @@ internal static class MeltiaPreviewSelfTest
                         if (string.Concat(input.Segments().Select(p => p.Raw)) != input.Raw)
                             return false;
                     }
+                    // The reported regression is visible before Space/Enter.
+                    // Verify the live composition after the final keystroke, not
+                    // only the final/committed rendering.
+                    var live = input.Segments(final: false);
+                    if (live.Count != 2 ||
+                        !live[0].IsEnglish || live[0].Raw != "change" ||
+                        live[1].IsEnglish || live[1].Raw != "suru" ||
+                        live[1].Kana != "する" ||
+                        input.RenderSegments(final: false, convert: null) != "changeする")
+                        return false;
                     var segments = input.Segments(final: true);
                     return input.Raw == "changesuru" &&
                         segments.Count == 2 &&
@@ -203,6 +213,10 @@ internal static class MeltiaPreviewSelfTest
             });
             Check("issue32-do-not-split-unrelated-japanese-or-incomplete-suffix", () =>
             {
+                // Use a detector without the Preview refinement for the
+                // baseline. Passing input.Segments() to TryRecover would
+                // check the already-refined output and could falsely pass.
+                var baselineDetector = CompositionDetector.CreateDefault();
                 foreach (var rawInput in new[] {
                     "chakusuru", "nihongosuru", "tokyosuru",
                     "changesu", "changesur", "changesurux", "changezuru"
@@ -210,9 +224,13 @@ internal static class MeltiaPreviewSelfTest
                 {
                     var input = new CompositionText(detector);
                     foreach (var c in rawInput) input.Append(c);
+                    var baseline = baselineDetector.Segment(
+                        input.Units, input.Pending, final: true);
                     if (MeltiaLexicalRecovery.TryRecover(
-                        input.Units, input.Pending, input.Segments(final: true),
-                        detector) is not null) return false;
+                        input.Units, input.Pending, baseline, detector) is not null)
+                        return false;
+                    if (!input.Segments(final: true).SequenceEqual(baseline))
+                        return false;
                 }
                 return true;
             });
