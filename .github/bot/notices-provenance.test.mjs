@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Fugu0141
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { implementationLines, movedCopyrightIsProven, sourcePathsFor } from './notices-provenance.mjs';
+import { copyrightOf, implementationLines, movedCopyrightIsProven, sourcePathsFor } from './notices-provenance.mjs';
 
 const name = 'src/CompositionController.cs';
 const fresh = 'src/CompositionController.Conversion.cs';
@@ -52,4 +52,34 @@ test('regression: mixed changes must not match a different old file name', () =>
 });
 test('normalization discards wrappers, not implementation', () => {
   assert.deepEqual(implementationLines(['// Copyright (C) 2026 Yukishiro','namespace A;', 'public sealed partial class B', '{','foo();','}']),['foo();']);
+});
+
+test('review regression: literal copyright words in source code are not notices', () => {
+  const valid = [
+    '// Copyright (C) 2026 Yukishiro',
+    '/// Copyright (C) 2026 Yukishiro',
+    '# Copyright (C) 2026 Yukishiro',
+    '; Copyright (C) 2026 Yukishiro',
+    '/* Copyright (C) 2026 Yukishiro */',
+    ' * Copyright (C) 2026 Yukishiro',
+    '<# Copyright (C) 2026 Yukishiro #>',
+  ];
+  for (const item of valid) assert.equal(copyrightOf(item),'Copyright (C) 2026 Yukishiro');
+  const literals = [
+    "const value = '// Copyright (C) 2026 Yukishiro';",
+    'assert.equal(name, "Copyright (C) 2026 Yukishiro")',
+    'if (text.includes("Copyright (C) 2026 Yukishiro")) return;',
+    'var code = "// Copyright (C) 2026 Yukishiro"; // text, not notice',
+    'Copyright (C) 2026 Yukishiro',
+  ];
+  for (const item of literals) assert.equal(copyrightOf(item),null);
+});
+test('review regression: renamed source with deleted blocks is recognized by base path', () => {
+  const renamed = {...removed,status:'renamed',filename:'src/RenamedController.cs',previous_filename:name};
+  assert.deepEqual(sourcePathsFor(target,[target,renamed],moved),[name]);
+  assert.equal(isMoved(target,[target,renamed]),true);
+});
+test('review regression: base source code literal is not a legitimate copyright header', () => {
+  const fakeSource = ['const notAHeader = "Copyright (C) 2026 Yukishiro";',...block].join('\n');
+  assert.equal(isMoved(target,[target,removed],new Map([[name,fakeSource]])),false);
 });
