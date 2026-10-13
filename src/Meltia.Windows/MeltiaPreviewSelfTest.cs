@@ -165,6 +165,77 @@ internal static class MeltiaPreviewSelfTest
                     pieces[0].IsEnglish && pieces[0].Raw == "Meltia" &&
                     !pieces[1].IsEnglish && pieces[1].Kana == "をためす";
             });
+            // Issue #32: "change" is both a listed English word and fully
+            // readable as Japanese romaji ("ちゃんげ"). The stable lexical
+            // safeguard must preserve it before the complete Japanese "suru".
+            foreach (var boundaryEnabled in new[] { false, true })
+            {
+                MeltiaPreviewBoundary.Enabled = boundaryEnabled;
+                Check("issue32-change-suru-boundary-" +
+                    (boundaryEnabled ? "experimental-on" : "experimental-off"), () =>
+                {
+                    var input = new CompositionText(detector);
+                    foreach (var c in "changesuru")
+                    {
+                        input.Append(c);
+                        if (string.Concat(input.Segments().Select(p => p.Raw)) != input.Raw)
+                            return false;
+                    }
+                    var segments = input.Segments(final: true);
+                    return input.Raw == "changesuru" &&
+                        segments.Count == 2 &&
+                        segments[0].IsEnglish && segments[0].Raw == "change" &&
+                        !segments[1].IsEnglish && segments[1].Raw == "suru" &&
+                        segments[1].Kana == "する" &&
+                        input.RenderSegments(final: true, convert: null) == "changeする";
+                });
+            }
+            MeltiaPreviewBoundary.Enabled = false;
+            Check("issue32-capitalized-change-suru", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "Changesuru") input.Append(c);
+                var segments = input.Segments(final: true);
+                return segments.Count == 2 && segments[0].IsEnglish &&
+                    segments[0].Raw == "Change" &&
+                    !segments[1].IsEnglish && segments[1].Kana == "する" &&
+                    input.RenderSegments(final: true, convert: null) == "Changeする";
+            });
+            Check("issue32-do-not-split-unrelated-japanese-or-incomplete-suffix", () =>
+            {
+                foreach (var rawInput in new[] {
+                    "chakusuru", "nihongosuru", "tokyosuru",
+                    "changesurux", "changezuru"
+                })
+                {
+                    var input = new CompositionText(detector);
+                    foreach (var c in rawInput) input.Append(c);
+                    if (MeltiaLexicalRecovery.TryRecover(
+                        input.Units, input.Pending, input.Segments(final: true),
+                        detector) is not null) return false;
+                }
+                return true;
+            });
+            Check("issue32-respects-explicit-Japanese-learning", () =>
+            {
+                var learned = CompositionDetector.CreateDefault();
+                learned.Memory = new LanguageMemory(path: null);
+                learned.Memory.Remember("change", english: false, explicitChoice: true);
+                var input = new CompositionText(learned);
+                foreach (var c in "changesuru") input.Append(c);
+                return MeltiaLexicalRecovery.TryRecover(
+                    input.Units, input.Pending, input.Segments(final: true),
+                    learned) is null;
+            });
+            Check("issue32-respects-protected-spans", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "changesuru") input.Append(c);
+                return MeltiaLexicalRecovery.TryRecover(
+                    input.Units, input.Pending,
+                    [new CompositionSegment(true, "", "changesuru")
+                        { IsProtected = true }], detector) is null;
+            });
             Check("Japanese-only-input-not-forced-to-English", () =>
             {
                 var input = new CompositionText(detector);
