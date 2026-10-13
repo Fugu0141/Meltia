@@ -5,8 +5,18 @@ name: linux
 # Mozc のビルドは初回 30〜40 分かかるので、Bazel の結果をキャッシュして次から速くする。
 on:
   workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'linux/**'
+      - 'native/mozc/**'
+      - 'src/Meltype.Core/**'
+      - 'src/Meltype.Core.Tests/**'
+      - 'dictionaries/**'
+      - 'tools/test-native-boundaries.py'
+      - '.github/workflows/linux.yml'
   push:
-    branches: ['**']
+    branches: [main]
     tags: ['v*']
     paths:
       - 'linux/**'
@@ -25,11 +35,10 @@ concurrency:
 
 jobs:
   app:
+    # Expensive Mozc integration runs on review-ready PRs; drafts can test locally.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    # タグ時の softprops/action-gh-release 用。permissions は式が使えないため常に write。
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # IBus のエンジン (Python) の書き間違いを、時間のかかるビルドの前に見つける
@@ -90,7 +99,20 @@ jobs:
           name: meltype-linux
           path: linux/build/Meltype-*.zip
           retention-days: 14
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@e598afbe1493e6b1bafb1f389cabb956eab91231 # v3.0.3
+      # Release publishing is separated to avoid write permissions on PR code.
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: app
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          files: linux/build/Meltype-*.zip
+          name: meltype-linux
+          path: dist/linux
+      - uses: softprops/action-gh-release@e598afbe1493e6b1bafb1f389cabb956eab91231 # v3.0.3
+        with:
+          files: dist/linux/Meltype-*.zip
