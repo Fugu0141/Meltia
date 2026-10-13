@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 // Regression tests for the native Meltype input normalizer.
 // The independent Meltia boundary engine does not drive the live IME here.
 
