@@ -34,8 +34,10 @@ var categories = new[] {
     "short-technical-terms", "long-window-and-boundaries"
 };
 var failures = new List<object>();
+var mismatches = new List<object>();
 var rows = new List<object>();
 int total = 0, goldTop1 = 0, goldTopK = 0, truncated = 0, keystrokeChecks = 0;
+int hostObservedTop1 = 0;
 var clock = Stopwatch.StartNew();
 
 for (int family = 0; family < categories.Length; family++)
@@ -44,6 +46,7 @@ for (int family = 0; family < categories.Length; family++)
     var rng = new Random(unchecked(seed + family * 104729));
     var seen = new HashSet<string>(StringComparer.Ordinal);
     int familyTop1 = 0, familyTopK = 0, familyTruncated = 0, familyKeystrokes = 0;
+    int familyHostTop1 = 0;
     int familyFailures = 0;
     string? previousAmbiguous = null;
     for (int i = 0; i < perFamily; i++)
@@ -69,12 +72,23 @@ for (int family = 0; family < categories.Length; family++)
             // because a spelling can mean either Japanese or English.
             var observed = engine.Analyze(item.Raw);
             ValidateRoutes(item.Raw, observed);
-            if (observed.Routes[0].EnglishSpans.SequenceEqual(item.GoldEnglish))
+            // Protected URL/email ranges are inherently English/protected:
+            // omitting them from the gold made this category look 0% correct.
+            var expectedEnglish = item.GoldEnglish.Concat(item.Protected)
+                .OrderBy(x => x.Start).ToArray();
+            var isTop1 = observed.Routes[0].EnglishSpans.SequenceEqual(expectedEnglish);
+            if (isTop1)
             {
                 familyTop1++;
                 goldTop1++;
             }
-            if (observed.Routes.Any(r => r.EnglishSpans.SequenceEqual(item.GoldEnglish)))
+            else if (mismatches.Count < 60)
+                mismatches.Add(new {
+                    Category = name, Index = i, Raw = item.Raw,
+                    Gold = expectedEnglish, Actual = observed.Routes[0].EnglishSpans,
+                    OtherRoutes = observed.Routes.Count
+                });
+            if (observed.Routes.Any(r => r.EnglishSpans.SequenceEqual(expectedEnglish)))
             {
                 familyTopK++;
                 goldTopK++;
@@ -113,7 +127,7 @@ for (int family = 0; family < categories.Length; family++)
             // Exercise the actual OS-neutral composition keystroke pipeline.
             // Symbol-rich/UTF-16 inputs remain Core-only: keyboard hooks and
             // Windows IME are NOT simulated by this test.
-            if (i % 25 == 0 && family is 0 or 2 or 3 or 5 or 8 &&
+            if (i % 25 == 0 && (family is 0 or 2 or 3 or 5 or 8) &&
                 item.Raw.Length <= 100 && item.Raw.All(char.IsAsciiLetter))
             {
                 var composition = new CompositionText(detector);
@@ -130,6 +144,26 @@ for (int family = 0; family < categories.Length; family++)
                         if (string.Concat(pieces.Select(p => p.Raw)) != composition.Raw)
                             throw new InvalidOperationException("Composition segment lost input");
                     }
+                }
+                // Report the inherited Meltype detector's segmentation
+                // separately from the experimental Core. This is the actual
+                // OS-neutral composition output after a key sequence.
+                var host = detector.Segment(composition.Units, composition.Pending);
+                int offset = 0;
+                var hostSpans = new List<Utf16Span>();
+                foreach (var segment in host)
+                {
+                    int end = offset + segment.Raw.Length;
+                    if (segment.IsEnglish && end > offset)
+                        hostSpans.Add(new Utf16Span(offset, end));
+                    offset = end;
+                }
+                if (offset != item.Raw.Length)
+                    throw new InvalidOperationException("Final host segment coverage mismatch");
+                if (hostSpans.SequenceEqual(expectedEnglish))
+                {
+                    hostObservedTop1++;
+                    familyHostTop1++;
                 }
                 familyKeystrokes++;
                 keystrokeChecks++;
@@ -148,11 +182,13 @@ for (int family = 0; family < categories.Length; family++)
     rows.Add(new {
         Category = name, Cases = perFamily, UniqueRaw = seen.Count,
         ObservedTop1 = familyTop1, ObservedTopK = familyTopK,
+        InheritedMeltypeTop1OnReplay = familyHostTop1,
         Truncated = familyTruncated, KeystrokeReplays = familyKeystrokes,
         InvariantFailures = familyFailures
     });
     Console.WriteLine($"{name}: {perFamily} examples, distinct={seen.Count}, " +
-        $"observed Top1={familyTop1}, TopK={familyTopK}, invariant-failures={familyFailures}");
+        $"observed Top1={familyTop1}, TopK={familyTopK}, host={familyHostTop1}/{familyKeystrokes}, " +
+        $"invariant-failures={familyFailures}");
 }
 clock.Stop();
 var output = Path.GetFullPath(args[5]);
@@ -166,9 +202,10 @@ File.WriteAllText(output, JsonSerializer.Serialize(new {
     Tier = args[1], Seed = seed, Families = categories.Length,
     CasesPerFamily = perFamily, TotalCases = total,
     ObservedTop1 = goldTop1, ObservedTopK = goldTopK,
+    InheritedMeltypeTop1OnReplays = hostObservedTop1,
     TruncatedCases = truncated, KeystrokeReplays = keystrokeChecks,
     DurationSeconds = Math.Round(clock.Elapsed.TotalSeconds, 3),
-    Passed = passed, Summary = rows, Failures = failures,
+    Passed = passed, Summary = rows, Failures = failures, Top1MismatchExamples = mismatches,
     Caveats = new[] {
         "Top1/TopK are observations against synthetic intended labels, NOT CI success thresholds.",
         "Unassisted Japanese/English intent cannot always be determined from raw bytes.",
@@ -228,7 +265,9 @@ static TestCase MakeCase(int family, int number, Random source, int seed)
             J(Ja()); J(Ja()); J(Ja()); J(Ja());
             break;
         case 1:
-            E(En()); E(En()); E(Short());
+            E(En()); if (number % 3 == 0) J(" ");
+            E(En()); if (number % 4 == 0) J(" ");
+            E(Short());
             break;
         case 2:
             J(Ja()); E(En()); J(Particle()); J(Ja());
