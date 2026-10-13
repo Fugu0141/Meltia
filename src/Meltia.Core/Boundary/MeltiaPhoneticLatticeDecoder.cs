@@ -109,7 +109,7 @@ internal static class MeltiaPhoneticLatticeDecoder
                         var bridgeBonus = contextualIslandScoring &&
                             tail.EnglishSpans.Count > 0
                             ? MeltiaContextualIslandScoring.Between(
-                                raw, edge.Span, tail.EnglishSpans[0]) : 0;
+                                raw, edge.Span, tail.EnglishSpans[0], candidates) : 0;
                         offers.Add(new BoundaryRoute(spans,
                             edge.Score + tail.Score - englishSpanCost +
                             bridgeBonus +
