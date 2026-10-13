@@ -56,8 +56,15 @@ function check(files, author, baseFiles = new Map()) {
     if (!SourceFile.test(file.filename)) continue;
     const added = addedLines(file.patch);
     if (file.status === 'added') {
-      // patch が大きすぎると GitHub は patch を返さない。そのときは見ない
-      if (!file.patch) continue;
+      // A missing or oversized GitHub patch does not prove the absence
+      // of license problems. Report an unverifiable new source file rather
+      // than silently accepting it as clean.
+      if (!file.patch) {
+        findings.push({ file: file.filename, problems: [
+          '新規ソースファイルの差分 (patch) が取得できず、SPDX・Copyright・出自を検証できません。追加ファイルを手動で確認してください'
+        ] });
+        continue;
+      }
       const head = added.slice(0, HeaderLines);
       const problems = [];
       if (!head.some(l => spdxOf(l))) problems.push('`SPDX-License-Identifier: GPL-3.0-or-later` がありません');
@@ -177,6 +184,10 @@ function selfTest() {
     ['SPDX のコメント行は識別', [file('g.sh', 'added', ['#!/bin/sh', '# SPDX-License-Identifier: GPL-3.0-or-later', '# Copyright (C) 2026 someone'])], 'someone', 0],
     ['SPDX の名前だけ書いても有効なヘッダーでない', [file('g.mjs', 'added', ['// SPDX-License-Identifier:', '// Copyright (C) 2026 someone'])], 'someone', 1],
     ['複数行コメント中の著作権表示を検出', [file('e.cs', 'modified', [` * ${inheritedHeader.slice(3)}`])], 'someone', 1],
+    ['新規ソースのpatchがnullでも検証不能を警告', [{ filename: 'h.cs', status: 'added', patch: null }], 'someone', 1],
+    ['新規ソースのpatchが未定義でも検証不能を警告', [{ filename: 'h.cs', status: 'added' }], 'someone', 1],
+    ['新規ソースのpatchが空でも検証不能を警告', [{ filename: 'h.cs', status: 'added', patch: '' }], 'yksr-melt', 1],
+    ['ソース以外のpatch欠落は対象外', [{ filename: 'docs/h.md', status: 'added', patch: null }], 'someone', 0],
   ];
   // Reproduction: a partial split moves exact method bodies out of the base file.
   const original = Array.from({ length: 20 }, (_, i) => `    var v${i} = Convert(${i});`);
