@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 // Meltia v0.9 additional synthetic vocabulary-shift diagnostics.
 // These lexical types intentionally do NOT occur in the previous 54-word
 // R01-R07 study list. This is NOT a blind or natural typing holdout.
