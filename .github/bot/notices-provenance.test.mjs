@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Fugu0141
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyrightOf, implementationLines, movedCopyrightIsProven, sourcePathsFor } from './notices-provenance.mjs';
+import { copyrightOf, spdxOf, implementationLines, movedCopyrightIsProven, sourcePathsFor } from './notices-provenance.mjs';
 
 const name = 'src/CompositionController.cs';
 const fresh = 'src/CompositionController.Conversion.cs';
@@ -82,4 +82,24 @@ test('review regression: renamed source with deleted blocks is recognized by bas
 test('review regression: base source code literal is not a legitimate copyright header', () => {
   const fakeSource = ['const notAHeader = "Copyright (C) 2026 Yukishiro";',...block].join('\n');
   assert.equal(isMoved(target,[target,removed],new Map([[name,fakeSource]])),false);
+});
+
+test('review follow-up: SPDX text in code must not masquerade as a license header', () => {
+  const valid = [
+    '// SPDX-License-Identifier: GPL-3.0-or-later',
+    '# SPDX-License-Identifier: GPL-3.0-or-later',
+    '/* SPDX-License-Identifier: GPL-3.0-or-later */',
+    ' * SPDX-License-Identifier: GPL-3.0-or-later',
+    '<# SPDX-License-Identifier: GPL-3.0-or-later #>',
+  ];
+  for (const line of valid) {
+    assert.equal(spdxOf(line), 'SPDX-License-Identifier: GPL-3.0-or-later');
+  }
+  for (const line of [
+    'const info = "SPDX-License-Identifier: GPL-3.0-or-later";',
+    'assert.match(value, /SPDX-License-Identifier/);',
+    'SPDX-License-Identifier: GPL-3.0-or-later',
+    '// SPDX-License-Identifier:',
+    '// unrelated SPDX-License-Identifier: GPL-3.0-or-later',
+  ]) assert.equal(spdxOf(line), null);
 });
