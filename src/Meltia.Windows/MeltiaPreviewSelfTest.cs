@@ -84,6 +84,49 @@ internal static class MeltiaPreviewSelfTest
                 return pieces.Count == 1 && pieces[0].IsEnglish &&
                     pieces[0].Raw == "commit";
             });
+            Check("commit-ha-English-then-particle", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "commitha") input.Append(c);
+                var pieces = input.Segments(final: true);
+                return pieces.Count == 2 &&
+                    pieces[0].IsEnglish && pieces[0].Raw == "commit" &&
+                    !pieces[1].IsEnglish && pieces[1].Raw == "ha" &&
+                    pieces[1].Kana == "は" &&
+                    input.RenderSegments(final: true, convert: null) == "commitは";
+            });
+            Check("Ado-san-no-preserves-name-and-Japanese", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "Adosannno") input.Append(c);
+                var pieces = input.Segments(final: true);
+                return pieces.Count == 2 &&
+                    pieces[0].IsEnglish && pieces[0].Raw == "Ado" &&
+                    !pieces[1].IsEnglish && pieces[1].Raw == "sannno" &&
+                    pieces[1].Kana == "さんの";
+            });
+            Check("API-raw-uppercase-does-not-turn-into-kana", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "API") input.Append(c);
+                return input.RenderSegments(final: true, convert: null) == "API" &&
+                    input.Raw == "API";
+            });
+            Check("meltia-ga-keystroke-roundtrip", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "meltiaga")
+                {
+                    input.Append(c);
+                    if (string.Concat(input.Segments().Select(p => p.Raw)) != input.Raw)
+                        return false;
+                }
+                var parts = input.Segments(final: true);
+                return parts.Count == 2 &&
+                    parts[0].IsEnglish && parts[0].Raw == "meltia" &&
+                    !parts[1].IsEnglish && parts[1].Raw == "ga" &&
+                    parts[1].Kana == "が";
+            });
             Check("meltiawo-English-then-Japanese", () =>
             {
                 var input = new CompositionText(detector);
