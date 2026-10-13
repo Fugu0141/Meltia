@@ -1,0 +1,44 @@
+name: Meltia H10 prototype comparison
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'src/Meltia.Core/Boundary/H10*.cs'
+      - 'tests/Meltia.H10Evaluation/**'
+      - 'docs/MELTIA_H10_*.md'
+      - '.github/workflows/meltia-h10-prototype.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meltia-h10-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    # Preserve the repository's convention: draft PRs do not consume hosted minutes.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Existing Meltia Core contract tests
+        run: dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
+      - name: H10 prototype contract checks and issue diagnostics
+        run: >
+          dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj
+          -c Release -- --output artifacts/h10/h10-comparison.json
+      - name: Upload full before-after case-level report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: h10-boundary-comparison
+          path: artifacts/h10/
+          if-no-files-found: warn
+          retention-days: 14
