@@ -1,0 +1,33 @@
+name: legacy-linux-release-guard
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/linux.yml'
+      - '.github/workflows/linux-artifacts.yml'
+      - '.github/workflows/legacy-linux-release-guard.yml'
+      - 'tools/test_legacy_linux_release_guard.py'
+      - 'docs/MELTIA_ISSUE23_LEGACY_LINUX_RELEASE_GUARD.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/linux.yml'
+      - '.github/workflows/linux-artifacts.yml'
+      - '.github/workflows/legacy-linux-release-guard.yml'
+      - 'tools/test_legacy_linux_release_guard.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  historical-isolation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0 # Pin exact historical tag without altering it.
+          persist-credentials: false
+      - name: Reproduce historical publishing path and test isolation
+        run: python3 tools/test_legacy_linux_release_guard.py
