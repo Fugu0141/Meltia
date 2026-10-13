@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 using Meltia.Core.Boundary;
 
 // Issue #28: an empty insertion is not an edit and must not discard explicit locks.
