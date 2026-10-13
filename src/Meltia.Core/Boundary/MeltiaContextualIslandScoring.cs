@@ -26,7 +26,8 @@ internal static class MeltiaContextualIslandScoring
     // This is a conservative research-mode guard, not a lexical decision.
     private const int MinCorroboratedIslandLength = 7;
 
-    public static double Between(string raw, Utf16Span left, Utf16Span right)
+    public static double Between(string raw, Utf16Span left, Utf16Span right,
+        IReadOnlyList<BoundaryCandidate> candidates)
     {
         if (left.Length < MinCorroboratedIslandLength ||
             right.Length < MinCorroboratedIslandLength ||
@@ -44,6 +45,25 @@ internal static class MeltiaContextualIslandScoring
         if (!a.All(char.IsAsciiLetter) || !b.All(char.IsAsciiLetter) ||
             MeltiaRomaji.CanRead(a) || MeltiaRomaji.CanRead(b))
             return 0;
+
+        // An apparent Latin island can swallow the following Japanese
+        // particle: SPYAIRde is NOT stronger evidence than the standalone
+        // candidate SPYAIR plus the trailing "de". Do not reward the
+        // extended edge if the lattice independently exposes that shorter
+        // non-phonetic English candidate. This uses only competing spans,
+        // not reference words, gold labels, or a dictionary lookup.
+        foreach (var particle in JapaneseConnectors)
+        {
+            if (!b.EndsWith(particle, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var properEnd = right.End - particle.Length;
+            if (properEnd - right.Start >= 5 &&
+                candidates.Any(x => x.Span.Start == right.Start &&
+                    x.Span.End == properEnd &&
+                    !MeltiaRomaji.CanRead(
+                        raw.Substring(x.Span.Start, x.Span.Length))))
+                return 0;
+        }
 
         // v0.7 emits many plausible substrings. A proposal that begins
         // with a long phonetic Japanese prefix (e.g. arigatou + part of
