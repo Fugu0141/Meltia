@@ -43,6 +43,7 @@
 - [2026-10-13 Issue / ブランチ整理（完了Issue・削除候補・安全な削除手順）](docs/MELTIA_ISSUE_BRANCH_CLEANUP_20261013.md)
 - [貢献方法](CONTRIBUTING.md)
 - [セキュリティ報告](SECURITY.md)
+- [Issue #23: 過去タグのLinux公開ワークフロー隔離と管理者確認手順](docs/MELTIA_ISSUE23_LEGACY_LINUX_RELEASE_GUARD.md)
 - [サードパーティー通知](THIRD-PARTY-NOTICES.md)
 - [開発・ビルド手順（本家から継承、Meltia 用に未更新）](docs/DEVELOPMENT.md)
 

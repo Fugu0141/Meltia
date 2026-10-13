@@ -2,13 +2,13 @@
 
 ## 検証対象を混同しない
 
-- **Linux CI**: GitHub Actions `linux.yml` が本物のIBusデーモン、Mozcヘルパー、NativeAOTライブラリ、fcitx5テストフロントエンドを用いて検証する。ネイティブ境界テストとともに全ジョブの結論を確認する。
+- **Linux CI**: GitHub Actions `linux-artifacts.yml` が本物のIBusデーモン、Mozcヘルパー、NativeAOTライブラリ、fcitx5テストフロントエンドを用いて検証する。ネイティブ境界テストとともに全ジョブの結論を確認する。
 - **Windows Preview CI**: `Meltia.exe` をビルドし、GUIにフックしないself-testとライセンス監査をする。**実際のアプリ入力欄・フォーカス・TSF動作の検証ではない**。
 - **Windows実機E2E**: 実入力の合否はテスト担当者がデスクトップで検証する。Previewの研究用hookは正式TSF実装とみなさない。
 
 ## Linux CI（自動）
 
-Ready for review状態で `src/Meltype.Core/**`、`linux/**`、`native/mozc/**` 等を変更したPRでは `.github/workflows/linux.yml` を実行する。Draftはホストランナー費用を節約するためスキップ。対象変更がなくても必要なら `workflow_dispatch` で手動実行する。
+Ready for review状態で `src/Meltype.Core/**`、`linux/**`、`native/mozc/**` 等を変更したPRでは `.github/workflows/linux-artifacts.yml` を実行する。Draftはホストランナー費用を節約するためスキップ。対象変更がなくても必要なら `workflow_dispatch` で手動実行する。
 
 成功と判定するには、同じPR HEADの `linux` ワークフローで以下のステップがすべて成功すること：
 
@@ -20,7 +20,7 @@ Ready for review状態で `src/Meltype.Core/**`、`linux/**`、`native/mozc/**` 
 
 **このLinux CIからGitHub Releaseへは公開しない。** `main`へのpush・Ready PR・手動実行のいずれもLinuxの検証用ZIPをActions Artifactに保存するだけであり、`v*` タグでは起動しない。既存の `v1.0.0-beta.1` などMeltia Windows PreviewのReleaseへ旧Meltype版ZIPを追加しない。将来Linuxを配布するときは、Meltia向けの名称・専用公開条件・既存Release不変性を設計した別の公開手順を新規レビューする。
 
-**既存タグの注意**: すでに公開済みの `v1.0.0-beta.1` タグには、旧 `linux.yml` の `workflow_dispatch` とReleaseへのアップロード処理が残る。PRブランチやmainのワークフロー変更は過去のタグrefを更新しないため、古いタグからの手動実行を行わないこと。管理者設定を含む恒久対策は [Issue #23](https://github.com/Fugu0141/Meltia/issues/23) で追跡する。既存タグ・Release自体の改変は行わない。
+**既存タグの注意**: すでに公開済みの `v1.0.0-beta.1` タグには、旧 `linux-artifacts.yml` の `workflow_dispatch` とReleaseへのアップロード処理が残る。PRブランチやmainのワークフロー変更は過去のタグrefを更新しないため、古いタグからの手動実行を行わないこと。管理者設定を含む恒久対策は [Issue #23](https://github.com/Fugu0141/Meltia/issues/23) で追跡する。既存タグ・Release自体の改変は行わない。
 
 ## Windows実機での手動受け入れ検証（自動化未実装）
 

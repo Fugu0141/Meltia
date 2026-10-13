@@ -10,7 +10,7 @@
 | L1 | 正解ラベル付きの固定コーパス（日英判定・辞書・候補） | 既存の Quality.Run を新レポートに統合 |
 | L2 | OS 非依存の逐次入力・編集の整合性・例外・ランダム入力・再現性・正解付きhost再生 | 今回の新規QA |
 | L3 | 境界Precision/Recall/F1、候補Recall、英語誤判定率、確定タイミング | 未実装（別途ゴールドデータを作成） |
-| L4-Linux | 実IBus/Mozc + fcitx5デーモンを介した統合入力 | `linux.yml` のReady PRゲートとして実行（結果は同じPR HEADで確認） |
+| L4-Linux | 実IBus/Mozc + fcitx5デーモンを介した統合入力 | `linux-artifacts.yml` のReady PRゲートとして実行（結果は同じPR HEADで確認） |
 | L4-Windows | 実Windows TSF/IME・アプリ互換・入力消失・本家との共存、インストール/更新/アンインストール | 手動実機E2E未実施（専用VM/実機が必要） |
 
 **L2 の合格は日英境界の正答率を示しません。**
@@ -45,7 +45,7 @@
 
 **失敗でブロック:** 処理例外、負の削除文字数、シミュレートしたテキストより長い不適切な削除、ホスト側Expectガード拒否、oracleのhost文書/commit列/未確定表示の不一致、確定済み入力の再生が非決定的、JSONシリアライズ異常、品質既存閾値違反。
 
-**既存ゲートでブロック:** Windows/Linux/macOS Build/Test、PR前後での正解ケース後退（`pr-checks`）。Ready for review のPRでLinuxネイティブの対象ファイルに変更がある場合は `linux.yml` のIBus/Mozc実統合とfcitx5・NativeAOTテストも最新HEADで確認する。
+**既存ゲートでブロック:** Windows/Linux/macOS Build/Test、PR前後での正解ケース後退（`pr-checks`）。Ready for review のPRでLinuxネイティブの対象ファイルに変更がある場合は `linux-artifacts.yml` のIBus/Mozc実統合とfcitx5・NativeAOTテストも最新HEADで確認する。
 
 **観測のみ:** CIランナーのp50/p95/p99。共有CIランナーでは変動が大きいので、同一環境での対照比較ができるまで性能しきい値は固定しない。
 
