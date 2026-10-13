@@ -29,7 +29,7 @@
 
 **診断指標（現段階では失敗条件にしない）**：証拠なし・固定共通英語語彙付きそれぞれのTop1・Top-K正答率、候補切り詰め件数、分類別のunique raw数、Meltype.Coreの最終区間判定率・逐次打鍵確認回数、経過時間。曖昧語には同じ文字列で二つの対立する正解を含めるため、単純な総合Top1を製品の精度として宣伝してはいけない。
 
-逐次打鍵は *Meltype.Core* の CompositionText.Append() と CompositionDetector.Segment() を段階的に使う。文字列全体だけでなく途中の複数のプレフィックスでも入力原文と区間の一致を確認する。Windowsの物理キー・IME/フックの再現ではない。
+逐次打鍵は *Meltype.Core* の CompositionText.Append() と CompositionDetector.Segment() を段階的に使う。さらに RemoveLast()（Backspace）→再入力→Clear() で前方のrawが失われないことを確認する。文字列全体だけでなく途中の複数のプレフィックスでも入力原文と区間の一致を確認する。Windowsの物理キー・IME/フックの再現ではない。
 
 本マトリクスのTop1・Top-K評価では、URL/メールとして保護される英字区間も正解spanに含める。誤判定例の入力・期待span・予測spanを限定件数だけJSONに保存する。
 
