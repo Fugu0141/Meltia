@@ -651,6 +651,20 @@ public sealed partial class CompositionDetector
     /// </summary>
     private int CapitalizedWordEnd(IReadOnlyList<CompositionUnit> units, int start, string pending, bool final)
     {
+        // The vast majority of incremental Japanese/English input is lowercase.
+        // Reject it BEFORE scanning and concatenating the entire remaining
+        // composition. CapitalizedWordEnd is tried at every unit index, so the
+        // previous ordering needlessly scanned long lowercase tails O(n^2).
+        if (start >= units.Count || units[start].Raw.Length == 0) return -1;
+        var first = units[start].Raw[0];
+        if (!char.IsAsciiLetterUpper(first))
+        {
+            var second = units[start].Raw.Length > 1 ? units[start].Raw[1] :
+                start + 1 < units.Count && units[start + 1].Raw.Length > 0
+                    ? units[start + 1].Raw[0] : '\0';
+            if (!char.IsAsciiLetterLower(first) || !char.IsAsciiLetterUpper(second))
+                return -1;
+        }
         // 見るのは、次の記号・数字・空白まで (長い文の OCR|woshi, … では、後ろの , までの woshi を見る)
         var n = start;
         while (n < units.Count && units[n].Raw.All(char.IsAsciiLetter) && units[n].Raw.Length > 0) n++;

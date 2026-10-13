@@ -65,6 +65,19 @@ if (-not $SkipSmokeTest) {
     $testPath = Join-Path $out "meltia-preview-selftest.json"
     $process = Start-Process -FilePath $exe -PassThru -Wait -ArgumentList @("--meltia-selftest", ('"' + $testPath + '"'))
     if ($process.ExitCode -ne 0) {
+        # The Preview is a WinExe; stdout is not reliably attached to CI.
+        # Print the failed JSON case names rather than an opaque exit code.
+        if (Test-Path -LiteralPath $testPath) {
+            try {
+                $failedReport = Get-Content -Raw -LiteralPath $testPath | ConvertFrom-Json
+                foreach ($failedCase in @($failedReport.Cases | Where-Object { $_.passed -ne $true })) {
+                    Write-Host "FAILED Preview self-test: $($failedCase.name) $($failedCase.error)"
+                }
+            }
+            catch {
+                Write-Host "Could not parse failed Preview self-test report: $_"
+            }
+        }
         throw "Meltia self-test failed (exit $($process.ExitCode)); package not created."
     }
     if (-not (Test-Path $testPath)) {

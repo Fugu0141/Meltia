@@ -72,7 +72,8 @@ Meltype本家の既存Windows C#ソースを新しい
 GitHub Actionsの利用枠は必要ない。
 
 ```powershell
-git switch release/v1.0.0-beta.1-preview
+git switch main
+git pull --ff-only origin main
 
 # 自分のPCでリリース構成の実行ファイルをビルドし、
 # フック未起動の統合スモークテストを実行してからZIPを作る
@@ -150,6 +151,8 @@ GitHub Actions Windowsランナーで、フレームワーク依存のビルド�
 
 **この段階は「実行可能なアプリ構成への移行」であり、製品完成の宣言ではない。**
 Windows Keyboard Preview `1.0.0-beta.1` の研究開発段階。mainへのソース統合は製品版完成・Windows実機E2E合格・既存公開beta.1アセットの更新を意味しない。
+
+2026-10-13に報告された `commitha` / `Adosannno` / `API` / `meltiaga` と速度問題は [実機入力フィードバック・改修の検証計画](MELTIA_WINDOWS_FIELD_TEST_20261013.md) で管理する。これらの修正は公開済みbeta.1 ZIPではなく、修正PR側で検証する。
 
 ## 実機入力で発見した英語の読み込み問題（2026-10-12）
 

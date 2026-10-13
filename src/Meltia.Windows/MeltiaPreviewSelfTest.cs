@@ -84,6 +84,68 @@ internal static class MeltiaPreviewSelfTest
                 return pieces.Count == 1 && pieces[0].IsEnglish &&
                     pieces[0].Raw == "commit";
             });
+            Check("commit-ha-English-then-particle", () =>
+            {
+                var input = new CompositionText(detector);
+                var beforeH = "";
+                var afterH = "";
+                foreach (var c in "commitha")
+                {
+                    if (c == 'h')
+                        beforeH = "beforeH[" + input.Pending + "] " +
+                            string.Join("|", input.Units.Select(u => u.Raw + ":" + u.Kana)) +
+                            " known(commit)=" + detector.IsKnownEnglishWord("commit");
+                    input.Append(c);
+                    if (c == 'h')
+                        afterH = "afterH[" + input.Pending + "] " +
+                            string.Join("|", input.Units.Select(u => u.Raw + ":" + u.Kana));
+                }
+                var pieces = input.Segments(final: true);
+                var ok = pieces.Count == 2 &&
+                    pieces[0].IsEnglish && pieces[0].Raw == "commit" &&
+                    !pieces[1].IsEnglish && pieces[1].Raw == "ha" &&
+                    pieces[1].Kana == "は" &&
+                    input.RenderSegments(final: true, convert: null) == "commitは";
+                if (!ok)
+                    throw new InvalidOperationException(
+                        beforeH + "; " + afterH + "; units=" + string.Join("|", input.Units.Select(u => u.Raw + ":" + u.Kana)) +
+                        "; pending=" + input.Pending +
+                        "; segments=" + string.Join("|", pieces.Select(p => p.Raw + ":" + p.Kana + ":" + (p.IsEnglish ? "EN" : "JA"))) +
+                        "; display=" + input.RenderSegments(final: true, convert: null));
+                return true;
+            });
+            Check("Ado-san-no-preserves-name-and-Japanese", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "Adosannno") input.Append(c);
+                var pieces = input.Segments(final: true);
+                return pieces.Count == 2 &&
+                    pieces[0].IsEnglish && pieces[0].Raw == "Ado" &&
+                    !pieces[1].IsEnglish && pieces[1].Raw == "sannno" &&
+                    pieces[1].Kana == "さんの";
+            });
+            Check("API-raw-uppercase-does-not-turn-into-kana", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "API") input.Append(c);
+                return input.RenderSegments(final: true, convert: null) == "API" &&
+                    input.Raw == "API";
+            });
+            Check("meltia-ga-keystroke-roundtrip", () =>
+            {
+                var input = new CompositionText(detector);
+                foreach (var c in "meltiaga")
+                {
+                    input.Append(c);
+                    if (string.Concat(input.Segments().Select(p => p.Raw)) != input.Raw)
+                        return false;
+                }
+                var parts = input.Segments(final: true);
+                return parts.Count == 2 &&
+                    parts[0].IsEnglish && parts[0].Raw == "meltia" &&
+                    !parts[1].IsEnglish && parts[1].Raw == "ga" &&
+                    parts[1].Kana == "が";
+            });
             Check("meltiawo-English-then-Japanese", () =>
             {
                 var input = new CompositionText(detector);
@@ -163,9 +225,14 @@ internal static class MeltiaPreviewSelfTest
         void Check(string name, Func<bool> assertion)
         {
             bool ok;
+            string? error = null;
             try { ok = assertion(); }
-            catch { ok = false; }
-            cases.Add(new { name, passed = ok });
+            catch (Exception ex)
+            {
+                ok = false;
+                error = ex.Message;
+            }
+            cases.Add(new { name, passed = ok, error });
         }
     }
 }

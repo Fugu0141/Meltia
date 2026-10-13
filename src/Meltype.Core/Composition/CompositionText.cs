@@ -148,7 +148,7 @@ public sealed class CompositionText
                    // 英単語の最後の l / x (hotel の l) は、次の文字と合わせて小書き文字 (lya = ゃ) にしない。
                    !(last.Raw is "l" or "x" or "L" or "X" && EndsWithEnglishWordFromUnit(_units.Count)) &&
                    // 英単語の最後の t (commit の t) も、続けて打った s と合わせて ts (つ) にしない。
-                   !(last.Raw is "t" or "T" && _pending.Length > 0 && _pending[0] is 's' or 'S' && EndsWithEnglishWordFromUnit(_units.Count)))
+                   !(last.Raw is "t" or "T" && _pending.Length > 0 && _pending[0] is 's' or 'S' or 'h' or 'H' && EndsWithEnglishWordFromUnit(_units.Count)))
             {
                 pulled.Insert(0, last.Raw);
                 _units.RemoveAt(_units.Count - 1);
@@ -167,6 +167,19 @@ public sealed class CompositionText
                 EndsWithEnglishWordFromUnit(_units.Count, _pending.ToString()))
             {
                 foreach (var letter in _pending.ToString()) _units.Add(new CompositionUnit(letter.ToString(), letter.ToString()));
+                _pending.Clear();
+            }
+            // An English word ending in "t" followed by Japanese "ha" must not
+            // become one "tha" (てゃ) romaji unit. Preserve the already
+            // recognized English word's final t as its own raw unit so the
+            // subsequent Japanese syllable can be segmented on a valid edge.
+            // This is analogous to the existing t+s boundary guard above.
+            if (_pending.Length >= 1 && _pending[^1] is 't' or 'T' &&
+                c is 'h' or 'H' && _pending.ToString().All(char.IsAsciiLetter) &&
+                EndsWithEnglishWordFromUnit(_units.Count, _pending.ToString()))
+            {
+                foreach (var letter in _pending.ToString())
+                    _units.Add(new CompositionUnit(letter.ToString(), letter.ToString()));
                 _pending.Clear();
             }
             _pending.Append(c);

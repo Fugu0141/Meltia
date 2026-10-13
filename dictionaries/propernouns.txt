@@ -73,3 +73,6 @@ America Europe Africa Australia Canada Mexico Brazil Germany France Italy Spain 
 # テスターのチャット (summary.json) で英字のまま打たれていた名前
 ReVanced Lavalink Skeb FANBOX Ryzen RTX Zenfone IntelliSense Unix
 Suica DCafe ProBot Carlbot Disboard TaCZ NSFW
+
+# 英字表記を正式名称として使うアーティスト（普通名詞との同形衝突は別途検証）
+Ado
