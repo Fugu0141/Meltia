@@ -21,8 +21,8 @@
 ## 検証結果と制約
 
 - アルゴリズムの参照実装として、変更前後の `w` 判定および正規表現相当パターン判定を、各**固定seedの100,000件のPython生成入力**で比較した。比較上の差異は0件。
-- これらは **C#コードやIMEの実行結果ではない**。この作業環境には .NET 10 SDKがなく、MeltiaのGitHub Actionsも実行枠の問題により使用できないため、C#のビルド・全回帰・実機性能は未検証。
-- 今回の変更は `commit`、`meltiawotamesu`、`japaneseno` 等の一般的な日英境界精度の解決を保証しない。特に研究版v1.0-devはまだ実IMEへ接続していない。
+- 前述のPython 100,000件比較自体は **C#コードや実IMEの実行結果ではない**。ただし後続の厳格QAは2026-10-13時点の旧HEADで[Ubuntu/Windowsとも成功](https://github.com/Fugu0141/Meltia/actions/runs/38362456570)し、[Linux IBus/Mozc E2E](https://github.com/Fugu0141/Meltia/actions/runs/38362447725)も成功した。これらは旧HEADでの結果であり、#18/#21統合後のmainとの組み合わせは別途検証する。
+- 今回の変更は `commit`、`meltiawotamesu`、`japaneseno` 等の一般的な日英境界精度の解決を保証しない。#18でWindows Preview向けの**研究用境界hook**はmainへ統合済みだが、研究版のTop1精度を本番IMEの変換精度と同一視しない。Windows実キー入力・TSFフォーカス・未確定表示・自動確定のE2Eは未検証である。
 
 ## ローカルで必要な試験 (.NET 10 SDK)
 
@@ -36,7 +36,7 @@ dotnet run --project src/Meltype.Core.Tests -- --repro japaneseno enter
 dotnet run --project src/Meltype.Core.Tests -- --repro tokyo enter
 ```
 
-上記に加えて、Windows実機でTSF中の未確定表示・変換確定・BackSpace・再変換・高速連打・p50/p95/p99を測り、旧版との比較結果を保存すること。**CI成功または同等のローカル検証結果が得られるまではPRをDraftに留め、mainへはマージしない。**
+上記に加えて、Windows実機でTSF中の未確定表示・変換確定・BackSpace・再変換・高速連打・p50/p95/p99を測り、旧版との比較結果を保存すること。**#18/#21のmainと統合した結果について通常ビルド・QA・Windows Preview publish/self-testが確認されるまではmainへはマージしない。**
 
 ## 次の設計段階
 
