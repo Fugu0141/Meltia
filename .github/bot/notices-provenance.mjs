@@ -6,6 +6,18 @@
 
 const MinimumRun = 8;
 
+/**
+ * A copyright notice must be a comment-line header, not arbitrary source code
+ * containing a string literal with the words "Copyright" and an author.
+ * Accept the comment syntaxes used by the extensions monitored by notices.mjs.
+ */
+export function copyrightOf(line) {
+  const comment = /^\s*(?:\/\/+|#+|;+|\/\*+|\*+|<#+)\s*(.+)$/.exec(line)?.[1];
+  if (!comment) return null;
+  const notice = comment.replace(/\s*(?:\*\/|#>)\s*$/, '').trim();
+  return /^copyright\s*(?:\(c\)|©)?\s*\d{4}\b/i.test(notice) ? notice : null;
+}
+
 /** Ignore file envelopes and comments, not executable code or preprocessor directives. */
 export function implementationLines(text) {
   const lines = Array.isArray(text) ? text : text.split(/\r?\n/);
@@ -59,11 +71,11 @@ export function sourcePathsFor(target, files, newLines) {
     const origin = file.status === 'renamed' ? file.previous_filename : file.filename;
     if (!origin || /\.[^.\/]+$/.exec(origin)?.[0]?.toLowerCase() !== extension) return false;
     if (origin.split('/').some(part => !part || part === '.' || part === '..')) return false;
-    if (!['modified', 'removed'].includes(file.status)) return false;
+    if (!['modified', 'removed', 'renamed'].includes(file.status)) return false;
     // This merely selects candidates. The base revision must independently
     // prove that *every* implementation line in the target was inherited.
     return hasSharedRun(implementationLines(removedLines(file.patch)), moved);
-  }).map(file => file.filename);
+  }).map(file => file.status === 'renamed' ? file.previous_filename : file.filename);
   if (renamedOrigin && !renamedOrigin.split('/').some(part => !part || part === '.' || part === '..')) {
     candidates.push(renamedOrigin);
   }
@@ -77,9 +89,7 @@ export function movedCopyrightIsProven(target, files, baseContents, newLines, co
   for (const path of sourcePathsFor(target, files, newLines)) {
     const originalText = baseContents.get(path);
     if (typeof originalText !== 'string') continue;
-    const copyrightHeaders = originalText.split(/\r?\n/).slice(0, 8).map(line =>
-      /copyright\s*(\(c\)|©)?\s*\d{4}/i.test(line)
-        ? line.replace(/^[\s#/;*!<>-]*(rem\s+)?/i, '').trim() : null);
+    const copyrightHeaders = originalText.split(/\r?\n/).slice(0, 8).map(copyrightOf);
     if (!copyrightHeaders.includes(copyright)) continue;
     if (coveredBy(implementationLines(originalText), moved)) return true;
   }
