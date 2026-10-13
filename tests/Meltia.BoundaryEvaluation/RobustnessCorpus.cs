@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 // 530 synthetic out-of-template robustness probes. Not independent natural data.
 // OOV source: IncrementalBoundaryLab/research/oov_character_model_experiment.py
 // SNAPSHOT_OOV and SNAPSHOT_PHON (2026-10-10); these words were used in H1-H9.
