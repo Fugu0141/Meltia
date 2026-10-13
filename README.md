@@ -42,6 +42,7 @@
 - [2026-10-13 Windows実機入力フィードバック・改修の検証計画](docs/MELTIA_WINDOWS_FIELD_TEST_20261013.md)
 - [2026-10-13 Issue / ブランチ整理（完了Issue・削除候補・安全な削除手順）](docs/MELTIA_ISSUE_BRANCH_CLEANUP_20261013.md)
 - [貢献方法](CONTRIBUTING.md)
+- [移動した原著コードの著作権を検証する notices bot の方針（Issue #22）](docs/MELTIA_ISSUE_22_NOTICES_PROVENANCE_20261014.md)
 - [セキュリティ報告](SECURITY.md)
 - [サードパーティー通知](THIRD-PARTY-NOTICES.md)
 - [開発・ビルド手順（本家から継承、Meltia 用に未更新）](docs/DEVELOPMENT.md)
