@@ -11,11 +11,20 @@ const MinimumRun = 8;
  * containing a string literal with the words "Copyright" and an author.
  * Accept the comment syntaxes used by the extensions monitored by notices.mjs.
  */
-export function copyrightOf(line) {
+function commentText(line) {
   const comment = /^\s*(?:\/\/+|#+|;+|\/\*+|\*+|<#+)\s*(.+)$/.exec(line)?.[1];
-  if (!comment) return null;
-  const notice = comment.replace(/\s*(?:\*\/|#>)\s*$/, '').trim();
-  return /^copyright\s*(?:\(c\)|©)?\s*\d{4}\b/i.test(notice) ? notice : null;
+  return comment ? comment.replace(/\s*(?:\*\/|#>)\s*$/, '').trim() : null;
+}
+
+export function copyrightOf(line) {
+  const notice = commentText(line);
+  return notice && /^copyright\s*(?:\(c\)|©)?\s*\d{4}\b/i.test(notice) ? notice : null;
+}
+
+/** Only actual header comments count as SPDX declarations. */
+export function spdxOf(line) {
+  const notice = commentText(line);
+  return notice && /^SPDX-License-Identifier:\s*\S+/i.test(notice) ? notice : null;
 }
 
 /** Ignore file envelopes and comments, not executable code or preprocessor directives. */
