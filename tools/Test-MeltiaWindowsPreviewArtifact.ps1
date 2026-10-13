@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Fugu0141
 # Run the same redistribution and self-test checks in PR CI and manual release.
 [CmdletBinding()]
 param(
