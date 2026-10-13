@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Synthetic boundary + composition matrix. Never installs, hooks, or commits text.
+name: Meltia input matrix quality
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main, 'release/v1.0.0-beta.1-preview']
+    paths:
+      - 'tests/Meltia.InputMatrix/**'
+      - 'src/Meltia.Core/**'
+      - 'src/Meltia.CompositionBridge/**'
+      - 'src/Meltype.Core/**'
+      - 'dictionaries/**'
+      - '.github/workflows/meltia-input-matrix.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/Meltia.InputMatrix/**'
+      - 'src/Meltia.Core/**'
+      - 'src/Meltia.CompositionBridge/**'
+      - 'src/Meltype.Core/**'
+      - 'dictionaries/**'
+      - '.github/workflows/meltia-input-matrix.yml'
+  schedule:
+    # Weekly on the default branch; the full suite has 10,000 mixed cases.
+    - cron: '35 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: 'smoke=800; full=10,000; stress=100,000 (10,000 per category)'
+        type: choice
+        required: true
+        default: full
+        options: [smoke, full, stress]
+      seed:
+        description: 'Reproducible integer seed (keep fixed for comparison)'
+        type: string
+        required: true
+        default: '20261013'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: input-matrix-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  matrix:
+    name: Synthetic matrix + composition replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Check synthetic matrix invariants, classification and raw-key replay
+        shell: bash
+        env:
+          MATRIX_TIER: ${{ github.event_name == 'workflow_dispatch' && inputs.tier || (github.event_name == 'schedule' && 'full' || 'smoke') }}
+          MATRIX_SEED: ${{ github.event_name == 'workflow_dispatch' && inputs.seed || '20261013' }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/meltia-input-matrix
+          dotnet run --project tests/Meltia.InputMatrix/Meltia.InputMatrix.csproj -c Release \
+            -- --tier "$MATRIX_TIER" --seed "$MATRIX_SEED" \
+            --output artifacts/meltia-input-matrix/report.json \
+            2>&1 | tee artifacts/meltia-input-matrix/run.log
+      - name: Upload category metrics and failure examples (even on failure)
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: meltia-input-matrix-${{ github.run_id }}
+          path: artifacts/meltia-input-matrix/
+          if-no-files-found: warn
+          retention-days: 14
