@@ -33,6 +33,7 @@ public sealed class MeltiaSession
     public void Insert(string value)
     {
         ArgumentNullException.ThrowIfNull(value);
+        if (value.Length == 0) return; // No edit: retain existing explicit language locks.
         if (Raw.Length + value.Length > MeltiaBoundaryEngine.MaxInputLength)
             throw new ArgumentException("Input exceeds boundary engine limit");
         Raw = Raw.Insert(CaretUtf16, value);
