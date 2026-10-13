@@ -8,6 +8,7 @@
 // 見つけたら Pull Request にコメントする (直ったらコメントを「直りました」に書き換える)。
 // Pull Request のコードは動かさない。GitHub の API で、変更 (patch) の足された行を文字列として読むだけ。
 import fs from 'node:fs';
+import { movedCopyrightIsProven, sourcePathsFor } from './notices-provenance.mjs';
 
 const api = process.env.GITHUB_API_URL ?? 'https://api.github.com';
 const repo = process.env.GITHUB_REPOSITORY;
@@ -50,7 +51,7 @@ const addedLines = patch => (patch ?? '').split('\n').filter(l => l.startsWith('
 
 const copyrightOf = line => /copyright\s*(\(c\)|©)?\s*\d{4}/i.test(line) ? line.replace(/^[\s#/;*!<>-]*(rem\s+)?/i, '').trim() : null;
 
-function check(files, author) {
+function check(files, author, baseFiles = new Map()) {
   const findings = [];
   const isOwner = Owners.some(o => o.toLowerCase() === author.toLowerCase());
   for (const file of files) {
@@ -62,15 +63,19 @@ function check(files, author) {
       const head = added.slice(0, HeaderLines);
       const problems = [];
       if (!head.some(l => l.includes('SPDX-License-Identifier'))) problems.push('`SPDX-License-Identifier: GPL-3.0-or-later` がありません');
-      const copyright = head.map(copyrightOf).find(c => c);
-      if (!copyright) problems.push('`Copyright (C) <年> <あなたの名前>` がありません');
-      else if (!isOwner && OwnerName.test(copyright)) problems.push(`著作権の行が作者の名義になっています (\`${copyright}\`)。あなたの名前にしてください`);
+      const copyrights = head.map(copyrightOf).filter(Boolean);
+      if (!copyrights.length) problems.push('`Copyright (C) <年> <あなたの名前>` がありません');
+      if (!isOwner) for (const copyright of copyrights.filter(c => OwnerName.test(c))) {
+        if (!movedCopyrightIsProven(file, files, baseFiles, added, copyright)) {
+          problems.push(`原著作者名義の著作権表示 (\`${copyright}\`) について、base 上の既存コードからの移動を確認できませんでした。原著コードの表示は消さず、新規実装には自身の著作権表示を付けてください`);
+        }
+      }
       if (problems.length) findings.push({ file: file.filename, problems });
     }
     else if (!isOwner) {
       // 既存のファイルに、作者の名義の著作権の行を足していないか
       const copyright = added.map(copyrightOf).find(c => c && OwnerName.test(c));
-      if (copyright) findings.push({ file: file.filename, problems: [`作者の名義の著作権の行を足しています (\`${copyright}\`)。あなたが書いた部分なら、あなたの名前の行を足してください`] });
+      if (copyright && !movedCopyrightIsProven(file, files, baseFiles, added, copyright)) findings.push({ file: file.filename, problems: [`作者名義の著作権の行 (\`${copyright}\`) を追加しています。既存コードの移動を確認できない場合、新規実装にはあなたの名前を付けてください`] });
     }
   }
   return findings;
@@ -107,11 +112,44 @@ async function upsert(number, body) {
   else await gh('POST', `/issues/${number}/comments`, { body: `${Marker}\n${body}` });
 }
 
+/**
+ * Provenance is read from the immutable PR base SHA, never from the PR head.
+ * Limit API lookups; missing/oversized patches or sources cannot grant an exemption.
+ */
+async function loadBaseSources(files, author, baseSha) {
+  const sources = new Map();
+  if (Owners.some(o => o.toLowerCase() === author.toLowerCase())) return sources;
+  if (!/^[a-f0-9]{40}$/i.test(baseSha ?? '')) return sources;
+  const paths = new Set();
+  for (const file of files) {
+    if (!SourceFile.test(file.filename) || !file.patch) continue;
+    const added = addedLines(file.patch);
+    const copyrightLines = (file.status === 'added' ? added.slice(0, HeaderLines) : added)
+      .map(copyrightOf).filter(c => c && OwnerName.test(c));
+    if (!copyrightLines.length) continue;
+    for (const path of sourcePathsFor(file, files, added)) {
+      if (paths.size >= 24) break;
+      paths.add(path);
+    }
+  }
+  for (const path of paths) {
+    const encoded = path.split('/').map(encodeURIComponent).join('/');
+    const file = await gh('GET', `/contents/${encoded}?ref=${baseSha}`);
+    if (file?.type !== 'file' || file.encoding !== 'base64' ||
+        !Number.isInteger(file.size) || file.size > 1_000_000 ||
+        typeof file.content !== 'string') continue;
+    sources.set(path, Buffer.from(file.content, 'base64').toString('utf8'));
+  }
+  return sources;
+}
+
 async function main() {
   const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
   const pr = event.pull_request;
   const author = pr.user.login;
-  const findings = check(await changedFiles(pr.number), author);
+  const files = await changedFiles(pr.number);
+  const baseSources = await loadBaseSources(files, author, pr.base?.sha);
+  const findings = check(files, author, baseSources);
   for (const f of findings) console.log(`${f.file}: ${f.problems.join(' / ')}`);
   await upsert(pr.number, findings.length ? message(findings, author) : null);
 }
@@ -128,10 +166,33 @@ function selfTest() {
     ['ソースでないファイル', [file('docs/a.md', 'added', ['# title'])], 'someone', 0],
     ['既存のファイルに Yukishiro 名義を足した', [file('c.ps1', 'modified', ['# Copyright (C) 2026 Yukishiro'])], 'someone', 1],
     ['雪代 の名義', [file('d.swift', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026 雪代'])], 'someone', 1],
+    ['SPDX のみ不足', [file('e.cs', 'added', ['// Copyright (C) 2026 someone', 'class X {}'])], 'someone', 1],
+    ['Copyright のみ不足', [file('e.cs', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', 'class X {}'])], 'someone', 1],
+    ['SPDX と Copyright が両方不足', [file('e.cs', 'added', ['class X {}'])], 'someone', 1],
+    ['自己名義と原著名義の混在', [file('e.cs', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026 someone', '// Copyright (C) 2026 Yukishiro','class X {}'])], 'someone', 1],
+  ];
+  // Reproduction: a partial split moves exact method bodies out of the base file.
+  const original = Array.from({ length: 20 }, (_, i) => `    var v${i} = Convert(${i});`);
+  const source = '// SPDX-License-Identifier: GPL-3.0-or-later\\n// Copyright (C) 2026 Yukishiro\\n' + original.join('\\n');
+  const moved = ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026 Yukishiro', 'public sealed partial class Split', '{', ...original, '}'];
+  const fresh = file('Split.cs', 'added', moved);
+  const deleted = { filename: 'Original.cs', status: 'modified', patch: original.map(l => '-'+l).join('\\n') };
+  const inherited = new Map([['Original.cs', source]]);
+  const provenanceCases = [
+    ['移動元が一致する partial 分割', [fresh, deleted], inherited, 0],
+    ['移動元を確認できない', [fresh, deleted], new Map(), 1],
+    ['新規実装と原著コードの混在', [file('Split.cs', 'added', [...moved.slice(0,-1), 'NewMethod();', '}']), deleted], inherited, 1],
+    ['移動元のコードが異なる', [fresh, deleted], new Map([['Original.cs', source.replace('Convert(7)', 'Other(7)')]]), 1],
   ];
   let failed = 0;
   for (const [name, files, author, expected] of cases) {
     const actual = check(files, author).length;
+    const ok = actual === expected;
+    if (!ok) failed++;
+    console.log(`${ok ? 'PASS' : 'FAIL'}  ${name} (指摘 ${actual} 件、期待 ${expected} 件)`);
+  }
+  for (const [name, files, sources, expected] of provenanceCases) {
+    const actual = check(files, 'someone', sources).length;
     const ok = actual === expected;
     if (!ok) failed++;
     console.log(`${ok ? 'PASS' : 'FAIL'}  ${name} (指摘 ${actual} 件、期待 ${expected} 件)`);
