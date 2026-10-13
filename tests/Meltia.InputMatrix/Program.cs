@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Meltype.Composition;
 using Meltia.Core.Boundary;
+using static Vocabulary;
 
 if (args.Length != 6 || args[0] != "--tier" ||
     args[1] is not ("smoke" or "full" or "stress") ||
@@ -336,4 +337,3 @@ internal static class Vocabulary
         "dev", "support", "test", "fugu", "meltia", "feedback"
     ];
 }
-using static Vocabulary;
