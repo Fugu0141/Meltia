@@ -18,10 +18,18 @@ internal static class MeltiaContextualIslandScoring
     // and cannot make a purely Japanese input suddenly English if it has
     // no qualifying English candidate islands.
     private const double SeparationEvidenceBonus = 3.0;
+    // Short speculative fragments commonly arise by splitting a *single*
+    // Latin word on an internal Japanese-looking pair (e.g. photo-ni-cswom
+    // inside "photonicswomiru", or ocryp-to-graphy in "cryptography").
+    // Two independently long Latin islands are stronger corroborating
+    // evidence; rejecting short pairs avoids rewarding these false seams.
+    // This is a conservative research-mode guard, not a lexical decision.
+    private const int MinCorroboratedIslandLength = 7;
 
     public static double Between(string raw, Utf16Span left, Utf16Span right)
     {
-        if (left.Length < 5 || right.Length < 5 ||
+        if (left.Length < MinCorroboratedIslandLength ||
+            right.Length < MinCorroboratedIslandLength ||
             right.Start <= left.End || right.Start - left.End != 2 ||
             right.End > raw.Length || left.Start < 0)
             return 0;
