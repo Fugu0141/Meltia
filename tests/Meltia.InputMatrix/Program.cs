@@ -27,6 +27,10 @@ var options = new MeltiaBoundaryOptions(
     ExperimentalJapaneseFlankScoring: true);
 var engine = new MeltiaBoundaryEngine(options);
 var detector = CompositionDetector.CreateDefault();
+// Identical fixed vocabulary for EVERY case, not generated from its gold label.
+// This is a known-lexicon experiment, not an unseen-word or blind accuracy test.
+var sharedWords = English.Concat(ShortEnglish).ToArray();
+var sharedEvidence = new BoundaryEvidence(EnglishWords: sharedWords);
 var categories = new[] {
     "japanese-only", "english-only", "japanese-english-japanese",
     "english-japanese-english", "three-english-islands", "romaji-variants",
@@ -37,7 +41,7 @@ var failures = new List<object>();
 var mismatches = new List<object>();
 var rows = new List<object>();
 int total = 0, goldTop1 = 0, goldTopK = 0, truncated = 0, keystrokeChecks = 0;
-int hostObservedTop1 = 0;
+int lexiconTop1 = 0, lexiconTopK = 0, hostObservedTop1 = 0;
 var clock = Stopwatch.StartNew();
 
 for (int family = 0; family < categories.Length; family++)
@@ -46,7 +50,7 @@ for (int family = 0; family < categories.Length; family++)
     var rng = new Random(unchecked(seed + family * 104729));
     var seen = new HashSet<string>(StringComparer.Ordinal);
     int familyTop1 = 0, familyTopK = 0, familyTruncated = 0, familyKeystrokes = 0;
-    int familyHostTop1 = 0;
+    int familyLexiconTop1 = 0, familyLexiconTopK = 0, familyHostTop1 = 0;
     int familyFailures = 0;
     string? previousAmbiguous = null;
     for (int i = 0; i < perFamily; i++)
@@ -94,6 +98,26 @@ for (int family = 0; family < categories.Length; family++)
                 goldTopK++;
             }
             if (observed.Truncated) { familyTruncated++; truncated++; }
+
+            // Japanese-only negatives and URL/email protection are safe,
+            // non-ambiguous controls that MUST pass even with zero evidence.
+            if ((family == 0 || family == 7) && !isTop1)
+                throw new InvalidOperationException("Unassisted negative/protected control regressed");
+
+            // Fixed vocabulary is supplied to every input uniformly.
+            // This does not smuggle case-specific gold labels into the model.
+            var withLexicon = engine.Analyze(item.Raw, sharedEvidence);
+            ValidateRoutes(item.Raw, withLexicon);
+            if (withLexicon.Routes[0].EnglishSpans.SequenceEqual(expectedEnglish))
+            {
+                familyLexiconTop1++;
+                lexiconTop1++;
+            }
+            if (withLexicon.Routes.Any(r => r.EnglishSpans.SequenceEqual(expectedEnglish)))
+            {
+                familyLexiconTopK++;
+                lexiconTopK++;
+            }
 
             // Strict test: explicit user language decisions and protected
             // regions must NOT be discarded, overlapped or auto-committed.
@@ -182,12 +206,14 @@ for (int family = 0; family < categories.Length; family++)
     rows.Add(new {
         Category = name, Cases = perFamily, UniqueRaw = seen.Count,
         ObservedTop1 = familyTop1, ObservedTopK = familyTopK,
+        FixedLexiconTop1 = familyLexiconTop1, FixedLexiconTopK = familyLexiconTopK,
         InheritedMeltypeTop1OnReplay = familyHostTop1,
         Truncated = familyTruncated, KeystrokeReplays = familyKeystrokes,
         InvariantFailures = familyFailures
     });
     Console.WriteLine($"{name}: {perFamily} examples, distinct={seen.Count}, " +
-        $"observed Top1={familyTop1}, TopK={familyTopK}, host={familyHostTop1}/{familyKeystrokes}, " +
+        $"observed Top1={familyTop1}, TopK={familyTopK}, " +
+        $"lexicon={familyLexiconTop1}/{familyLexiconTopK}, host={familyHostTop1}/{familyKeystrokes}, " +
         $"invariant-failures={familyFailures}");
 }
 clock.Stop();
@@ -202,6 +228,7 @@ File.WriteAllText(output, JsonSerializer.Serialize(new {
     Tier = args[1], Seed = seed, Families = categories.Length,
     CasesPerFamily = perFamily, TotalCases = total,
     ObservedTop1 = goldTop1, ObservedTopK = goldTopK,
+    FixedLexiconTop1 = lexiconTop1, FixedLexiconTopK = lexiconTopK,
     InheritedMeltypeTop1OnReplays = hostObservedTop1,
     TruncatedCases = truncated, KeystrokeReplays = keystrokeChecks,
     DurationSeconds = Math.Round(clock.Elapsed.TotalSeconds, 3),
@@ -209,6 +236,7 @@ File.WriteAllText(output, JsonSerializer.Serialize(new {
     Caveats = new[] {
         "Top1/TopK are observations against synthetic intended labels, NOT CI success thresholds.",
         "Unassisted Japanese/English intent cannot always be determined from raw bytes.",
+        "Fixed-lexicon condition knows the synthetic vocabulary in advance (not an independent holdout).",
         "Explicit-language protection, round-trip, boundedness and determinism ARE strict assertions.",
         "CompositionText exercises OS-neutral key sequences, not Windows hook/focus/TSF E2E."
     }
