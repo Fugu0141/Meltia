@@ -1,0 +1,123 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Always validate the actual Meltia.exe, even when only src/Meltia.Windows changes.
+# PR/push CI must NEVER create/overwrite a public release.
+name: Meltia Windows Preview CI
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'src/Meltia.Windows/**'
+      - 'src/Meltia.Core/**'
+      - 'src/Meltia.CompositionBridge/**'
+      - 'src/Meltype.Core/**'
+      - 'src/Meltype.Core.Tests/**'
+      - 'src/Meltype/**'
+      - 'tests/Meltia.Core.Tests/**'
+      - 'tests/Meltia.CompositionBridge.Tests/**'
+      - 'tests/Meltia.BoundaryEvaluation/**'
+      - 'tools/Meltia.BoundaryBenchmark/**'
+      - 'dictionaries/**'
+      - 'tools/run-meltia-quality.py'
+      - 'tools/build-meltia-windows-preview.ps1'
+      - 'tools/Test-MeltiaWindowsPreviewArtifact.ps1'
+      - 'tools/meltia-publish.nuget.config'
+      - 'docs/MELTIA_WINDOWS_PREVIEW.md'
+      - 'docs/MELTIA_PREVIEW_RELEASE_NOTES_v1.0.0-beta.1.md'
+      - 'docs/MELTIA_LICENSE_POLICY.md'
+      - 'LICENSE'
+      - 'THIRD-PARTY-NOTICES.md'
+      - '.github/workflows/meltia-windows-preview-ci.yml'
+      - '.github/workflows/meltia-preview-beta1-release.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/Meltia.Windows/**'
+      - 'src/Meltia.Core/**'
+      - 'src/Meltia.CompositionBridge/**'
+      - 'src/Meltype.Core/**'
+      - 'src/Meltype.Core.Tests/**'
+      - 'src/Meltype/**'
+      - 'tests/Meltia.Core.Tests/**'
+      - 'tests/Meltia.CompositionBridge.Tests/**'
+      - 'tests/Meltia.BoundaryEvaluation/**'
+      - 'tools/Meltia.BoundaryBenchmark/**'
+      - 'dictionaries/**'
+      - 'tools/run-meltia-quality.py'
+      - 'tools/build-meltia-windows-preview.ps1'
+      - 'tools/Test-MeltiaWindowsPreviewArtifact.ps1'
+      - 'tools/meltia-publish.nuget.config'
+      - 'docs/MELTIA_WINDOWS_PREVIEW.md'
+      - 'docs/MELTIA_PREVIEW_RELEASE_NOTES_v1.0.0-beta.1.md'
+      - 'docs/MELTIA_LICENSE_POLICY.md'
+      - 'LICENSE'
+      - 'THIRD-PARTY-NOTICES.md'
+      - '.github/workflows/meltia-windows-preview-ci.yml'
+      - '.github/workflows/meltia-preview-beta1-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meltia-preview-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-preview:
+    # Run even on Draft PRs: review must see the actual Preview EXE validation.
+    name: Windows Meltia.exe publish, smoke and audit
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Inherited Meltype Core regression tests
+        shell: pwsh
+        run: |
+          dotnet run --project src/Meltype.Core.Tests/Meltype.Core.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Meltype Core regressions failed.' }
+      - name: Publish actual Windows Preview and launch hook-free self-test
+        shell: pwsh
+        run: |
+          ./tools/build-meltia-windows-preview.ps1 -FrameworkDependent
+      - name: Audit executable, ZIP, licenses and self-test report
+        shell: pwsh
+        run: |
+          ./tools/Test-MeltiaWindowsPreviewArtifact.ps1
+      - name: Upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: meltia-preview-ci-windows
+          path: |
+            artifacts/meltia-windows-preview-win-x64-framework-dependent.zip
+            artifacts/meltia-windows-preview-win-x64-framework-dependent/meltia-preview-selftest.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  research-quality-full:
+    name: Core and Bridge full research quality (1,067 + benchmark)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Run all 1,067 synthetic boundary examples, bridge contracts and offline benchmark
+        run: python3 tools/run-meltia-quality.py --tier full --output-dir artifacts/meltia-quality
+      - name: Upload JSON reports and benchmark evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: meltia-preview-ci-full-quality
+          path: artifacts/meltia-quality/
+          if-no-files-found: warn
+          retention-days: 14

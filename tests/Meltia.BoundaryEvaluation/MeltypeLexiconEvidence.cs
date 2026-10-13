@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 // Offline evaluation adapter only: always use the dictionaries from the same
 // Meltype.Core assembly used by CompositionDetector. Never inject gold words.
 using Meltype.Detection;

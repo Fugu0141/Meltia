@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 // Synthetic intent-labeled test suite v1.1: examples are NOT human-validated natural typing.
 // H9/H8 study cases are cited in docs/MELTIA_BOUNDARY_EVALUATION.md.
 using Meltia.Core.Boundary;

@@ -1,8 +1,8 @@
 # Meltia Windows Keyboard Preview — 最初の実行可能アプリ構成
 
-> 状態：**Windows向け試験版のソースを実装済み、ビルド・実機動作は未検証**。
+> 状態：**Windows向け試験版ソースを実装し、GitHub ActionsのWindowsランナーでビルド・無フックのセルフテスト・ZIP監査に成功**。ただし実キー入力・編集・確定のWindows E2Eは未検証。
 > 正式なWindows TSF IME、独立インストーラー、署名済みリリースではない。
-> バージョン `1.0.0-dev`、これまでの境界判定研究からアプリ統合への転換点。
+> ソース版 `1.0.0-beta.1`（Windows Keyboard Preview）。公開済みbeta.1アセットは当時の候補コミットからビルドされており、その後の修正を自動で含まない。
 
 ## 何を再利用したか
 
@@ -72,7 +72,7 @@ Meltype本家の既存Windows C#ソースを新しい
 GitHub Actionsの利用枠は必要ない。
 
 ```powershell
-git switch feat/meltia-windows-preview-integration-20261012
+git switch release/v1.0.0-beta.1-preview
 
 # 自分のPCでリリース構成の実行ファイルをビルドし、
 # フック未起動の統合スモークテストを実行してからZIPを作る
@@ -106,19 +106,19 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-meltia-windows-preview.ps
 通信エラーや他の依存関係の問題を必ず解決できるとは限らない。
 
 **以前の12件のNU1101はNuGet復元フェーズの失敗であり、C#コードのコンパイル結果ではない。**
-新しいビルドスクリプトによるWindows実機の成功結果は未取得。
+GitHub Actions Windowsランナーで、フレームワーク依存のビルド・無フックセルフテスト・配布ZIP監査に成功した。開発者PCでの手動入力・フック動作の全項目は引き続き未検証。
 
-作成される予定のファイル：
+フレームワーク依存構成（公開プレビューの対象）で生成・監査したファイル：
 
-- `artifacts/meltia-windows-preview-win-x64/Meltia.exe`
-- `artifacts/meltia-windows-preview-win-x64/meltia-preview-selftest.json`
-- `artifacts/meltia-windows-preview-win-x64.zip`
+- `artifacts/meltia-windows-preview-win-x64-framework-dependent/Meltia.exe`
+- `artifacts/meltia-windows-preview-win-x64-framework-dependent/meltia-preview-selftest.json`
+- `artifacts/meltia-windows-preview-win-x64-framework-dependent.zip`
 
 このスクリプトはビルドかテストに失敗した場合は
 **ZIPを作成しない**。手動でスモークテストだけ行う場合：
 
 ```powershell
-.\artifacts\meltia-windows-preview-win-x64\Meltia.exe --meltia-selftest .\artifacts\meltia-smoke.json
+.\artifacts\meltia-windows-preview-win-x64-framework-dependent\Meltia.exe --meltia-selftest .\artifacts\meltia-smoke.json
 ```
 
 正常に生成された実行ファイルを起動するとWindowsトレイで動作する。
@@ -137,9 +137,9 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-meltia-windows-preview.ps
 - [x] Meltia Coreの任意有効の区間結果を実際の表示へ橋渡し
 - [x] 設定・終了制御・起動時登録・更新・TSFへの衝突を抑制
 - [x] セルフホストビルド/試験付きZIP作成スクリプトを用意
-- [ ] **Windows SDK 10でのビルド成功・無フックのスモーク結果**
+- [x] **GitHub Actions Windowsランナーでの.NET SDK 10ビルド成功・無フックのスモーク結果**
 - [ ] **Windows実入力・確定・変換・Backspace・操作停止のE2E試験**
-- [ ] 研究Coreと既存Meltypeの全評価を実施し、悪化したケースを改善
+- [x] 研究Coreの既存1,067合成ケース・ベンチマークとMeltype Core回帰をCIで検証（自然文holdoutとE2Eは別途必要）
 - [ ] Windows TSFネイティブ側の独立GUID、パイプ名、レジストリ、
       インストーラーおよび確実なアンインストール
 - [ ] 設定画面・ヘルプ・通知の本格的なMeltia表記への統一、
@@ -149,7 +149,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-meltia-windows-preview.ps
 - [ ] 独立したユーザーの実入力を使った品質試験、正式リリース判定
 
 **この段階は「実行可能なアプリ構成への移行」であり、製品完成の宣言ではない。**
-研究用バージョン `1.0.0-dev` のままGitHubのDraft PRで管理する。
+Windows Keyboard Preview `1.0.0-beta.1` の研究開発段階。mainへのソース統合は製品版完成・Windows実機E2E合格・既存公開beta.1アセットの更新を意味しない。
 
 ## 実機入力で発見した英語の読み込み問題（2026-10-12）
 
@@ -186,6 +186,6 @@ Windows Previewの初回起動に成功した後、ユーザーから次の入�
 日本語`nihongowotamesu`、曖昧語の不変更をチェックする。
 
 **状態：修正ソースと自動回帰テストは実装済み。**
-実機でのビルド成功・スモークテスト結果・手入力結果は未取得。
+GitHub Actions上のビルド・無フックセルフテストは成功済み。報告された誤変換に対する修正後のWindows実キー入力・確定の再評価は未完了。
 次のローカルビルドが失敗した場合は作成中の
 `meltia-preview-selftest.json`やコンソールのエラーを確認する。

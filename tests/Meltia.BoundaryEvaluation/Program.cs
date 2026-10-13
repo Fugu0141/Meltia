@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 using System.Text.Json;
 using Meltype.Composition;
 using Meltia.CompositionBridge;
@@ -618,6 +619,37 @@ foreach (var condition in new[] { "independent", "lexicon", "shadow", "shadow-le
             suite + " " + condition +
             " Top1=" + newer.ExactCases + "/" + older.ExactCases +
             " TopK=" + newer.TopKExactCases + "/" + older.TopKExactCases);
+        // Show actionable per-case losses without weakening the quality gate.
+        // Aggregate counts alone hide which ambiguous inputs actually regressed.
+        foreach (var row in records)
+        {
+            var before = row.Predictions.Single(x => x.Model == "Meltia-v0.8-" + condition);
+            var after = row.Predictions.Single(x => x.Model == "Meltia-v0.9-" + condition);
+            var lostTop1 = before.Error is null &&
+                before.English.SequenceEqual(row.GoldEnglish) &&
+                !after.English.SequenceEqual(row.GoldEnglish);
+            var lostTopK = before.Error is null &&
+                before.Routes.Any(route => route.SequenceEqual(row.GoldEnglish)) &&
+                !after.Routes.Any(route => route.SequenceEqual(row.GoldEnglish));
+            if (lostTop1 || lostTopK)
+            {
+                Console.Error.WriteLine("  REGRESSED case=" + row.Id +
+                    " category=" + row.Category +
+                    " lostTop1=" + lostTop1 + " lostTopK=" + lostTopK +
+                    " raw=" + row.Raw[..Math.Min(row.Raw.Length, 110)]);
+                static string Spans(IEnumerable<Utf16Span> spans) =>
+                    string.Join(",", spans.Select(s => s.Start + "-" + s.End));
+                Console.Error.WriteLine("    gold=" + Spans(row.GoldEnglish));
+                Console.Error.WriteLine("    beforeTop1=" + Spans(before.English) +
+                    " afterTop1=" + Spans(after.English));
+                for (int route = 0; route < Math.Max(before.Routes.Count, after.Routes.Count); route++)
+                {
+                    Console.Error.WriteLine("    rank=" + route +
+                        " v0.8=" + (route < before.Routes.Count ? Spans(before.Routes[route]) : "(none)") +
+                        " v0.9=" + (route < after.Routes.Count ? Spans(after.Routes[route]) : "(none)"));
+                }
+            }
+        }
         return 7;
     }
 }

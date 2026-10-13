@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 namespace Meltia.Core.Boundary;
 
 /// <summary>
@@ -18,10 +19,19 @@ internal static class MeltiaContextualIslandScoring
     // and cannot make a purely Japanese input suddenly English if it has
     // no qualifying English candidate islands.
     private const double SeparationEvidenceBonus = 3.0;
+    // Short speculative fragments commonly arise by splitting a *single*
+    // Latin word on an internal Japanese-looking pair (e.g. photo-ni-cswom
+    // inside "photonicswomiru", or ocryp-to-graphy in "cryptography").
+    // Two independently long Latin islands are stronger corroborating
+    // evidence; rejecting short pairs avoids rewarding these false seams.
+    // This is a conservative research-mode guard, not a lexical decision.
+    private const int MinCorroboratedIslandLength = 7;
 
-    public static double Between(string raw, Utf16Span left, Utf16Span right)
+    public static double Between(string raw, Utf16Span left, Utf16Span right,
+        IReadOnlyList<BoundaryCandidate> candidates)
     {
-        if (left.Length < 5 || right.Length < 5 ||
+        if (left.Length < MinCorroboratedIslandLength ||
+            right.Length < MinCorroboratedIslandLength ||
             right.Start <= left.End || right.Start - left.End != 2 ||
             right.End > raw.Length || left.Start < 0)
             return 0;
@@ -36,6 +46,25 @@ internal static class MeltiaContextualIslandScoring
         if (!a.All(char.IsAsciiLetter) || !b.All(char.IsAsciiLetter) ||
             MeltiaRomaji.CanRead(a) || MeltiaRomaji.CanRead(b))
             return 0;
+
+        // An apparent Latin island can swallow the following Japanese
+        // particle: SPYAIRde is NOT stronger evidence than the standalone
+        // candidate SPYAIR plus the trailing "de". Do not reward the
+        // extended edge if the lattice independently exposes that shorter
+        // non-phonetic English candidate. This uses only competing spans,
+        // not reference words, gold labels, or a dictionary lookup.
+        foreach (var particle in JapaneseConnectors)
+        {
+            if (!b.EndsWith(particle, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var properEnd = right.End - particle.Length;
+            if (properEnd - right.Start >= 5 &&
+                candidates.Any(x => x.Span.Start == right.Start &&
+                    x.Span.End == properEnd &&
+                    !MeltiaRomaji.CanRead(
+                        raw.Substring(x.Span.Start, x.Span.Length))))
+                return 0;
+        }
 
         // v0.7 emits many plausible substrings. A proposal that begins
         // with a long phonetic Japanese prefix (e.g. arigatou + part of
