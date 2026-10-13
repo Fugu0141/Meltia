@@ -29,7 +29,7 @@ FORBIDDEN = (
     re.compile(r"^\s*contents:\s*write\b", re.MULTILINE),
     re.compile(r"softprops/action-gh-release"),
     re.compile(r"\bgh\s+release\s+(?:create|upload|edit)\b"),
-    re.compile(r"\b(?:curl|wget)\b[^\n]*/releases(?:/|\b)"),
+    re.compile(r"\b(?:curl|wget)\b[^\n]*(?:api|uploads)\.github\.com/repos/[^\s]+/releases\b"),
     re.compile(r"^\s*tags:\s*\[", re.MULTILINE),
 )
 
@@ -113,6 +113,8 @@ class LegacyLinuxGuardTests(unittest.TestCase):
         self.assertTrue(hazards("permissions:\n  contents: write\n"))
         self.assertTrue(hazards("uses: softprops/action-gh-release@deadbeef"))
         self.assertTrue(hazards("run: gh release upload v1 file.zip"))
+        self.assertTrue(hazards("run: curl -X POST https://uploads.github.com/repos/a/b/releases/1/assets"))
+        self.assertFalse(hazards("curl -fsSL https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64"))
         self.assertTrue(hazards("push:\n  tags: ['v*']"))
         self.assertFalse(hazards("permissions:\n  contents: read\n"
                                  "uses: actions/upload-artifact@sha"))
