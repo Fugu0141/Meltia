@@ -82,6 +82,10 @@ public sealed class H10BoundaryPrototype
 
         for (int i = 0; i < raw.Length; i++)
         {
+            // A UTF-16 low-surrogate cannot be a graph vertex. Even an
+            // unreachable fallback edge would violate the candidate contract.
+            if (i > 0 && char.IsHighSurrogate(raw[i - 1]) &&
+                char.IsLowSurrogate(raw[i])) continue;
             if (mandatory.Any(x => x.Start <= i && i < x.End)) continue;
             char c = raw[i];
             if (!char.IsAsciiLetter(c))
