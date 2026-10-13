@@ -16,6 +16,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Meltype" />
+    <InternalsVisibleTo Include="Meltia" />
     <InternalsVisibleTo Include="Meltype.Tests" />
     <InternalsVisibleTo Include="Meltype.Core.Tests" />
     <InternalsVisibleTo Include="MeltypeNative" />

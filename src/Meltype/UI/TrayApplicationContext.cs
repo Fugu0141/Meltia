@@ -46,6 +46,23 @@ internal sealed class TrayApplicationContext : ApplicationContext
         var detector = Composition.CompositionDetector.CreateDefault(AppPaths.UserDictionaryDirectory);
         detector.SpellChecker = Detection.WindowsSpellChecker.Shared;
         detector.UseScoredSegmentation = () => _engine.AppSettings.ScoredSegmentation;
+#if MELTIA_PREVIEW
+        // Bridges into the actual Windows keyboard composition pipeline.
+        // The adapter is gated by explicit user opt-in and fail-closed checks.
+        detector.BoundaryRefinement = (units, pending, legacy) =>
+        {
+            // Explicit user corrections in Meltype's language memory outrank
+            // Meltia's experimental boundary score.
+            var raw = string.Concat(units.Select(x => x.Raw)) + pending;
+            if (detector.Memory?.Get(raw.ToLowerInvariant()) is not null)
+                return null;
+            // Stable preview-only lexical protection runs even when the
+            // experimental Core boundary model is switched off.
+            return MeltiaLexicalRecovery.TryRecover(
+                    units, pending, legacy, detector) ??
+                MeltiaPreviewBoundary.Refine(units, pending, legacy);
+        };
+#endif
         _composition = new Composition.CompositionService(_invoker, detector, new Composition.CompositionOptions
         {
             LiveConversion = () => _engine.AppSettings.LiveConversion,
@@ -75,10 +92,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         });
         _engine.AttachComposition(_composition);
         _tipServer = new Tip.TipServer(_invoker, _composition, () => _engine.Settings);
+#if !MELTIA_PREVIEW
         _tipServer.Start();
+#endif
         // Meltype IME (TSF) を入れたら、一度だけ動作モードを Meltype IME にする
         // (PC に登録されていても、このユーザーのキーボードの一覧に無ければ Win + Space で選べないので切り替えない)
         // (ARM64 の Windows には Meltype IME は対応していないので切り替えない)
+#if !MELTIA_PREVIEW
         if (!_engine.Settings.TsfIntroduced && Tip.TipServer.IsRegistered && Tip.TipServer.IsInUserLanguageList &&
             System.Runtime.InteropServices.RuntimeInformation.OSArchitecture != System.Runtime.InteropServices.Architecture.Arm64)
         {
@@ -89,19 +109,32 @@ internal sealed class TrayApplicationContext : ApplicationContext
             Diagnostics.Log.Info("Meltype IME が入っているので、動作モードを Meltype IME にしました。");
             Tip.TipServer.ActivateForSession();
         }
+#endif
 
         var menu = new ContextMenuStrip();
         _statusItem = new ToolStripMenuItem { Enabled = false };
+#if MELTIA_PREVIEW
+        _enabledItem = new ToolStripMenuItem("Meltia を有効にする", null, (_, _) => ToggleEnabled()) { CheckOnClick = false };
+#else
         _enabledItem = new ToolStripMenuItem("Meltype を有効にする", null, (_, _) => ToggleEnabled()) { CheckOnClick = false };
+#endif
+#if MELTIA_PREVIEW
+        _keyboardModeItem = new ToolStripMenuItem("Meltia キーボード (試験版)", null, (_, _) => SetMode(InputMode.Keyboard));
+#else
         _keyboardModeItem = new ToolStripMenuItem("Meltype キーボード (変換ボックスで入力)", null, (_, _) => SetMode(InputMode.Keyboard));
+#endif
         _autoSwitchModeItem = new ToolStripMenuItem("IME 自動切替 (Microsoft IME を使う)", null, (_, _) => SetMode(InputMode.AutoSwitch));
         _tsfModeItem = new ToolStripMenuItem("Meltype IME (入力欄に直接入力)", null, (_, _) => SetMode(InputMode.Tsf));
         menu.Items.Add(_statusItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_enabledItem);
+#if !MELTIA_PREVIEW
         menu.Items.Add(_tsfModeItem);
+#endif
         menu.Items.Add(_keyboardModeItem);
+#if !MELTIA_PREVIEW
         menu.Items.Add(_autoSwitchModeItem);
+#endif
         // 自動判定の強さ (積極的 / 標準 / 慎重 / 手動)
         _levelItem = new ToolStripMenuItem("自動判定の強さ");
         foreach (var level in Enum.GetValues<DetectionLevel>())
@@ -109,6 +142,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _levelItem.DropDownItems.Add(new ToolStripMenuItem(LevelName(level), null, (_, _) => SetLevel(level)) { Tag = level });
         }
         menu.Items.Add(_levelItem);
+#if MELTIA_PREVIEW
+        var meltiaBoundaryItem = new ToolStripMenuItem(
+            "Meltia 新境界判定を試す (実験)")
+        {
+            CheckOnClick = true,
+            Checked = MeltiaPreviewBoundary.Enabled
+        };
+        meltiaBoundaryItem.CheckedChanged += (_, _) =>
+            MeltiaPreviewBoundary.Enabled = meltiaBoundaryItem.Checked;
+        menu.Items.Add(meltiaBoundaryItem);
+#endif
         // プロファイル (仕事用・趣味用・SNS 用など)。一覧は開くたびに作る (設定画面で足したもの・名前を変えたものを出す)
         _profileItem = new ToolStripMenuItem("プロファイル");
         _profileItem.DropDownItems.Add("(読み込み中)");
@@ -116,7 +160,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add(_profileItem);
         var startup = new ToolStripMenuItem("Windows の起動時に起動", null, (_, _) => ToggleStartup());
         menu.Items.Add(startup);
+#if !MELTIA_PREVIEW
         menu.Items.Add("使い方...", null, (_, _) => ShowWelcome());
+#endif
         menu.Items.Add("設定...", null, (_, _) => ShowSettings());
         menu.Items.Add("ユーザー辞書...", null, (_, _) => ShowUserDictionary());
         menu.Items.Add("ログ / 判定理由...", null, (_, _) => ShowLog());
@@ -126,11 +172,23 @@ internal sealed class TrayApplicationContext : ApplicationContext
         backup.DropDownItems.Add("バックアップを書き出す...", null, (_, _) => CreateBackup());
         backup.DropDownItems.Add("バックアップから戻す...", null, (_, _) => RestoreBackup());
         menu.Items.Add(backup);
+#if MELTIA_PREVIEW
+        menu.Items.Add("Meltia の開発・不具合報告...", null, (_, _) =>
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "https://github.com/Fugu0141/Meltia/issues") { UseShellExecute = true }));
+#else
         menu.Items.Add("不具合の報告・提案...", null, (_, _) => OpenReport());
+#endif
+#if MELTIA_PREVIEW
+        menu.Items.Add("Meltia について...", null, (_, _) => MessageBox.Show(AppInfo.AboutText, "Meltia について", MessageBoxButtons.OK, MessageBoxIcon.Information));
+#else
         menu.Items.Add("Meltype について...", null, (_, _) => MessageBox.Show(AppInfo.AboutText, "Meltype について", MessageBoxButtons.OK, MessageBoxIcon.Information));
+#endif
         menu.Items.Add("学習した語...", null, (_, _) => ShowLearnedWords());
         menu.Items.Add("学習データをリセット", null, (_, _) => ResetLearning());
+#if !MELTIA_PREVIEW
         menu.Items.Add("アンインストール...", null, (_, _) => Uninstall());
+#endif
         // 更新: 自動更新の ON/OFF、今すぐ確認、ダウンロード済みなら更新して再起動
         var updates = new ToolStripMenuItem("更新");
         _autoUpdateItem = new ToolStripMenuItem("自動で更新する", null, (_, _) => ToggleAutoUpdate());
@@ -139,7 +197,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _updateItem = new ToolStripMenuItem("", null, (_, _) => ApplyUpdate()) { Visible = false };
         updates.DropDownItems.Add(_updateItem);
         updates.DropDownOpening += (_, _) => _autoUpdateItem.Checked = _engine.Settings.AutoUpdate;
+#if !MELTIA_PREVIEW
         menu.Items.Add(updates);
+#endif
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("終了", null, (_, _) => ExitThread());
         menu.Opening += (_, _) => startup.Checked = Startup.IsEnabled;
@@ -150,12 +210,24 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _hotkey = new HotkeyWindow(ToggleEnabled);
         _registerHotkey = new HotkeyWindow(RegisterSelectedWord, HotkeyWindow.RegisterWordKeys, "単語の登録");
         _engine.ToggleRequested += OnToggleRequested;
+#if MELTIA_PREVIEW
+        _enabledItem.Text = "Meltia を有効にする / 無効にする";
+#else
         _enabledItem.Text = _hotkey.Name is { } hotkey ? $"Meltype を有効にする (Ctrl+半角/全角, {hotkey})" : "Meltype を有効にする (Ctrl+半角/全角)";
+#endif
         _engine.StatusChanged += OnEngineStatusChanged;
         _engine.ImeSuggested += OnImeSuggested;
-        _updater = new Updater(() => _engine.Settings.AutoUpdate);
+        _updater = new Updater(() =>
+#if MELTIA_PREVIEW
+            false
+#else
+            _engine.Settings.AutoUpdate
+#endif
+        );
         _updater.Ready += OnUpdateReady;
+#if !MELTIA_PREVIEW
         ShowUpdateItem();
+#endif
         UpdateStatus();
         // 初めて起動したら使い方を見せる (見せたことは設定に残す)
         if (!_engine.Settings.WelcomeShown)
@@ -378,7 +450,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
             status = last is null || last.Text.Length == 0 ? "IME 自動切替: ON" : $"IME 自動切替: ON / 直前の判定: {last.Verdict}";
         }
         _statusItem.Text = status;
+#if MELTIA_PREVIEW
+        var tip = $"Meltia Preview — {status}";
+#else
         var tip = $"Meltype — {status}";
+#endif
         _tray.Text = tip.Length > 63 ? tip[..63] : tip;
     }
 

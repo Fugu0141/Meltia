@@ -7,7 +7,7 @@ name: notices
 
 on:
   pull_request_target:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize, ready_for_review]
 
 permissions: {}
 
@@ -17,6 +17,9 @@ concurrency:
 
 jobs:
   notices:
+    # Metadata-only GitHub notices need not bill a runner on Draft PR updates.
+    # pull_request_target uses the default-branch workflow until merged.
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -12,9 +12,14 @@ namespace Meltype;
 /// </summary>
 internal sealed class ExitSignal : NativeWindow, IDisposable
 {
+#if MELTIA_PREVIEW
+    private const string Caption = "Meltia.Preview.ExitSignal";
+    private static readonly uint ExitMessage = RegisterWindowMessage("Meltia.Preview.Exit");
+#else
     private const string Caption = "Meltype.ExitSignal";
-    private const uint MSGFLT_ALLOW = 1;
     private static readonly uint ExitMessage = RegisterWindowMessage("Meltype.Exit");
+#endif
+    private const uint MSGFLT_ALLOW = 1;
 
     public ExitSignal()
     {

@@ -1,30 +1,42 @@
 name: Meltia Core boundary diagnostics
 on:
+  workflow_dispatch:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - 'src/Meltia.Core/**'
       - 'src/Meltia.Cli/**'
       - 'tests/Meltia.Core.Tests/**'
       - '.github/workflows/meltia-core.yml'
   push:
+    branches: [main]
     paths:
       - 'src/Meltia.Core/**'
       - 'src/Meltia.Cli/**'
       - 'tests/Meltia.Core.Tests/**'
       - '.github/workflows/meltia-core.yml'
+
 permissions:
   contents: read
+
+concurrency:
+  group: meltia-core-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   boundary-contracts:
+    # Drafts are not validated by hosted runners. Run locally until review.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Compile independent core
+      - name: Compile independent Core
         run: dotnet build src/Meltia.Cli/Meltia.Cli.csproj -c Release --nologo
-      - name: Execute boundary regression contracts
+      - name: Execute boundary contracts
         run: dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
       - name: CLI smoke (non-committing)
         run: dotnet run --project src/Meltia.Cli/Meltia.Cli.csproj -c Release --no-build -- handanwodelegatesuru --word=delegate

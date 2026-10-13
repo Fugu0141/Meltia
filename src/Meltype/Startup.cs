@@ -13,9 +13,17 @@ namespace Meltype;
 internal static class Startup
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+#if MELTIA_PREVIEW
+    private const string ValueName = "MeltiaPreview";
+#else
     private const string ValueName = "Meltype";
+#endif
 
+#if MELTIA_PREVIEW
+    private static string Shortcut => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "MeltiaPreview.lnk");
+#else
     private static string Shortcut => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "Meltype.lnk");
+#endif
 
     public static bool IsEnabled
     {

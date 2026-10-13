@@ -14,7 +14,8 @@ public sealed record BoundaryCandidate(Utf16Span Span, string Origin, double Sco
 public sealed record BoundaryRoute(IReadOnlyList<Utf16Span> EnglishSpans, double Score);
 public sealed record BoundaryResult(
     string Raw, IReadOnlyList<BoundaryCandidate> Candidates,
-    IReadOnlyList<BoundaryRoute> Routes, bool Truncated)
+    IReadOnlyList<BoundaryRoute> Routes, bool Truncated,
+    BoundaryReview? Review = null)
 {
     // v0.5 is an advisory engine. It must never commit to the user's application.
     public bool AutoCommitAllowed => false;
@@ -27,6 +28,19 @@ public sealed record BoundaryEvidence(
     IReadOnlyList<Utf16Span>? ExplicitJapanese = null,
     IReadOnlyList<Utf16Span>? Protected = null);
 
+// Explicit opt-in for offline experiments. Default remains the v0.5 behavior.
+// This is NOT wired to the active Meltype TSF/composition host.
+public sealed record MeltiaBoundaryOptions(
+    bool ExperimentalStrongHostAdvisory = false,
+    bool ExperimentalFragmentationPenalty = false,
+    bool ExperimentalUnknownLatinCandidates = false,
+    bool ExperimentalPhoneticLatticeDecoder = false,
+    bool ExperimentalContextualIslandScoring = false,
+    bool ExperimentalUncertaintyReview = false,
+    bool ExperimentalLongRunWindowing = false,
+    bool ExperimentalDiverseCandidatePruning = false,
+    bool ExperimentalJapaneseFlankScoring = false);
+
 /// <summary>
 /// v0.5 parallel boundary engine. No changes to Meltype composition/TSF or commit behavior.
 /// Keeps ambiguous lexical matches as candidates without allowing them to fragment
@@ -37,6 +51,48 @@ public sealed class MeltiaBoundaryEngine
     public const int MaxInputLength = 1024;
     public const int MaxCandidates = 128;
     public const int MaxRoutes = 8;
+    private readonly MeltiaBoundaryOptions _options;
+
+    public MeltiaBoundaryEngine(MeltiaBoundaryOptions? options = null)
+    {
+        _options = options ?? new MeltiaBoundaryOptions();
+        // Otherwise "v0.9 enabled" silently runs the v0.7 decoder and the
+        // caller may mistake its accuracy or behavior for v0.9 evidence.
+        if (_options.ExperimentalContextualIslandScoring &&
+            !_options.ExperimentalPhoneticLatticeDecoder)
+            throw new ArgumentException(
+                "v0.9 contextual scoring requires the phonetic lattice decoder.",
+                nameof(options));
+        if (_options.ExperimentalLongRunWindowing &&
+            !_options.ExperimentalUnknownLatinCandidates)
+            throw new ArgumentException(
+                "Long-run windowing requires experimental unknown Latin candidates.",
+                nameof(options));
+        if (_options.ExperimentalDiverseCandidatePruning &&
+            !_options.ExperimentalUnknownLatinCandidates)
+            throw new ArgumentException(
+                "Candidate diversity requires experimental unknown Latin candidates.",
+                nameof(options));
+        if (_options.ExperimentalJapaneseFlankScoring &&
+            (!_options.ExperimentalPhoneticLatticeDecoder ||
+             !_options.ExperimentalUnknownLatinCandidates))
+            throw new ArgumentException(
+                "Japanese flank scoring requires the phonetic lattice decoder and unknown Latin proposals.",
+                nameof(options));
+    }
+
+    // Short uppercase text can be valid Japanese romaji (e.g. KURU).
+    // Only these conventional technical acronyms override that ambiguity
+    // without an explicit language lock; extend via dictionaries in future.
+    private static readonly HashSet<string> CommonTechnicalAcronyms =
+        new(StringComparer.Ordinal)
+        {
+            "AI", "API", "BIOS", "CLI", "CPU", "CSS", "DNS", "GPU",
+            "HTML", "HTTP", "IDE", "IME", "JS", "JSON", "LAN",
+            "OS", "RAM", "SDK", "SQL", "SSD", "TSF", "UI",
+            "URL", "USB", "UTF", "XML"
+        };
+
     private static readonly string[] Particles = ["shimasu", "shita", "sareta", "suru",
         "desu", "kara", "made", "noni", "noto", "de", "ga", "no", "wo", "ni", "ha", "to"];
     private static readonly Regex AsciiRuns = new("[A-Za-z]+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -49,7 +105,10 @@ public sealed class MeltiaBoundaryEngine
         if (raw.Length > MaxInputLength) throw new ArgumentOutOfRangeException(nameof(raw));
         evidence ??= new BoundaryEvidence();
         var japanese = (evidence.ExplicitJapanese ?? []).ToArray();
-        var hard = (evidence.ExplicitEnglish ?? []).Concat(evidence.Protected ?? []).ToList();
+        // Identical explicit/protected locks are idempotent. Overlapping distinct locks
+        // are still rejected below rather than silently resolved.
+        var hard = (evidence.ExplicitEnglish ?? []).Concat(evidence.Protected ?? [])
+            .Distinct().ToList();
         foreach (var expression in new[] { ProtectedUrl, ProtectedEmail })
             foreach (Match match in expression.Matches(raw))
             {
@@ -76,7 +135,17 @@ public sealed class MeltiaBoundaryEngine
                 !old.Mandatory && score > old.Score) bySpan[span] = next;
         }
         foreach (var span in hard) Add(span, "user-or-protected", 100, true);
-        foreach (var span in evidence.MeltypeEnglish ?? []) Add(span, "meltype-advisory", -0.2);
+        foreach (var span in evidence.MeltypeEnglish ?? [])
+        {
+            // In the default mode, host output is ONLY a provisional candidate.
+            // Optional experiment: prioritize host suggestions when the token has
+            // strong orthographic evidence that it is not Japanese romaji.
+            // An embedded CamelCase transition with a lowercase prefix is NOT
+            // such evidence (Meltype may have swallowed a full mixed sentence).
+            double advisoryScore = ExperimentalHostScore(raw, span);
+            Add(span, advisoryScore > 0 ? "meltype-strong-advisory" : "meltype-advisory",
+                advisoryScore);
+        }
 
         var words = (evidence.EnglishWords ?? []).Concat(evidence.ProperNames ?? [])
             .Where(x => x is { Length: >= 2 and <= 72 } && x.All(char.IsAsciiLetter))
@@ -146,22 +215,90 @@ public sealed class MeltiaBoundaryEngine
             }
         }
 
+        // v0.7 research mode: independent spelling/phonetic hypotheses.
+        // Low-confidence by design: these help candidate recall, but are not
+        // an instruction to show or commit English in the user's IME.
+        if (_options.ExperimentalUnknownLatinCandidates)
+            foreach (var edge in MeltiaUnknownLatinCandidates.Generate(
+                raw, _options.ExperimentalLongRunWindowing))
+            {
+                // v0.7 adds hypotheses; it must never alter the provenance or
+                // ranking of an existing lexicon / Meltype / capitalization edge.
+                if (!bySpan.ContainsKey(edge.Span))
+                    Add(edge.Span, edge.Origin, edge.Score);
+            }
+
         // Mandatory spans survive pruning. All other proposals may be truncated.
         var mandatoryCandidates = bySpan.Values.Where(x => x.Mandatory)
             .OrderBy(x => x.Span.Start).ThenBy(x => x.Span.End).ToList();
         if (mandatoryCandidates.Count > MaxCandidates)
             throw new ArgumentException("Too many mandatory ranges");
-        var remaining = bySpan.Values.Where(x => !x.Mandatory)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.Span.Start).ThenBy(x => x.Span.End)
-            .Take(MaxCandidates - mandatoryCandidates.Count).ToList();
+        var remaining = _options.ExperimentalDiverseCandidatePruning
+            ? MeltiaDiverseCandidateSelector.Select(
+                bySpan.Values.Where(x => !x.Mandatory),
+                MaxCandidates - mandatoryCandidates.Count).ToList()
+            : bySpan.Values.Where(x => !x.Mandatory)
+                // Preserve previously ranked host/lexicon candidates before
+                // admitting speculative v0.7 edges under the bounded cap.
+                .OrderBy(x => x.Origin == "v0.7-unknown-latin-provisional" ? 1 : 0)
+                .ThenByDescending(x => x.Score)
+                .ThenBy(x => x.Span.Start).ThenBy(x => x.Span.End)
+                .Take(MaxCandidates - mandatoryCandidates.Count).ToList();
         var candidates = mandatoryCandidates.Concat(remaining)
             .OrderBy(x => x.Span.Start).ThenBy(x => x.Span.End).ToArray();
-        var routes = BuildRoutes(raw.Length, candidates, hard);
-        return new BoundaryResult(raw, candidates, routes, bySpan.Count > MaxCandidates);
+        // The original 0.3/span favors chaining many small lexical hits;
+        // research mode charges roughly the base score of a short dictionary
+        // word to discourage gratuitous language switches. Defaults unchanged.
+        // v0.7 produces many speculative Latin candidates. Always use the
+        // cautious fragmentation cost when its generator is enabled, even if
+        // a caller forgot to opt in to the ranking experiment separately.
+        var perSpanCost = _options.ExperimentalFragmentationPenalty ||
+            _options.ExperimentalUnknownLatinCandidates ||
+            _options.ExperimentalPhoneticLatticeDecoder ? 4.5 : 0.3;
+        // v0.8 is a separate experimental decoder, never an implicit change
+        // to v0.7 or the installed Meltype input/composition path.
+        var routes = _options.ExperimentalPhoneticLatticeDecoder
+            ? MeltiaPhoneticLatticeDecoder.Decode(raw, candidates, hard,
+                japanese, perSpanCost, MaxRoutes,
+                _options.ExperimentalContextualIslandScoring,
+                _options.ExperimentalJapaneseFlankScoring)
+            : BuildRoutes(raw.Length, candidates, hard, perSpanCost);
+        var review = _options.ExperimentalUncertaintyReview
+            ? MeltiaUncertaintyReview.Create(raw, routes, hard, evidence)
+            : null;
+        return new BoundaryResult(raw, candidates, routes,
+            bySpan.Count > MaxCandidates, review);
+    }
+
+    private double ExperimentalHostScore(string raw, Utf16Span span)
+    {
+        const double conservative = -0.2;
+        if (!_options.ExperimentalStrongHostAdvisory ||
+            span.Start < 0 || span.End > raw.Length || span.Start >= span.End)
+            return conservative;
+        var token = raw.Substring(span.Start, span.Length);
+        if (token.Length > 72 || token.Length < 2 || !token.All(char.IsAsciiLetter))
+            return conservative;
+        // Do not promote a whole mixed-script romanized stream just because
+        // the old engine returned it as one English segment.
+        if (char.IsAsciiLetterLower(token[0]) &&
+            token.Any(char.IsAsciiLetterUpper))
+            return conservative;
+        // Explicitly typed short uppercase acronyms carry evidence that their
+        // lower-case counterpart does not (e.g. IME vs ime).
+        if (token.Length <= 5 && token.All(char.IsAsciiLetterUpper) &&
+            CommonTechnicalAcronyms.Contains(token))
+            return 5.0;
+        // An unreadable Latin token is stronger evidence than a dictionary
+        // substring. However it is still only a reversible preview hypothesis.
+        if (token.Length >= 4 && !MeltiaRomaji.CanRead(token))
+            return 5.0;
+        return conservative;
     }
 
     private static IReadOnlyList<BoundaryRoute> BuildRoutes(
-        int length, IReadOnlyList<BoundaryCandidate> candidates, IReadOnlyList<Utf16Span> mandatory)
+        int length, IReadOnlyList<BoundaryCandidate> candidates,
+        IReadOnlyList<Utf16Span> mandatory, double perSpanCost)
     {
         var byStart = candidates.GroupBy(x => x.Span.Start)
             .ToDictionary(g => g.Key, g => g.ToArray());
@@ -180,9 +317,12 @@ public sealed class MeltiaBoundaryEngine
                     if (forced && edge.Span != required) continue;
                     foreach (var tail in dp[edge.Span.End])
                     {
-                        if (tail.EnglishSpans.Count >= 4) continue;
+                        // Do not impose a four-English-span cap here: mandatory locks
+                        // (including protected URLs) must survive even in long input.
+                        // Candidates are already bounded by MaxCandidates and the
+                        // DP keeps only MaxRoutes paths per input position.
                         var path = new[] { edge.Span }.Concat(tail.EnglishSpans).ToArray();
-                        offers.Add(new BoundaryRoute(path, edge.Score + tail.Score - 0.3));
+                        offers.Add(new BoundaryRoute(path, edge.Score + tail.Score - perSpanCost));
                     }
                 }
             dp[index] = offers.OrderByDescending(x => x.Score)

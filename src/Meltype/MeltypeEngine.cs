@@ -558,6 +558,12 @@ internal sealed class MeltypeEngine : ISessionEnvironment, IDisposable
     public void ApplySettings(Settings settings)
     {
         var next = settings.Clone().Normalize();
+#if MELTIA_PREVIEW
+        // Settings UI and app-specific profiles must not switch the preview
+        // into Meltype's registered TSF identity or shared updater.
+        next.Mode = InputMode.Keyboard;
+        next.AutoUpdate = false;
+#endif
         var previous = _settings;
         // 設定画面で Meltype IME を選んだが、登録されていない: どこでも何も起きなくなるので選ばせない
         if (next.Mode == InputMode.Tsf && previous.Mode != InputMode.Tsf && !Tip.TipServer.IsRegistered)

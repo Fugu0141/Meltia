@@ -12,6 +12,13 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+#if MELTIA_PREVIEW
+        // Must precede the first AppPaths access in the shared Meltype.Core assembly.
+        MeltiaPreviewSafety.Initialize();
+        // Offline integration smoke: no hook and no TSF registration.
+        if (args.FirstOrDefault() == "--meltia-selftest")
+            return MeltiaPreviewSelfTest.Run(args.ElementAtOrDefault(1));
+#endif
         // Meltype.exe --selftest [結果ファイル]: キーボードフックを掛けずに、主な機能が動くかだけを確かめる。
         if (args.FirstOrDefault() == "--selftest") return SelfTest.Run(args.ElementAtOrDefault(1));
         // Meltype.exe --exit: 動いている Meltype を終了させる (インストール・アンインストール用。管理者として動いていても止められる)。
@@ -22,7 +29,16 @@ internal static class Program
         // Meltype.exe --restore <バックアップ>: 動いている Meltype が終わるのを待ってから、バックアップを戻して起動する
         // (動いている Meltype が終わるときに学習データを書き戻すので、戻すのはその後)。
         var restore = args.FirstOrDefault() == "--restore" ? args.ElementAtOrDefault(1) : null;
-        if (!createdNew && (restore is null || !WaitForExit(mutex))) return 0;
+        if (!createdNew && (restore is null || !WaitForExit(mutex)))
+        {
+#if MELTIA_PREVIEW
+            MessageBox.Show(
+                "Meltype または Meltia がすでに動作しています。\n" +
+                "両方のキーボードフックを同時に起動しないため、Meltia Previewを開始しません。",
+                "Meltia Preview", MessageBoxButtons.OK, MessageBoxIcon.Information);
+#endif
+            return 0;
+        }
 
         ApplicationConfiguration.Initialize();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
@@ -34,10 +50,19 @@ internal static class Program
             WriteCrashLog(e.ExceptionObject);
         };
 
+#if !MELTIA_PREVIEW
         AppPaths.MigrateFromOldName();
+#endif
         Directory.CreateDirectory(AppPaths.DataDirectory);
         if (restore is not null) RestoreBackup(restore);
         var settings = Settings.Load(AppPaths.ConfigFile);
+#if MELTIA_PREVIEW
+        // This build deliberately reuses Meltype's keyboard/preview UI only.
+        // It must not activate Meltype's registered TSF TIP or updater.
+        settings.Mode = InputMode.Keyboard;
+        settings.AutoUpdate = false;
+        settings.WelcomeShown = true;
+#endif
         if (!File.Exists(AppPaths.ConfigFile))
         {
             try { settings.Save(AppPaths.ConfigFile); } catch { }
@@ -54,7 +79,9 @@ internal static class Program
         }
 
         // ダウンロード済みの新しい版があれば、起動せずに更新する (install.ps1 が新しい版を起動する)。
+#if !MELTIA_PREVIEW
         if (Updater.ApplyStagedAtStartup(() => settings.AutoUpdate)) return 0;
+#endif
 
         MeltypeEngine engine;
         try

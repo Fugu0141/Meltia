@@ -8,10 +8,18 @@ namespace Meltype;
 /// <summary>バージョン・著作権・ライセンスの表示 (トレイの「Meltype について...」)。</summary>
 internal static class AppInfo
 {
+#if MELTIA_PREVIEW
+    public const string SourceUrl = "https://github.com/Fugu0141/Meltia";
+#else
     public const string SourceUrl = Config.ProjectInfo.SourceUrl;
+#endif
 
     /// <summary>公開した版 (1.0.0 以降) か。それまではリポジトリが非公開なので、GitHub で報告する道は出さない。</summary>
+#if MELTIA_PREVIEW
+    public static bool IsPublicRelease => false;
+#else
     public static bool IsPublicRelease => Config.ProjectInfo.IsPublicRelease(Version);
+#endif
 
     /// <summary>GitHub の Issue の作成画面を、OS・版・実行環境を入れた状態で開く URL (template は 1-bug.yml など)。</summary>
     public static string GitHubReportUrl(string template, string environment) =>
@@ -22,12 +30,34 @@ internal static class AppInfo
     public static string ReportUrl(string environment) => Config.ProjectInfo.ReportUrl(Diagnostics.ReportInfo.OsName, Version, environment);
 
     /// <summary>自動更新で最新のリリースを見に行く GitHub のリポジトリ (公開されている必要がある)。</summary>
+#if MELTIA_PREVIEW
+    public const string UpdateRepository = "Fugu0141/Meltia";
+#else
     public const string UpdateRepository = "yksr-melt/Meltype";
+#endif
     public const string Contact = "ibutya0319@gmail.com";
 
     public static string Version =>
         typeof(AppInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "?";
 
+#if MELTIA_PREVIEW
+    public static string AboutText => $"""
+        Meltia {Version} — Windows Keyboard Preview
+
+        Meltia contributors / Fugu0141
+        Based on Meltype by Yukishiro and the original contributors.
+        Copyright (C) 2026 original authors and contributors.
+
+        GNU GPL-3.0-or-later. NO WARRANTY.
+        Source code: {SourceUrl}
+
+        Keyboard-style preview only. This does NOT register its own Windows TSF
+        input processor. Full IME identity / installer / auto-updater is not ready.
+        This build reuses Meltype's Windows keyboard input, composition UI,
+        dictionary and conversion implementation under the original licenses.
+        Third-party notices from Meltype remain applicable.
+        """;
+#else
     public static string AboutText => $"""
         Meltype {Version}
         Copyright (C) 2026 雪代 / Yukishiro (@yksr_melt / @yksr-melt)
@@ -48,4 +78,5 @@ internal static class AppInfo
         絵文字の読みは Unicode CLDR を元にしています (Unicode License v3)。
         詳しくは THIRD-PARTY-NOTICES.txt を参照してください。
         """;
+#endif
 }
