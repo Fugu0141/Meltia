@@ -20,6 +20,8 @@ Ready for review状態で `src/Meltype.Core/**`、`linux/**`、`native/mozc/**` 
 
 **このLinux CIからGitHub Releaseへは公開しない。** `main`へのpush・Ready PR・手動実行のいずれもLinuxの検証用ZIPをActions Artifactに保存するだけであり、`v*` タグでは起動しない。既存の `v1.0.0-beta.1` などMeltia Windows PreviewのReleaseへ旧Meltype版ZIPを追加しない。将来Linuxを配布するときは、Meltia向けの名称・専用公開条件・既存Release不変性を設計した別の公開手順を新規レビューする。
 
+**既存タグの注意**: すでに公開済みの `v1.0.0-beta.1` タグには、旧 `linux.yml` の `workflow_dispatch` とReleaseへのアップロード処理が残る。PRブランチやmainのワークフロー変更は過去のタグrefを更新しないため、古いタグからの手動実行を行わないこと。管理者設定を含む恒久対策は [Issue #23](https://github.com/Fugu0141/Meltia/issues/23) で追跡する。既存タグ・Release自体の改変は行わない。
+
 ## Windows実機での手動受け入れ検証（自動化未実装）
 
 Windows 11のテスト環境で、Meltia Previewを起動して版/commit SHAと使用した入力方式（Keyboard Previewか、別途検証対象の正式TSF）を記録する。メモ帳とブラウザの入力欄など、少なくとも2種類のホストアプリで試す。テスト中はログにパスワード・メールアドレス・個人情報を記録しない。
