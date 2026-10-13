@@ -18,7 +18,7 @@ Ready for review状態で `src/Meltype.Core/**`、`linux/**`、`native/mozc/**` 
 4. `xvfb-run -a dbus-run-session -- python3 linux/tests/test_daemon.py` のプライベートIBusデーモンテスト。
 5. ZIP作成。CIの `skipped`、`cancelled`、古いHEADの `success` は代替証拠としない。
 
-タグ公開は **PRテストとは独立した権限付きreleaseジョブ**でのみ実行する。
+**このLinux CIからGitHub Releaseへは公開しない。** `main`へのpush・Ready PR・手動実行のいずれもLinuxの検証用ZIPをActions Artifactに保存するだけであり、`v*` タグでは起動しない。既存の `v1.0.0-beta.1` などMeltia Windows PreviewのReleaseへ旧Meltype版ZIPを追加しない。将来Linuxを配布するときは、Meltia向けの名称・専用公開条件・既存Release不変性を設計した別の公開手順を新規レビューする。
 
 ## Windows実機での手動受け入れ検証（自動化未実装）
 
