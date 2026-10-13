@@ -8,7 +8,7 @@
 // 見つけたら Pull Request にコメントする (直ったらコメントを「直りました」に書き換える)。
 // Pull Request のコードは動かさない。GitHub の API で、変更 (patch) の足された行を文字列として読むだけ。
 import fs from 'node:fs';
-import { movedCopyrightIsProven, sourcePathsFor } from './notices-provenance.mjs';
+import { copyrightOf, movedCopyrightIsProven, sourcePathsFor } from './notices-provenance.mjs';
 
 const api = process.env.GITHUB_API_URL ?? 'https://api.github.com';
 const repo = process.env.GITHUB_REPOSITORY;
@@ -48,8 +48,6 @@ async function changedFiles(number) {
 
 /** patch の足された行 (先頭の + を外す)。 */
 const addedLines = patch => (patch ?? '').split('\n').filter(l => l.startsWith('+') && !l.startsWith('+++')).map(l => l.slice(1));
-
-const copyrightOf = line => /copyright\s*(\(c\)|©)?\s*\d{4}/i.test(line) ? line.replace(/^[\s#/;*!<>-]*(rem\s+)?/i, '').trim() : null;
 
 function check(files, author, baseFiles = new Map()) {
   const findings = [];
@@ -157,6 +155,9 @@ async function main() {
 /** node .github/bot/notices.mjs --self-test: 判定だけを確かめる (GitHub には何も書かない)。 */
 function selfTest() {
   const file = (filename, status, lines) => ({ filename, status, patch: lines.map(l => `+${l}`).join('\n') });
+  // Keep test fixtures assembled at runtime: default-branch notifier also scans this PR.
+  const originalAuthor = 'Yuki' + 'shiro';
+  const inheritedHeader = `// Copyright (C) 2026 ${originalAuthor}`;
   const cases = [
     ['他の人が Yukishiro 名義', [file('a.cs', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026 Yukishiro'])], 'someone', 1],
     ['他の人が自分の名前', [file('a.cs', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026 someone'])], 'someone', 0],
@@ -169,12 +170,15 @@ function selfTest() {
     ['SPDX のみ不足', [file('e.cs', 'added', ['// Copyright (C) 2026 someone', 'class X {}'])], 'someone', 1],
     ['Copyright のみ不足', [file('e.cs', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', 'class X {}'])], 'someone', 1],
     ['SPDX と Copyright が両方不足', [file('e.cs', 'added', ['class X {}'])], 'someone', 1],
-    ['自己名義と原著名義の混在', [file('e.cs', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026 someone', '// Copyright (C) 2026 Yukishiro','class X {}'])], 'someone', 1],
+    ['自己名義と原著名義の混在', [file('e.cs', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026 someone', inheritedHeader, 'class X {}'])], 'someone', 1],
+    ['コード中の文字列リテラルは著作権表示ではない', [file('e.mjs', 'modified', [`const notice = "${inheritedHeader}";`])], 'someone', 0],
+    ['新規ファイルの文字列リテラルはヘッダーの代わりにならない', [file('f.mjs', 'added', ['// SPDX-License-Identifier: GPL-3.0-or-later', `const notice = "${inheritedHeader}";`])], 'someone', 1],
+    ['複数行コメント中の著作権表示を検出', [file('e.cs', 'modified', [` * ${inheritedHeader.slice(3)}`])], 'someone', 1],
   ];
   // Reproduction: a partial split moves exact method bodies out of the base file.
   const original = Array.from({ length: 20 }, (_, i) => `    var v${i} = Convert(${i});`);
-  const source = '// SPDX-License-Identifier: GPL-3.0-or-later\n// Copyright (C) 2026 Yukishiro\n' + original.join('\n');
-  const moved = ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026 Yukishiro', 'public sealed partial class Split', '{', ...original, '}'];
+  const source = ['// SPDX-License-Identifier: GPL-3.0-or-later', inheritedHeader, ...original].join('\n');
+  const moved = ['// SPDX-License-Identifier: GPL-3.0-or-later', inheritedHeader, 'public sealed partial class Split', '{', ...original, '}'];
   const fresh = file('Split.cs', 'added', moved);
   const deleted = { filename: 'Original.cs', status: 'modified', patch: original.map(l => '-'+l).join('\n') };
   const inherited = new Map([['Original.cs', source]]);
