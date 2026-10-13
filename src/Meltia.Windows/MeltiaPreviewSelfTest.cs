@@ -89,11 +89,18 @@ internal static class MeltiaPreviewSelfTest
                 var input = new CompositionText(detector);
                 foreach (var c in "commitha") input.Append(c);
                 var pieces = input.Segments(final: true);
-                return pieces.Count == 2 &&
+                var ok = pieces.Count == 2 &&
                     pieces[0].IsEnglish && pieces[0].Raw == "commit" &&
                     !pieces[1].IsEnglish && pieces[1].Raw == "ha" &&
                     pieces[1].Kana == "は" &&
                     input.RenderSegments(final: true, convert: null) == "commitは";
+                if (!ok)
+                    throw new InvalidOperationException(
+                        "units=" + string.Join("|", input.Units.Select(u => u.Raw + ":" + u.Kana)) +
+                        "; pending=" + input.Pending +
+                        "; segments=" + string.Join("|", pieces.Select(p => p.Raw + ":" + p.Kana + ":" + (p.IsEnglish ? "EN" : "JA"))) +
+                        "; display=" + input.RenderSegments(final: true, convert: null));
+                return true;
             });
             Check("Ado-san-no-preserves-name-and-Japanese", () =>
             {
@@ -206,9 +213,14 @@ internal static class MeltiaPreviewSelfTest
         void Check(string name, Func<bool> assertion)
         {
             bool ok;
+            string? error = null;
             try { ok = assertion(); }
-            catch { ok = false; }
-            cases.Add(new { name, passed = ok });
+            catch (Exception ex)
+            {
+                ok = false;
+                error = ex.Message;
+            }
+            cases.Add(new { name, passed = ok, error });
         }
     }
 }
