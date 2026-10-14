@@ -2,6 +2,7 @@
 // H10 diagnostic runner: both engines see the SAME raw, with NO issue-derived hints.
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Meltia.Core.Boundary;
 
 var input = Path.Combine(AppContext.BaseDirectory, "issue_intents_v2.jsonl");
@@ -143,9 +144,11 @@ foreach (var c in cases)
     foreach (var route in h10Result.Routes)
         ValidateEnglishSpans(route.EnglishSpans, c.Raw);
     diagnostics.Add(new CaseReport(c.Id, c.Family, c.Raw, gold, before, after,
-        c.Id.StartsWith("meltype-contrast-", StringComparison.Ordinal)));
+        c.Id.StartsWith("meltype-contrast-", StringComparison.Ordinal),
+        c.SourceUrl, c.IssueStateAtCollection, c.Qualification, c.Provenance));
 }
-var stats = new [] { "EN-OOV", "STRUCT", "SEAM", "JA-PROTECT", "CONTEXT", "SCRIPT", "AMBIGUOUS" };
+var stats = cases.Select(x => x.Family).Distinct(StringComparer.Ordinal)
+    .OrderBy(x => x, StringComparer.Ordinal).ToArray();
 var summaries = stats.Append("TOTAL").ToDictionary(family => family,
     family => Summarize(diagnostics.Where(x => family == "TOTAL" || x.Family == family).ToArray()));
 var oldSummary = summaries["TOTAL"]["v1.0-flank-independent"];
@@ -157,6 +160,10 @@ var report = new
     Baseline = "v1.0-flank-independent",
     Candidate = "H10-dual-channel",
     DataKind = "Meltype Issue diagnostic snapshot; not independent holdout or production IME",
+    SourceIssueStates = diagnostics.GroupBy(x => x.IssueStateAtCollection ?? "unrecorded")
+        .ToDictionary(x => x.Key, x => x.Count()),
+    SourceIssueCount = diagnostics.Where(x => x.SourceUrl is not null)
+        .Select(x => x.SourceUrl).Distinct().Count(),
     NoUserTextTraining = true,
     Measurement = "Five post-warmup-ish runs per input; local process times include allocation/GC noise, not keyboard E2E",
     Runtime = Environment.Version.ToString(),
@@ -182,6 +189,15 @@ foreach (var family in stats)
     Console.WriteLine($"FAMILY {family,-12} Top1 {a.Top1Exact}/{a.Count} -> " +
         $"{b.Top1Exact}/{b.Count}; pure-JA false English {a.JapaneseFalseEnglish} -> " +
         $"{b.JapaneseFalseEnglish}");
+}
+foreach (var group in diagnostics.GroupBy(x => x.IssueStateAtCollection ?? "unrecorded"))
+{
+    var s = Summarize(group.ToArray());
+    var a = s["v1.0-flank-independent"];
+    var b = s["H10-dual-channel"];
+    Console.WriteLine($"ISSUE_STATE {group.Key}: n={group.Count()} " +
+        $"Top1 {a.Top1Exact}->{b.Top1Exact}; JA false English " +
+        $"{a.JapaneseFalseEnglish}->{b.JapaneseFalseEnglish}");
 }
 foreach (var c in diagnostics.Where(x => !x.After.Top1Exact))
     Console.WriteLine($"H10_ERROR {c.Id}: {c.Raw} | {c.After.Failure} " +
@@ -295,14 +311,20 @@ static object Timing(List<double> input)
         P95ms = Percentile(.95), P99ms = Percentile(.99) };
 }
 
-sealed record Case(string Id, string Family, string Raw, Segment[] Parts);
+sealed record Case(string Id, string Family, string Raw, Segment[] Parts,
+    [property: JsonPropertyName("source_url")] string? SourceUrl = null,
+    [property: JsonPropertyName("issue_state_at_collection")] string? IssueStateAtCollection = null,
+    [property: JsonPropertyName("qualification")] string? Qualification = null,
+    [property: JsonPropertyName("provenance")] string? Provenance = null);
 sealed record Segment(string Lang, string Text);
 sealed record Prediction(string Model, int CandidateCount, bool CandidateCovered,
     bool TopKExact, bool Top1Exact, Utf16Span[] Top1, int TruePositives,
     int FalsePositives, int FalseNegatives, bool PureJapaneseFalseEnglish,
     string Failure);
 sealed record CaseReport(string Id, string Family, string Raw, Utf16Span[] Gold,
-    Prediction Before, Prediction After, bool IsContrastPair);
+    Prediction Before, Prediction After, bool IsContrastPair,
+    string? SourceUrl, string? IssueStateAtCollection, string? Qualification,
+    string? Provenance);
 sealed record Summary(string Model, int Count, int CandidateCoverage, int TopKExact,
     int Top1Exact, int JapaneseOnly, int JapaneseFalseEnglish, double BoundaryF1,
     Dictionary<string, int> FailureStages);
