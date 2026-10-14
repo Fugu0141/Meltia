@@ -27,6 +27,20 @@ public sealed class H11BoundaryPrototype
         ["ga", "de", "no", "wo", "ni", "to", "ya", "ha", "suru",
          "shita", "sareta", "noni", "kara", "made"];
 
+    // Alternate Latin-key layouts are evidence for Japanese, not converted
+    // strings. Keep the original raw and offsets at every decoding stage.
+    private static bool RomajiReadable(string value)
+    {
+        if (MeltiaRomaji.CanRead(value)) return true;
+        if (!value.All(char.IsAsciiLetter)) return false;
+        var normalized = value.ToLowerInvariant()
+            .Replace("cye", "che", StringComparison.Ordinal)
+            .Replace("cyu", "chu", StringComparison.Ordinal)
+            .Replace("cyo", "cho", StringComparison.Ordinal)
+            .Replace("ci", "shi", StringComparison.Ordinal);
+        return !string.Equals(normalized, value, StringComparison.OrdinalIgnoreCase) &&
+            MeltiaRomaji.CanRead(normalized);
+    }
     private static bool Consonant(char letter) =>
         char.IsAsciiLetter(letter) && "aeiou".IndexOf(char.ToLowerInvariant(letter)) < 0;
 
@@ -42,7 +56,7 @@ public sealed class H11BoundaryPrototype
             if (costs[i] == 99) continue;
             costs[i + 1] = Math.Min(costs[i + 1], costs[i] + 1);
             for (int n = 1; n <= 4 && i + n <= word.Length; n++)
-                if (MeltiaRomaji.CanRead(word.Substring(i, n)))
+                if (RomajiReadable(word.Substring(i, n)))
                     costs[i + n] = Math.Min(costs[i + n], costs[i]);
         }
         return costs[^1];
@@ -116,8 +130,14 @@ public sealed class H11BoundaryPrototype
         }
         foreach (var x in hard) Add(x, Lang.En, 100, "mandatory");
         foreach (Match m in Structure.Matches(raw))
+        {
+            var hyphen = m.Value.Split('-', 2);
+            if (hyphen.Length == 2 && RomajiReadable(hyphen[0]) &&
+                RomajiReadable(hyphen[1]))
+                continue; // Japanese readings like sha-nashi: punctuation is not English.
             Add(new Utf16Span(m.Index, m.Index + m.Length), Lang.En,
                 15.0 + Math.Min(m.Length, 16) * 0.3, "structural");
+        }
 
         // Romanization and spelling scores are cached independently of the
         // path search; unlike H10, no pairwise rerun of the full decoder.
@@ -166,7 +186,7 @@ public sealed class H11BoundaryPrototype
             for (int end = i + 1; end <= Math.Min(endRun, i + MaxEdge); end++)
             {
                 string word = raw[i..end];
-                bool readable = MeltiaRomaji.CanRead(word);
+                bool readable = RomajiReadable(word);
                 double difference = Model.Difference(word);
                 if (readable)
                 {
@@ -205,7 +225,7 @@ public sealed class H11BoundaryPrototype
                 if (end < endRun && word.Length >= 2 && (!readable || lexical) &&
                     JapaneseSeams.Any(p => raw.AsSpan(end, endRun - end)
                         .StartsWith(p.AsSpan(), StringComparison.OrdinalIgnoreCase)))
-                    spell += 2.8;
+                    spell += !readable && Consonant(word[^1]) ? 5.7 : 2.8;
                 if (end == endRun && word.Any(char.IsUpper) &&
                     word.Any(char.IsLower) && word.Skip(1).Any(char.IsUpper))
                     spell += 2.0;
@@ -218,10 +238,6 @@ public sealed class H11BoundaryPrototype
                 Add(new Utf16Span(i, end), Lang.En, spell, lexical
                     ? "baseline-lexicon-word" : "orthographic-word");
             }
-            // Generic digit-prefixed labels / units, not Issue-specific text.
-            if (i > 0 && char.IsAsciiDigit(raw[i - 1])) continue;
-            int digits = i;
-            while (digits < raw.Length && char.IsAsciiDigit(raw[digits])) digits++;
         }
         // Numeric+Latin terms: 50cc, 3D, 100GB. Their *whole* digit-prefixed
         // span must exist; H10 produced only the ASCII suffix.
