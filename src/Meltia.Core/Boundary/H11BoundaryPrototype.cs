@@ -209,7 +209,19 @@ public sealed class H11BoundaryPrototype
                     (Lexicon.Contains(word[..^1].ToLowerInvariant()) && word.EndsWith('s') ||
                      word.EndsWith("ing", StringComparison.OrdinalIgnoreCase) &&
                         Lexicon.Contains(word[..^3].ToLowerInvariant()));
+                // Productive two-word compounds are evidence even when the
+                // concatenated spelling has never been entered into a list.
+                bool compound = !lexical && word.Length >= 6 &&
+                    Enumerable.Range(3, word.Length - 5).Any(split =>
+                        Lexicon.Contains(word[..split].ToLowerInvariant()) &&
+                        Lexicon.Contains(word[split..].ToLowerInvariant()));
+                bool derivedPrefix = !lexical && word.Length >= 6 &&
+                    new[] { "dis", "re", "pre", "un", "sub" }.Any(prefix =>
+                        word.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                        word.Length >= prefix.Length + 4 &&
+                        Lexicon.Contains(word[prefix.Length..].ToLowerInvariant()));
                 double lexBonus = lexical ? 2.3 + Math.Min(word.Length, 12) * .38 :
+                    compound ? 5.5 : derivedPrefix ? 3.5 :
                     naturalWord ? 2.2 : 0;
                 double capsBonus = char.IsUpper(word[0]) ? 1.55 : 0;
                 if (word.Length <= 6 && word.All(char.IsUpper)) capsBonus += 1.4;
@@ -228,7 +240,13 @@ public sealed class H11BoundaryPrototype
                     spell += !readable && Consonant(word[^1]) ? 5.7 : 2.8;
                 if (end == endRun && word.Any(char.IsUpper) &&
                     word.Any(char.IsLower) && word.Skip(1).Any(char.IsUpper))
-                    spell += 2.0;
+                    spell += 5.8;
+                if (word.Length >= 2 && word.All(char.IsUpper) && end < endRun &&
+                    char.IsLower(raw[end]) && (lexical || word.Length >= 3))
+                    spell += 5.5; // acronym followed by an unspaced JA reading
+                if (end == endRun && i > 0 && char.IsWhiteSpace(raw[i - 1]) &&
+                    char.IsUpper(word[0]) && word.Length >= 3) spell += 2.8;
+                if (end == endRun && lexical && !readable) spell += 2.1;
                 // Latin word immediately adjacent to existing Japanese script
                 // is a stronger English island than an arbitrary substring.
                 if (end == endRun && end < raw.Length &&
