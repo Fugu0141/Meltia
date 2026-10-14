@@ -93,6 +93,52 @@ try { prototype.Analyze("abcdef", new BoundaryEvidence(
 catch (ArgumentException) { rejected = true; }
 Check(rejected, "contradictory locks rejected");
 
+// H11 robustness: no fixed Issue vocabulary, no path mutation, no surrogate
+// split, and no hidden nondeterminism over mixed scripts and edits.
+var h11Fragments = new[]
+{
+    "nihongo", "koreha", "GitHub", "release", "tab", "de", "ga",
+    "to", "さ", "😀", " ", "-", "50", "cc", "yappari", "xyz"
+};
+var h11Seed = new Random(20261014);
+for (int sample = 0; sample < 160; sample++)
+{
+    var rawSample = string.Concat(Enumerable.Range(0, h11Seed.Next(1, 9))
+        .Select(_ => h11Fragments[h11Seed.Next(h11Fragments.Length)]));
+    var first = challenger.Analyze(rawSample);
+    var second = challenger.Analyze(rawSample);
+    Check(first.Raw == rawSample && second.Raw == rawSample &&
+        !first.AutoCommitAllowed &&
+        first.Routes.Count is > 0 and <= 8 &&
+        first.Routes[0].EnglishSpans.SequenceEqual(
+            second.Routes[0].EnglishSpans) &&
+        first.Routes[0].Score.Equals(second.Routes[0].Score),
+        "H11 160 seeded mixed-script deterministic cases");
+    foreach (var route in first.Routes)
+        ValidateEnglishSpans(route.EnglishSpans, rawSample);
+    foreach (var edge in first.Edges)
+        Check(edge.Span.Start >= 0 && edge.Span.End <= rawSample.Length &&
+            edge.Span.Start < edge.Span.End &&
+            !SplitPair(rawSample, edge.Span.Start) &&
+            !SplitPair(rawSample, edge.Span.End),
+            "H11 candidates preserve UTF-16 boundaries");
+}
+var h11Many = string.Concat(Enumerable.Range(0, 10).Select(_ => "nihongo"));
+Check(h11Many.Length < H11BoundaryPrototype.MaxInputLength &&
+    challenger.Analyze(h11Many).Routes.Count is > 0 and <= 8,
+    "H11 long phonetic run remains bounded");
+bool h11BadRange = false;
+try { challenger.Analyze("😀a", new BoundaryEvidence(
+    ExplicitEnglish: [new Utf16Span(1, 2)])); }
+catch (ArgumentException) { h11BadRange = true; }
+Check(h11BadRange, "H11 rejects explicit UTF-16 surrogate split");
+h11BadRange = false;
+try { challenger.Analyze("abcdef", new BoundaryEvidence(
+    ExplicitEnglish: [new Utf16Span(0, 4)],
+    ExplicitJapanese: [new Utf16Span(2, 6)])); }
+catch (ArgumentException) { h11BadRange = true; }
+Check(h11BadRange, "H11 rejects overlapping contradictory locks");
+
 // Edit consistency oracle: session edit operations must match a full decode.
 var session = new H10PrototypeSession(prototype);
 session.Insert("kyouha🌸commitniiku");
