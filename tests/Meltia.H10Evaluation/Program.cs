@@ -29,6 +29,34 @@ var old = new MeltiaBoundaryEngine(new MeltiaBoundaryOptions(
     ExperimentalDiverseCandidatePruning: true,
     ExperimentalJapaneseFlankScoring: true));
 var prototype = new H10BoundaryPrototype();
+var challenger = new H11BoundaryPrototype();
+
+// H11 is an independent, reversible comparison hypothesis, never a host IME.
+var h11Locked = challenger.Analyze("tokyo",
+    new BoundaryEvidence(ExplicitEnglish: [new Utf16Span(0, 5)]));
+Check(h11Locked.Routes[0].EnglishSpans.SequenceEqual([new Utf16Span(0, 5)]),
+    "H11 respects explicit English");
+Check(challenger.Analyze("tokyo",
+    new BoundaryEvidence(ExplicitJapanese: [new Utf16Span(0, 5)]))
+    .Routes[0].EnglishSpans.Count == 0, "H11 respects explicit Japanese");
+Check(!challenger.Analyze("data").AutoCommitAllowed, "H11 does not auto-commit");
+Check(challenger.Analyze("🌸a").Edges.All(x => x.Span.Start != 1 &&
+    x.Span.End != 1), "H11 no surrogate splits");
+Check(challenger.Analyze("https://example.com").Routes[0].EnglishSpans
+    .SequenceEqual([new Utf16Span(0, 19)]), "H11 protects URL");
+Check(challenger.Analyze("dev@example.org").Routes[0].EnglishSpans
+    .SequenceEqual([new Utf16Span(0, 15)]), "H11 protects email");
+Check(challenger.Analyze("50ccgenntuki").Edges.Any(x =>
+    x.Language == "English" && x.Span == new Utf16Span(0, 4)),
+    "H11 generates numeric English word boundaries");
+Check(challenger.Analyze("buy me a coffee").Edges.Any(x =>
+    x.Language == "English" && x.Span == new Utf16Span(7, 8)),
+    "H11 generates isolated one-letter English words");
+var h11Repeat = challenger.Analyze("kyouhashoppingniiku");
+Check(h11Repeat.Routes[0].EnglishSpans.SequenceEqual(
+    challenger.Analyze("kyouhashoppingniiku").Routes[0].EnglishSpans),
+    "H11 deterministic decoded route");
+
 
 // Unlabelled self-tests: fixed behavior, deterministic scores, explicit intent,
 // raw integrity, unicode offsets, and the inability to auto-commit.
@@ -114,7 +142,8 @@ var diagnostics = new List<CaseReport>();
 var timings = new Dictionary<string, List<double>>
 {
     ["v1.0-flank-independent"] = [],
-    ["H10-dual-channel"] = []
+    ["H10-dual-channel"] = [],
+    ["H11-word-phonetic"] = []
 };
 foreach (var c in cases)
 {
@@ -124,6 +153,7 @@ foreach (var c in cases)
     var length = c.Raw.Length;
     var oldResult = old.Analyze(c.Raw);
     var h10Result = prototype.Analyze(c.Raw);
+    var h11Result = challenger.Analyze(c.Raw);
     // Warm both engines, then take 5 samples of a single independent Analyze.
     for (int i = 0; i < 5; i++)
     {
@@ -135,17 +165,27 @@ foreach (var c in cases)
         _ = prototype.Analyze(c.Raw);
         watch.Stop();
         timings["H10-dual-channel"].Add(watch.Elapsed.TotalMilliseconds);
+        watch.Restart();
+        _ = challenger.Analyze(c.Raw);
+        watch.Stop();
+        timings["H11-word-phonetic"].Add(watch.Elapsed.TotalMilliseconds);
     }
     var before = Make("v1.0-flank-independent", oldResult.Candidates.Select(x => x.Span),
         oldResult.Routes, gold, length);
     var after = Make("H10-dual-channel",
         h10Result.Edges.Where(x => x.Language == "English").Select(x => x.Span),
         h10Result.Routes, gold, length);
+    var updated = Make("H11-word-phonetic",
+        h11Result.Edges.Where(x => x.Language == "English").Select(x => x.Span),
+        h11Result.Routes, gold, length);
     foreach (var route in h10Result.Routes)
+        ValidateEnglishSpans(route.EnglishSpans, c.Raw);
+    foreach (var route in h11Result.Routes)
         ValidateEnglishSpans(route.EnglishSpans, c.Raw);
     diagnostics.Add(new CaseReport(c.Id, c.Family, c.Raw, gold, before, after,
         c.Id.StartsWith("meltype-contrast-", StringComparison.Ordinal),
-        c.SourceUrl, c.IssueStateAtCollection, c.Qualification, c.Provenance));
+        c.SourceUrl, c.IssueStateAtCollection, c.Qualification, c.Provenance,
+        updated));
 }
 var stats = cases.Select(x => x.Family).Distinct(StringComparer.Ordinal)
     .OrderBy(x => x, StringComparer.Ordinal).ToArray();
@@ -153,12 +193,15 @@ var summaries = stats.Append("TOTAL").ToDictionary(family => family,
     family => Summarize(diagnostics.Where(x => family == "TOTAL" || x.Family == family).ToArray()));
 var oldSummary = summaries["TOTAL"]["v1.0-flank-independent"];
 var newSummary = summaries["TOTAL"]["H10-dual-channel"];
+var h11Summary = summaries["TOTAL"]["H11-word-phonetic"];
 var report = new
 {
     Schema = "meltia-h10-issue-diagnostic-v1",
     Date = "2026-10-14",
     Baseline = "v1.0-flank-independent",
     Candidate = "H10-dual-channel",
+    NextCandidate = "H11-word-phonetic",
+    ExperimentalCandidateSource = "PRE-EXISTING dictionaries/english.txt embedded as read-only baseline lexicon",
     DataKind = "Meltype Issue diagnostic snapshot; not independent holdout or production IME",
     SourceIssueStates = diagnostics.GroupBy(x => x.IssueStateAtCollection ?? "unrecorded")
         .ToDictionary(x => x.Key, x => x.Count()),
@@ -179,30 +222,36 @@ File.WriteAllText(output, JsonSerializer.Serialize(report, new JsonSerializerOpt
     { WriteIndented = true }));
 Console.WriteLine($"H10 issue diagnostic ({cases.Length} cases, NOT holdout)");
 Console.WriteLine("Mode                      CandRecall    TopK    Top1    JA->EN   BoundaryF1");
-foreach (var s in new [] { oldSummary, newSummary })
+foreach (var s in new [] { oldSummary, newSummary, h11Summary })
     Console.WriteLine($"{s.Model,-25} {s.CandidateCoverage,3}/{s.Count,-3} {s.TopKExact,3}/{s.Count,-3} " +
         $"{s.Top1Exact,3}/{s.Count,-3} {s.JapaneseFalseEnglish,3}/{s.JapaneseOnly,-3} {s.BoundaryF1:F3}");
 foreach (var family in stats)
 {
     var a = summaries[family]["v1.0-flank-independent"];
     var b = summaries[family]["H10-dual-channel"];
+    var d = summaries[family]["H11-word-phonetic"];
     Console.WriteLine($"FAMILY {family,-12} Top1 {a.Top1Exact}/{a.Count} -> " +
-        $"{b.Top1Exact}/{b.Count}; pure-JA false English {a.JapaneseFalseEnglish} -> " +
-        $"{b.JapaneseFalseEnglish}");
+        $"{b.Top1Exact}/{b.Count} -> {d.Top1Exact}/{d.Count}; pure-JA false English " +
+        $"{a.JapaneseFalseEnglish} -> {b.JapaneseFalseEnglish} -> {d.JapaneseFalseEnglish}");
 }
 foreach (var group in diagnostics.GroupBy(x => x.IssueStateAtCollection ?? "unrecorded"))
 {
     var s = Summarize(group.ToArray());
     var a = s["v1.0-flank-independent"];
     var b = s["H10-dual-channel"];
+    var d = s["H11-word-phonetic"];
     Console.WriteLine($"ISSUE_STATE {group.Key}: n={group.Count()} " +
-        $"Top1 {a.Top1Exact}->{b.Top1Exact}; JA false English " +
-        $"{a.JapaneseFalseEnglish}->{b.JapaneseFalseEnglish}");
+        $"Top1 {a.Top1Exact}->{b.Top1Exact}->{d.Top1Exact}; JA false English " +
+        $"{a.JapaneseFalseEnglish}->{b.JapaneseFalseEnglish}->{d.JapaneseFalseEnglish}");
 }
 foreach (var c in diagnostics.Where(x => !x.After.Top1Exact))
     Console.WriteLine($"H10_ERROR {c.Id}: {c.Raw} | {c.After.Failure} " +
         $"| expected {string.Join(",", c.Gold.Select(s => $"{s.Start}-{s.End}"))} " +
         $"| top1 {string.Join(",", c.After.Top1.Select(s => $"{s.Start}-{s.End}"))}");
+foreach (var c in diagnostics.Where(x => x.H11 is { Top1Exact: false }))
+    Console.WriteLine($"H11_ERROR {c.Id}: {c.Raw} | {c.H11!.Failure} " +
+        $"| expected {string.Join(",", c.Gold.Select(s => $"{s.Start}-{s.End}"))} " +
+        $"| top1 {string.Join(",", c.H11!.Top1.Select(s => $"{s.Start}-{s.End}"))}");
 foreach (var entry in timings)
 {
     var samples = entry.Value.Order().ToArray();
@@ -299,7 +348,9 @@ static Dictionary<string, Summary> Summarize(CaseReport[] rows)
     return new Dictionary<string, Summary>
     {
         ["v1.0-flank-independent"] = Aggregate("v1.0-flank-independent", x => x.Before),
-        ["H10-dual-channel"] = Aggregate("H10-dual-channel", x => x.After)
+        ["H10-dual-channel"] = Aggregate("H10-dual-channel", x => x.After),
+        ["H11-word-phonetic"] = Aggregate("H11-word-phonetic", x =>
+            x.H11 ?? throw new InvalidDataException("Missing H11 prediction"))
     };
 }
 static object Timing(List<double> input)
@@ -324,7 +375,7 @@ sealed record Prediction(string Model, int CandidateCount, bool CandidateCovered
 sealed record CaseReport(string Id, string Family, string Raw, Utf16Span[] Gold,
     Prediction Before, Prediction After, bool IsContrastPair,
     string? SourceUrl, string? IssueStateAtCollection, string? Qualification,
-    string? Provenance);
+    string? Provenance, Prediction? H11);
 sealed record Summary(string Model, int Count, int CandidateCoverage, int TopKExact,
     int Top1Exact, int JapaneseOnly, int JapaneseFalseEnglish, double BoundaryF1,
     Dictionary<string, int> FailureStages);
