@@ -32,6 +32,7 @@
 - [開発ロードマップ](docs/MELTIA_ROADMAP.md)
 - [H10 境界判定v2 要件定義（Meltype Issue駆動・研究フェーズ）](docs/MELTIA_H10_BOUNDARY_V2_REQUIREMENTS_20261014.md)
 - [H10 境界判定v2 試作実装・47件の新旧診断・再現手順](docs/MELTIA_H10_PROTOTYPE_COMPARISON_20261014.md)
+- [H10追加調査：Meltype Open/Closedの40 Issue・56入力の境界評価（全件結果）](docs/MELTIA_H10_MELTYPE_ISSUES_EXPANDED_20261014.md)
 - [開発バージョン管理（v0.5〜v1.0-dev）](docs/MELTIA_VERSIONING.md)
 - [v0.7 未知英語候補生成の実験・検証](docs/MELTIA_V07_UNKNOWN_LATIN_20261012.md)
 - [v0.8 音韻ラティス・経路探索の実装と実測](docs/MELTIA_V08_PHONETIC_LATTICE_20261012.md)
