@@ -10,5 +10,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Meltia.Core/Meltia.Core.csproj" />
     <None Include="issue_intents_v2.jsonl" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="issue_intents_extra_20261014.jsonl" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
