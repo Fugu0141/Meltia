@@ -19,6 +19,19 @@ dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c R
 dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --input tests/Meltia.H10Evaluation/issue_intents_extra_20261014.jsonl --output artifacts/h10/h10-extra-issue-comparison.json
 ```
 
+## 47件＋追加56件の累積範囲
+
+前回の47ケースと今回の56ケースを合わせ、**80件の異なるMeltype Issue、103件のラベル付き診断ケース、99種類のraw入力** を対象にした。`opencode`・`overcute` は別Issueが報告した同じraw、`new`・`aiueo` は同一rawに異なる意図を付けた対照ペアである。この4組の重複を独立観測数に数えて統計的な性能を推定しない。
+
+| 累計指標 | v1.0 | H10 |
+| --- | ---: | ---: |
+| **Top1完全一致** | 27/103 | **54/103** |
+| 正しい経路がTop-Kにある | 47/103 | **80/103** |
+| ENを含む82ケースでの候補完備 | 30/82 | **80/82** |
+| 非ENの21ケースで誤EN検出 | **1/21** | 8/21 |
+
+これらは「Issue症例を再診断した実験結果」であって、日本語文全般での正解率やユーザー体験改善率ではない。母集団には**元のモデルや過去の研究で見られた例**も含み、観測数も同一rawが重複する。純日本語の誤判定増加が残る以上、H10はまだ採用不可。
+
 ## 新たに追加した56入力の比較
 
 | 指標 | v1.0-flank-independent | H10-dual-channel |
