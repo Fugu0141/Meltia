@@ -34,6 +34,11 @@ jobs:
         run: >
           dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj
           -c Release -- --output artifacts/h10/h10-comparison.json
+      - name: Compare additional open and closed Meltype issue reports
+        run: >
+          dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj
+          -c Release -- --input tests/Meltia.H10Evaluation/issue_intents_extra_20261014.jsonl
+          --output artifacts/h10/h10-extra-issue-comparison.json
       - name: Upload full before-after case-level report
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
