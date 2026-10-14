@@ -13,7 +13,8 @@ namespace Meltia.Core.Boundary;
 public sealed class H11BoundaryPrototype
 {
     public const int MaxInputLength = H10BoundaryPrototype.MaxInputLength;
-    private const int MaxEdge = 40;
+    // Bound cubic phonetic work: long inputs compose adjacent segments.
+    private const int MaxEdge = 26;
     private const int Width = 16;
     private static readonly Regex Url = new(@"https?://[^\s]+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex Email = new(@"(?<![\w.@])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -22,6 +23,30 @@ public sealed class H11BoundaryPrototype
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly HashSet<string> Lexicon = LoadLexicon();
     private static readonly H10CharacterEvidence Model = new();
+    private static readonly string[] JapaneseSeams =
+        ["ga", "de", "no", "wo", "ni", "to", "ya", "ha", "suru",
+         "shita", "sareta", "noni", "kara", "made"];
+
+    private static bool Consonant(char letter) =>
+        char.IsAsciiLetter(letter) && "aeiou".IndexOf(char.ToLowerInvariant(letter)) < 0;
+
+    // A single nonstandard romaji keystroke should not force the whole
+    // Japanese reading into English. This is a costed *alternate FST path*,
+    // never a rewrite of the original keystrokes.
+    private static int RomajiFallbackCost(string word)
+    {
+        var costs = Enumerable.Repeat(99, word.Length + 1).ToArray();
+        costs[0] = 0;
+        for (int i = 0; i < word.Length; i++)
+        {
+            if (costs[i] == 99) continue;
+            costs[i + 1] = Math.Min(costs[i + 1], costs[i] + 1);
+            for (int n = 1; n <= 4 && i + n <= word.Length; n++)
+                if (MeltiaRomaji.CanRead(word.Substring(i, n)))
+                    costs[i + n] = Math.Min(costs[i + n], costs[i]);
+        }
+        return costs[^1];
+    }
 
     private enum Lang { Ja, En, Neutral }
     private sealed record Edge(Utf16Span Span, Lang Lang, double Score, string Origin);
@@ -92,7 +117,7 @@ public sealed class H11BoundaryPrototype
         foreach (var x in hard) Add(x, Lang.En, 100, "mandatory");
         foreach (Match m in Structure.Matches(raw))
             Add(new Utf16Span(m.Index, m.Index + m.Length), Lang.En,
-                5.5 + Math.Min(m.Length, 16) * 0.3, "structural");
+                15.0 + Math.Min(m.Length, 16) * 0.3, "structural");
 
         // Romanization and spelling scores are cached independently of the
         // path search; unlike H10, no pairwise rerun of the full decoder.
@@ -115,6 +140,26 @@ public sealed class H11BoundaryPrototype
             int endRun = i;
             while (endRun < raw.Length && char.IsAsciiLetter(raw[endRun]) &&
                 !hard.Any(x => endRun >= x.Start && endRun < x.End)) endRun++;
+            if (i == 0 || !char.IsAsciiLetter(raw[i - 1]))
+            {
+                // An alternative Japanese path represents a full local typing
+                // intent without inventing English inside a near-phonetic word.
+                // Only 6-14 lowercase letters with <=1 unsupported romaji
+                // keystroke and a plausible Japanese final vowel/n qualify.
+                // No Issue-specific word list or output correction is used.
+                int size = endRun - i;
+                if (size is >= 6 and <= 14)
+                {
+                    var entire = raw[i..endRun];
+                    bool endsLikeJapanese = "aeioun".Contains(entire[^1]);
+                    if (entire.All(char.IsLower) && endsLikeJapanese &&
+                        !Lexicon.Contains(entire) &&
+                        RomajiFallbackCost(entire) <= 1)
+                        Add(new Utf16Span(i, endRun), Lang.Ja,
+                            0.68 * size + 5.8 - 2.0 * RomajiFallbackCost(entire),
+                            "robust-full-romaji");
+                }
+            }
             Add(new Utf16Span(i, i + 1), Lang.Ja, -2.65, "unfinished-romaji");
             // Fully spelled Japanese syllables must be representable even when
             // an English word inside the same run is an attractive hypothesis.
@@ -154,6 +199,21 @@ public sealed class H11BoundaryPrototype
                 double readablePenalty = readable ? 2.25 : 0;
                 double spell = -1.45 + difference * Math.Min(word.Length, 14) * 0.70 +
                     0.11 * word.Length + lexBonus + capsBonus - readablePenalty;
+                // The right seam is Japanese phonotactics, not a list of
+                // examples. A lexical/nonphonetic word should end BEFORE a
+                // particle rather than consume its first letter.
+                if (end < endRun && word.Length >= 2 && (!readable || lexical) &&
+                    JapaneseSeams.Any(p => raw.AsSpan(end, endRun - end)
+                        .StartsWith(p.AsSpan(), StringComparison.OrdinalIgnoreCase)))
+                    spell += 2.8;
+                if (end == endRun && word.Any(char.IsUpper) &&
+                    word.Any(char.IsLower) && word.Skip(1).Any(char.IsUpper))
+                    spell += 2.0;
+                // Latin word immediately adjacent to existing Japanese script
+                // is a stronger English island than an arbitrary substring.
+                if (end == endRun && end < raw.Length &&
+                    char.IsLetter(raw[end]) && !char.IsAsciiLetter(raw[end]) &&
+                    (lexical || char.IsUpper(word[0]))) spell += 3.2;
                 if (isolatedOne) spell += 2.0;
                 Add(new Utf16Span(i, end), Lang.En, spell, lexical
                     ? "baseline-lexicon-word" : "orthographic-word");
@@ -174,8 +234,15 @@ public sealed class H11BoundaryPrototype
             int beginLetters = j;
             while (j < raw.Length && char.IsAsciiLetter(raw[j]) && j - i < MaxEdge) j++;
             for (int end = beginLetters + 1; end <= j; end++)
+            {
+                bool seam = end < j && Consonant(raw[end]) && end + 1 < j &&
+                    "aeiou".Contains(char.ToLowerInvariant(raw[end + 1]));
+                bool doubles = end >= beginLetters + 2 &&
+                    raw[end - 1] == raw[end - 2];
                 Add(new Utf16Span(i, end), Lang.En,
-                    4.5 + 0.34 * (end - i), "numeric-latin");
+                    4.5 + 0.34 * (end - i) + (seam && doubles ? 5.0 : 0),
+                    "numeric-latin");
+            }
         }
 
         var dp = new List<Node>[raw.Length + 1, 3];
