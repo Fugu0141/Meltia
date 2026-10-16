@@ -60,6 +60,16 @@ internal static class H11Snapshot
     internal static string CorpusSha(string path) =>
         Hash(File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal));
 
+    internal static string EmbeddedDictionarySha()
+    {
+        using var stream = typeof(H11BoundaryPrototype).Assembly
+            .GetManifestResourceStream("Meltia.H11EnglishWords")
+            ?? throw new InvalidOperationException("H11 embedded English corpus missing");
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        return Convert.ToHexString(SHA256.HashData(buffer.ToArray())).ToLowerInvariant();
+    }
+
     internal static void Verify(string path, string corpus, IReadOnlyList<H11CaseSnapshot> actual)
     {
         if (!File.Exists(path)) throw new FileNotFoundException("Frozen H11 baseline absent", path);
