@@ -40,7 +40,7 @@ dotnet run --project tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj -c Rel
 
 初回の[GitHub Actions run #38930087520](https://github.com/Fugu0141/Meltia/actions/runs/38930087520) は **成功**。`H11_BENCH_FIXTURES_PASS` と `H11_BENCH_PASS: 44 fixtures x 3 models, warmups=2, repetitions=7` を確認。合成8カテゴリ×5長さ＋編集後4状態の合計44入力について、3モデルを同条件で計測した。モデル本体・辞書に一切変更を加えていない。
 
-- **測定対象ソースコミット**：`3d58a0a1a7845b5e6619646a7d1eff0f4a655e62`。GitHub PRのhead SHAをレポート内へ保存。
+- **初回PR head SHA**：`3d58a0a1a7845b5e6619646a7d1eff0f4a655e62`。ただし初回のCIは既定のPRマージコミットをcheckoutしていたのに、レポートの `RepositoryCommit` はhead SHAを表示していたため、**初回のJSONだけでは実際の計測checkoutコミットを確定できない**。数値は参考観測として保持するが、厳密な同一コミット再現基準には使わない。
 - **実行条件**：GitHub Actions ubuntu-latest（Ubuntu 24.04）、Linux x64、.NET SDK **10.0.402**、Releaseビルド、事前ウォームアップ2回、計測7回、各モデル・入力ごとに開始前GC、`Stopwatch` と現在スレッドの割り当て量を測定。詳細なCPU識別・OS・runtime・辞書/モデル/入力ハッシュはArtifactのJSONが正本。
 - **結果の正本**：該当runの `h11-synthetic-benchmark-*` Artifact（`full.json`、保持期限14日）。時間統計の**p95/p99は7反復のnearest-rank法のため最大値と一致**し、低遅延SLAや十分な尾部統計ではない。
 
@@ -56,3 +56,9 @@ dotnet run --project tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj -c Rel
 **観測と次期改修への示唆**：ローマ字日本語1024文字ではH11の1回の全文解析がp50で約199ms・約233MBのスレッド割り当て量となった。H10より速いが旧v1.0より遅い。一般化を避けつつ、後続Phase 2の**PERF-01 / PERF-02**で長文のCPUと割り当て元をプロファイルし、出力不変のキャッシュ・Span化などを評価する優先度は高い。**ここでは最適化を行わず、既存103件の固定出力も変更しない。**
 
 初回の全長CI成功を確認した後、継続的なPR CIは`--smoke`（32/128文字）へ縮小し、全長の再実測はworkflow_dispatchの`full`で任意に起動する方針とした。JSON Artifactの有効期限後も、この文書の数値・コミットと条件は比較のための研究記録として残す。毎回の実測値を同じハードウェアを使わないまま厳密比較しない。
+
+## 7. レビュー指摘への修正（2026-10-17）
+
+- [PR #37](https://github.com/Fugu0141/Meltia/pull/37) のP1：workflowの `pull_request.paths` に `src/Meltia.Core/**` と `dictionaries/english.txt` を追加し、計測器以外の推論コード・辞書変更でもsmokeが起動するようにした。
+- 同P1：checkout後の `git rev-parse HEAD` を `MELTIA_ACTUAL_CHECKOUT_SHA` に保存し、JSONの `ActualCheckoutCommit` と互換名 `RepositoryCommit` に書く。従来のPR headは **別項目** `PrHeadCommit` として記録。PRイベントでは合成マージコミットのSHAを実測対象として記録する。Actions内でcheckout SHA取得が欠落した場合は失敗する。
+- [修正後のrun #38932964971](https://github.com/Fugu0141/Meltia/actions/runs/38932964971) でベンチ計測CIの成功を確認。**smoke成功は性能閾値保証ではない**。将来の厳密な性能比較はマシン・負荷・実行順の固定や反復数増加を別途計画する。
