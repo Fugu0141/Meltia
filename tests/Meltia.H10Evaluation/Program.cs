@@ -6,6 +6,13 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Meltia.Core.Boundary;
 
+// Standalone negative tests for the baseline verifier (no decoder run).
+if (args.Length == 2 && args[0] == "--test-baseline-validator")
+{
+    H11Snapshot.ValidatorSelfTest(args[1]);
+    return 0;
+}
+
 var input = Path.Combine(AppContext.BaseDirectory, "issue_intents_v2.jsonl");
 string output = "artifacts/h10-comparison.json";
 string? verifyBaseline = null;
@@ -19,7 +26,8 @@ for (int i = 0; i < args.Length; i++)
     else if (args[i] == "--emit-baseline") emitBaseline = true;
     else throw new ArgumentException(
         "Usage: --input corpus.jsonl --output report.json " +
-        "[--verify-baseline frozen.jsonl] [--emit-baseline]");
+        "[--verify-baseline frozen.jsonl] [--emit-baseline] | " +
+        "--test-baseline-validator frozen.jsonl");
 }
 var cases = File.ReadLines(input).Where(x => !string.IsNullOrWhiteSpace(x))
     .Select(x => JsonSerializer.Deserialize<Case>(x, new JsonSerializerOptions
