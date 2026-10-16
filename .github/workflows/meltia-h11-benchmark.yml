@@ -59,6 +59,20 @@ jobs:
           fi
           dotnet run --project tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj \
             -c Release -- --"$MODE" --output "artifacts/h11-benchmark/$MODE.json"
+      - name: Verify JSON provenance against actual checkout
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          files = list(pathlib.Path('artifacts/h11-benchmark').glob('*.json'))
+          assert len(files) == 1, 'Expected exactly one benchmark report'
+          report = json.loads(files[0].read_text(encoding='utf-8'))
+          checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert report['ActualCheckoutCommit'] == checkout, 'Report checkout SHA mismatch'
+          assert report['RepositoryCommit'] == checkout, 'Compatibility SHA mismatch'
+          assert report['PrHeadCommit'] == os.environ['MELTIA_PR_HEAD_SHA'], 'PR head SHA mismatch'
+          print('H11_BENCH_PROVENANCE_PASS: actual checkout SHA matches report')
+          PY
       - name: Upload benchmark report
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
