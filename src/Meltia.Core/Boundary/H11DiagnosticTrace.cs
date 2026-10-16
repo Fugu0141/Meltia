@@ -196,13 +196,19 @@ public sealed partial class H11BoundaryPrototype
     {
         private const int MaxDropEvents = 10000;
         private readonly List<Edge> _edges = [];
+        private readonly Dictionary<Edge, int> _englishEndRuns =
+            new(ReferenceEqualityComparer.Instance);
         private readonly List<Node> _endNodes = [];
         private readonly List<Node> _routes = [];
         private readonly Dictionary<string, int> _rejected = new(StringComparer.Ordinal);
         private readonly List<DiagnosticBeamDrop> _drops = [];
         private int _totalDropped;
 
-        public void Accept(Edge edge) => _edges.Add(edge);
+        public void Accept(Edge edge, int? englishRunEnd)
+        {
+            _edges.Add(edge);
+            if (englishRunEnd is not null) _englishEndRuns.Add(edge, englishRunEnd.Value);
+        }
         public void Reject(string reason)
         {
             _rejected.TryGetValue(reason, out int count);
@@ -226,7 +232,8 @@ public sealed partial class H11BoundaryPrototype
 
         public DiagnosticTrace Build(string raw, Analysis result)
         {
-            var explained = _edges.Select(edge => ExplainEdge(raw, edge)).ToArray();
+            var explained = _edges.Select(edge => ExplainEdge(raw, edge,
+                _englishEndRuns.TryGetValue(edge, out int runEnd) ? runEnd : null)).ToArray();
             var routes = _routes.Select(RouteSteps).ToArray();
             if (routes.Length != result.Routes.Count ||
                 routes.Where((x, i) => x.Score != result.Routes[i].Score ||
@@ -274,7 +281,7 @@ public sealed partial class H11BoundaryPrototype
         }
     }
 
-    private static DiagnosticEdge ExplainEdge(string raw, Edge edge)
+    private static DiagnosticEdge ExplainEdge(string raw, Edge edge, int? latinRunEnd)
     {
         var features = new List<ScoreTerm>();
         void Add(string name, double value) => features.Add(new ScoreTerm(name, value));
@@ -324,7 +331,7 @@ public sealed partial class H11BoundaryPrototype
                 break;
             case "baseline-lexicon-word":
             case "orthographic-word":
-                ExplainEnglish(raw, edge, word, Add);
+                ExplainEnglish(raw, edge, word, latinRunEnd, Add);
                 break;
             default:
                 throw new InvalidDataException("Unrecognized H11 edge origin");
@@ -337,12 +344,11 @@ public sealed partial class H11BoundaryPrototype
     }
 
     private static void ExplainEnglish(string raw, Edge edge, string word,
-        Action<string, double> add)
+        int? latinRunEnd, Action<string, double> add)
     {
         int i = edge.Span.Start, end = edge.Span.End;
-        int endRun = end;
-        while (endRun < raw.Length && char.IsAsciiLetter(raw[endRun]))
-            endRun++;
+        int endRun = latinRunEnd ??
+            throw new InvalidDataException("Missing original English run boundary");
         bool readable = RomajiReadable(word);
         double difference = Model.Difference(word);
         bool lexical = Lexicon.Contains(word.ToLowerInvariant());
