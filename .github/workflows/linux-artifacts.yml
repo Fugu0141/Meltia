@@ -1,10 +1,11 @@
-name: linux
+name: linux-artifact-ci
 
 # Linux 版 (linux/、IBus) をビルドして、テスター向けの zip を実行結果 (Artifacts) に置く。
 # PRではIBus/Mozc実統合を同一HEADで検証し、Windowsの実キーE2Eとは分ける。
 # 手動のOS別受け入れ試験: docs/MELTIA_OS_E2E_VERIFICATION.md
 # Actionsから手動で実行するか、対象コードを変更したPR/mainで実行する。
 # このワークフローは配布を行わず、検証用ZIPをActions Artifactにのみ保存する。
+# Issue #23: legacy linux.yml workflow ID と分離。旧IDは管理者が無効化する。
 # Meltiaの既存v*リリースは変更しない。将来のLinux公開は別途レビューした専用手順で行う。
 # Mozc のビルドは初回 30〜40 分かかるので、Bazel の結果をキャッシュして次から速くする。
 on:
@@ -18,7 +19,7 @@ on:
       - 'src/Meltype.Core.Tests/**'
       - 'dictionaries/**'
       - 'tools/test-native-boundaries.py'
-      - '.github/workflows/linux.yml'
+      - '.github/workflows/linux-artifacts.yml'
   push:
     branches: [main]
     paths:
@@ -27,7 +28,7 @@ on:
       - 'src/Meltype.Core/**'
       - 'dictionaries/**'
       - 'tools/test-native-boundaries.py'
-      - '.github/workflows/linux.yml'
+      - '.github/workflows/linux-artifacts.yml'
 
 permissions:
   contents: read
