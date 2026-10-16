@@ -30,6 +30,7 @@
 - [プロジェクトの由来と本家との関係](docs/MELTIA_ORIGIN.md)
 - [ライセンスと著作権の取り扱い](docs/MELTIA_LICENSE_POLICY.md)
 - [開発ロードマップ](docs/MELTIA_ROADMAP.md)
+- [H11 Phase 0-A3：独立自然文holdoutの収集・封印・評価手順](docs/MELTIA_H11_PHASE0_A3_HOLDOUT_POLICY_20261017.md)
 - [H10 境界判定v2 要件定義（Meltype Issue駆動・研究フェーズ）](docs/MELTIA_H10_BOUNDARY_V2_REQUIREMENTS_20261014.md)
 - [H10 境界判定v2 試作実装・47件の新旧診断・再現手順](docs/MELTIA_H10_PROTOTYPE_COMPARISON_20261014.md)
 - [H10追加調査：Meltype Open/Closedの40 Issue・56入力の境界評価（全件結果）](docs/MELTIA_H10_MELTYPE_ISSUES_EXPANDED_20261014.md)

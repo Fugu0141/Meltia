@@ -1,0 +1,26 @@
+name: Meltia H11 holdout policy validation
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'tools/validate_h11_holdout.py'
+      - 'tests/test_validate_h11_holdout.py'
+      - 'docs/MELTIA_H11_PHASE0_A3_*.md'
+      - '.github/workflows/meltia-h11-holdout.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  holdout-schema:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Run synthetic-only holdout schema regression tests
+        run: python3 -m unittest discover -s tests -p 'test_validate_h11_holdout.py' -v
+      - name: Validate Python syntax without holdout content
+        run: python3 -m py_compile tools/validate_h11_holdout.py

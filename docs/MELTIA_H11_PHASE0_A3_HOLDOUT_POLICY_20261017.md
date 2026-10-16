@@ -1,0 +1,110 @@
+# H11 Phase 0-A3：独立自然文holdoutの収集・封印・評価仕様（2026-10-17）
+
+> **データ収集の手順・ラベル規則・分離基準の凍結のみ**。このPRで実際の自然文や利用者の打鍵ログを取得せず、非公開testの正解を公開しない。研究用H11・辞書・Windows Preview/TSFの挙動は変更しない。
+>
+> 上位計画：[H11次期開発準備計画](MELTIA_H11_NEXT_DEVELOPMENT_READINESS_20261016.md)。既知Issue103件は[PR #36](https://github.com/Fugu0141/Meltia/pull/36)で**挙動固定の診断集合**とした。これを自然文holdoutの正解率として利用・再標本化しない。
+
+## 1. 目的と採用前の条件
+
+H11は既知Meltype Issue由来の103ラベル付きケースでTop1 72/103だったが、報告由来の辞書命中やモデル調整との独立性を立証できていない。実際の一般的な日英混在入力に対して評価するには、**事前に収集・隔離・ラベル付けした未使用の自然文**を別に必要とする。
+
+- 独立holdoutの**test**は、バージョン比較と受け入れ判定が確定するまで実装者が見ない。初回テスト後の誤例への対策は別の**dev**群で行い、同じtestへの再調整を禁止する。
+- 本書の公開によって生データが存在・承認されたことにはならない。実データの収集や公開には権利者の許諾・保護措置・管理担当者の合意が必要。
+- **完成条件**は仕様と検証器の整備。自然文の実収集・独立ラベル監査・sealed testのスコア計測は未完了の別マイルストーン。
+
+## 2. 出典と許諾
+
+対象は短文/長文、日本語ローマ字、英単語、複数英語区間、途中切替、固有名、URL、絵文字等。*公開可能な文章*であっても自由に再配布できるとは限らない。
+
+1. ライセンスと出典URL/文献を検証できる公開自然文、または明示的な研究利用・保持許諾を受けた提出文のみを候補にする。SNS・チャット・業務情報を無断転載しない。
+2. Meltype Issueの報告、Meltia/IncrementalBoundaryLabの既存研究ケース、辞書から抽出した模範例は**独立testに含めない**。
+3. 利用許諾の範囲、引用・再配布可否、保持期限、収集UTC日、出典識別子、ラベル担当者、取消し/削除の連絡経路を**非公開のメタデータ**に保持する。
+4. 実ユーザーのキー入力履歴、IME学習辞書、アクセスログ、認証情報、URLクエリ内の個人情報、病歴等の個人データは採取しない。利用目的以外の二次利用を禁止。
+5. 公開リポジトリに格納するのは**仕様・合成サンプル・検証器・集計結果のみ**。dev/testのraw、ラベル、元URLで秘匿性を損なうもの、抽出可能な短文ハッシュ一覧はコミットしない。
+
+## 3. データ構造：1行1raw、複数意図は同一行で管理
+
+UTF-8 JSONL、各行のキーと型は以下。自然文データは私有・権限管理された保存領域に配置する。
+
+| フィールド | 必須 | 説明 |
+|---|---|---|
+| `case_id` | ○ | 元文を表さないランダムID。Issue番号等を流用しない |
+| `split` | ○ | `dev` または `test`。固定後は変更不可 |
+| `raw` | ○ | **IMEに投入する実際の文字列**。Unicode正規化やローマ字変換を実行前に加えない |
+| `intents` | ○ | 1個以上の意図ラベル。各要素に `label_id` と `english_spans`（`[[start,end],...]`） |
+| `source` | ○ | `source_id`, `kind`（`licensed-public` / `consented-submission`）, `license_or_consent`, `collected_utc` |
+| `tags` | ○ | `english_dictionary_hit`, `explicit_english`, `japanese_protection`, `seam`, `compound` のbooleanと、`script_group` |
+| `annotation` | ○ | `adjudicated`、final時は異なる2名以上の `independent_submissions` と完了した `adjudication`、draft時だけ `annotator_id` + `adjudicated:false` |
+
+ラベルはUTF-16 **half-open span**で、`0 <= start < end <= raw.Length(UTF-16)`、昇順・互いに非重複、サロゲートペアを割らない。英語以外の領域は暗黙に非英語、空配列`[]`は日本語のみ（または英語と判定しない）という意図を表す。**文字列を勝手に漢字変換した期待出力ではない。**
+
+### 合成例（実holdoutには使用しない）
+
+```json
+{"case_id":"synthetic-example-001","split":"dev","raw":"kyouhaGitHubde","intents":[{"label_id":"intent-a","english_spans":[[6,12]]}],"source":{"source_id":"synthetic-doc","kind":"licensed-public","license_or_consent":"synthetic-demo-only","collected_utc":"2026-10-17T00:00:00Z"},"tags":{"english_dictionary_hit":true,"explicit_english":false,"japanese_protection":false,"seam":true,"compound":false,"script_group":"mixed-latin"},"annotation":{"adjudicated":true,"independent_submissions":[{"annotator_id":"synthetic-1","intents":[{"label_id":"a","english_spans":[[6,12]]}]},{"annotator_id":"synthetic-2","intents":[{"label_id":"b","english_spans":[[6,12]]}]}],"adjudication":{"status":"complete","method":"agreement","reason":"Independent labels match","recorded_utc":"2026-10-17T00:00:00Z"}}}
+```
+
+この文字列はあくまで形式説明用で、出典/許諾フィールドは**合成サンプルの例外的プレースホルダー**。実データで`synthetic-demo-only`は拒否する。
+
+## 4. 重複、分離、辞書命中タグ
+
+- 原文の**バイト完全一致**だけでなく、事前に固定した重複監査正規化（NFC、空白連続の単一化、ASCII casefold）でも比較する。**正規化は重複検出にのみ使用**、評価入力rawは絶対に変更しない。
+- 同一rawで意図が異なるときは**同一ケースの`intents`を増やす**。相反するラベルを分割してdev/testに振り分けない。
+- 同一出典文の派生（改行、分割、誤字、別打鍵）はグループを固定し、必ず同じsplitに置く。出典`source_id`単位でもdev/test間交差を禁止。
+- Meltype既存Issue103件と同一raw、既存評価データとの重複、過去にモデル選択に使用した文章はtestから排除。既存ケースのごく近い言い換えも人手監査で除外。
+- `english_dictionary_hit`は**収集時に凍結した辞書SHA-256**に対し正解英語区間の表層形が命中するかのタグであり、推論結果から生成してはならない。辞書の追加時はタグ版を更新し、評価前後を同じ固定辞書で比較。
+- `explicit_english`は入力時に明示的な英語指定があったか。実装が勝手に推論したものではない。JA保護、seam、compound、script_groupも正解ラベルに基づきレビューする。
+
+## 5. 封印運用・ラベル監査と公開できる集計
+
+1. 収集担当（custodian）が事前に層別化とdev/test配分の基準を決め、同じ出典文を全て同じsplitへ配置。分離直後に各ファイルSHA-256と件数・辞書SHA・作成日時を**非公開監査台帳**へ記録。
+2. devは研究担当へ渡してよいが、testはアクセス制御付き暗号化保管。**モデル候補・辞書・閾値・評価コードと合格基準が確定するまで開封しない。** 研究担当へtest原文、テストラベル、短文のSHA一覧を提供しない。
+3. 2名以上の独立した注釈者が、意図・UTF-16区間を互いの回答を見ずにラベル付け。相違は第3者裁定/複数意図の記録。単一意図に無理に統一しない。注釈一致率や「判定不能」は別区分で報告。
+4. testは**一度だけ固定した比較**に使用。結果公開は件数・Top1/TopK・precision/recall・純JA誤英語など層別集計、無ラベルの性能値との区別、環境・辞書・モデルのハッシュを明記。少数セルで出典が推測される集計は省略。
+5. testで発見した誤りを開発に使うなら、そのtestは再評価から引退させ、新しい独立holdoutを再取得する。過去の測定を未来の独立テストと扱わない。
+
+## 6. ローカル検証と責務分離
+
+- `tools/validate_h11_holdout.py` は外部通信なしで、JSONLの必須フィールド、UTF-16スパン、不正なsplit、同一raw/source跨ぎ、重複case、既知Issueコーパスとのraw完全一致、ラベルの不整合を検証する。
+- この検証器を非公開データに対して使う場合は**収集担当の隔離環境でのみ**実行し、元のJSONLや詳細エラーをActions・外部AI・GitHubへ送信しない。出力は集計とステータスのみ。
+- CIは`tests/test_validate_h11_holdout.py` の**合成データ**だけで検証器の異常拒否をチェックする。秘匿testはCIへアップロードしない。
+- 形式バリデーションは出典の真正性、利用許諾、ラベルの意味的正確性、dev/test独立性を単独では保証しない。担当者による監査・権限分離を必要条件とする。
+
+## 7. 現状と次のマイルストーン
+
+**本PRの達成：**収集仕様、UTF-16・複数意図・重複・許諾・保護・辞書タグの形式、チェック用の合成例とローカル検証器/テストを整備。
+
+**未達成：**自然文の実収集、独立注釈者の裁定、出典・許諾の個別審査、秘匿testの封印運用、自然文holdoutでの精度評価、Windows実キーE2E。実在しないデータの件数や成功率を報告しない。
+
+
+## 8. レビュー指摘への修正（2026-10-17）
+
+### Draft / Finalの明確な分離
+
+CLIの `--mode draft|final` は省略時 `final`。`draft` は未裁定の収集中ケースのみ受理し、`annotation: {"annotator_id":"匿名ID","adjudicated":false}` が必要。**draft PASSはsealed testでの評価許可ではない**。重複、UTF-16、出典の構造検査はdraftでも行う。
+
+`final` モードには以下を必須とする。
+
+1. `annotation.adjudicated:true`。`independent_submissions` は異なる匿名`annotator_id`を持つ2名以上のリストで、それぞれ独自の `intents` とUTF-16の英字区間を保持する。
+2. `adjudication` に `status:"complete"`, `method:"agreement"|"third-party"`, 空でない `reason`, UTCの `recorded_utc` を保持する。
+3. `agreement` は各人の区間集合が一致し、かつ最終の上位`intents`とも一致する場合のみ。IDや列挙順は独立意図として扱わない。
+4. 判定が食い違う場合には `third-party` と、元の注釈者とは異なる `adjudicator_id` を必須にする。上位`intents`が第三者の最終結論（複数の妥当な意図も保持可能）。
+
+2名の独立注釈の真正性は、提出時刻・アクセス制御を含む**非公開の監査台帳**でcustodianが確認する。判定一致率もcustodianが各提出の区間データから層別集計する。現行検証器は一致率を計算・保証せず、finalで構造と合意の整合性を検証するにとどまる。
+
+```bash
+python3 tools/validate_h11_holdout.py --input /private/holdout.jsonl --mode draft
+python3 tools/validate_h11_holdout.py --input /private/holdout.jsonl --mode final
+```
+
+### 固定タグの規則
+
+`script_group` は `romaji-only`, `english-only`, `mixed-latin`, `mixed-script`, `japanese-script`, `code-url`, `other` の7種類のみ。ローマ字主体、英語主体、同じラテン文字列中での日英切替、複数スクリプト混在、日本語文字主体、コード・URL主体、その他の順に、入力意図・出典から注釈担当が設定する。分類では**モデルの予測を使わない**。
+
+`english_dictionary_hit` は、収集時に固定した辞書 `dictionaries/english.txt`（SHA-256 `9ff04ffe969c393d85d2ec67e3e6e494ac2c9e4d1b0b1f0d6c53648f3a4efd1f`）に対し、正解の英語スパンのうち少なくとも1つをASCII小文字化した文字列が辞書の見出し語に**完全一致**する場合のみtrue（正解英語スパンなしはfalse）。部分文字列一致は採用しない。辞書版とタグの意味的正確性は非公開台帳で管理し、**現行検証器はbool型のみをチェックする**ため自動的な辞書照合は未実装。
+
+### 著作権と不正UTF-8（レビューP2）
+
+新規PythonソースとテストにはGPL-3.0-or-laterのSPDX・2026年の著作権表示を付けた。`read_jsonl()` は不正UTF-8をデータを含めない例外に変換し、CLIはトレースバック・raw・ファイルパスを表示しない。合成の不正バイト列で負例テストを追加した。
+
+本PRでは独立自然文の実収集・許諾審査・裁定品質実測・秘匿test評価は行っていない。CIで使うのは合成データのみ。
