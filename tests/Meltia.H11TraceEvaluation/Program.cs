@@ -145,6 +145,29 @@ void RejectBoth(string raw, BoundaryEvidence evidence)
     catch (ArgumentException) { traceRejected = true; }
     Check(plainRejected && traceRejected, "trace must preserve invalid-lock exceptions");
 }
+// A one-letter x has no English candidate, even though it has a legal
+// Japanese fallback. This proves missing_candidate is distinct from pruning.
+var noEnglishEdge = engine.AnalyzeWithTrace("x");
+var absentEnglish = noEnglishEdge.Trace.CompareToGold([new Utf16Span(0, 1)]);
+Check(absentEnglish.Status == "missing_candidate" &&
+    !absentEnglish.ExistsInCandidateGraph &&
+    absentEnglish.BestGoldScore is null &&
+    absentEnglish.BestGoldSteps.Count == 0,
+    "gold comparison must not fabricate missing English candidates");
+var validJapanese = noEnglishEdge.Trace.CompareToGold([]);
+Check(validJapanese.Status == "correct" && validJapanese.ExistsInCandidateGraph,
+    "empty gold should accept a legal Japanese-only route");
+
+var lockedEnglish = engine.AnalyzeWithTrace("abcde",
+    new BoundaryEvidence(ExplicitEnglish: [new Utf16Span(0, 3)]));
+Check(lockedEnglish.Trace.Edges.Any(e =>
+    e.Origin == "mandatory" && e.RawUtf16Span == new Utf16Span(0, 3)),
+    "mandatory lock must be traceable");
+Check(lockedEnglish.Trace.Edges.All(e =>
+    Math.Abs(e.Contributions.Sum(t => t.Value) +
+        e.RoundingResidual - e.LocalScore) < 1e-9),
+    "locked candidate score accounting must remain exact");
+
 RejectBoth("😀test", new BoundaryEvidence(ExplicitEnglish: [new Utf16Span(1, 3)]));
 RejectBoth("abcdef", new BoundaryEvidence(ExplicitEnglish: [new Utf16Span(0, 4)],
     ExplicitJapanese: [new Utf16Span(2, 6)]));
