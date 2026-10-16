@@ -320,10 +320,13 @@ public sealed partial class H11BoundaryPrototype
                 int firstLetter = 0;
                 while (firstLetter < length && char.IsAsciiDigit(word[firstLetter]))
                     firstLetter++;
-                bool seam = edge.Span.End < raw.Length &&
-                    char.IsAsciiLetter(raw[edge.Span.End]) &&
+                int numericEnd = edge.Span.Start + firstLetter;
+                while (numericEnd < raw.Length &&
+                    char.IsAsciiLetter(raw[numericEnd]) &&
+                    numericEnd - edge.Span.Start < MaxEdge) numericEnd++;
+                bool seam = edge.Span.End < numericEnd &&
                     Consonant(raw[edge.Span.End]) &&
-                    edge.Span.End + 1 < raw.Length &&
+                    edge.Span.End + 1 < numericEnd &&
                     "aeiou".Contains(char.ToLowerInvariant(raw[edge.Span.End + 1]));
                 bool doubles = length >= firstLetter + 2 &&
                     word[^1] == word[^2];
