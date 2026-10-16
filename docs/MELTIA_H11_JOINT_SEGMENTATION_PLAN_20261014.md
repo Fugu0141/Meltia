@@ -40,4 +40,4 @@ PR #34のH10試作を既定ONにしてはならない。47件＋56件＝103件�
 - `tests/Meltia.H10Evaluation/Program.cs`: 旧v1.0、H10、H11の同条件比較・失敗箇所・経路検査
 - `docs/MELTIA_H11_RESEARCH_RESULTS_20261014.md`: 実行後の比較結果・次の設計判断
 
-**当面の達成状態**：Core独立試作で改善パターンと退行を確認する。製品のユーザー入力経路・Meltia Windows Preview・本家Meltypeには配線せず、レビュー前にmainへマージしない。
+**現段階の統合方針**：Core独立試作として精度と退行を検証済み。研究用の比較ベースとしてmainへの統合を許可する。ただし、製品のユーザー入力経路・Windows Preview・本家Meltypeには配線しない。IME実装の採用可否は独立評価・性能測定・Windows E2E完了後に別途判断する。
