@@ -4,6 +4,9 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
     paths:
+      # Performance changes in research Core or its embedded lexicon must run smoke.
+      - 'src/Meltia.Core/**'
+      - 'dictionaries/english.txt'
       - 'tests/Meltia.H11Benchmark/**'
       - 'docs/MELTIA_H11_PHASE0_A2_*.md'
       - '.github/workflows/meltia-h11-benchmark.yml'
@@ -29,12 +32,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      MELTIA_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      MELTIA_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: 10.0.x
+      - name: Record exact benchmark checkout
+        shell: bash
+        run: |
+          echo "MELTIA_ACTUAL_CHECKOUT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git rev-parse HEAD
       - name: Print measurement environment
         run: dotnet --info
       - name: Validate fixed UTF-16 and edit workload
