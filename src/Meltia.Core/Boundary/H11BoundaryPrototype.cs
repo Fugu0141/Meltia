@@ -11,7 +11,7 @@ namespace Meltia.Core.Boundary;
 /// runs in one Viterbi search. It never writes to the IME, TSF or host.
 /// The lexicon is the PRE-EXISTING Meltype English dictionary, not Issue gold.
 /// </summary>
-public sealed class H11BoundaryPrototype
+public sealed partial class H11BoundaryPrototype
 {
     public const int MaxInputLength = H10BoundaryPrototype.MaxInputLength;
     // Bound cubic phonetic work: long inputs compose adjacent segments.
@@ -63,9 +63,9 @@ public sealed class H11BoundaryPrototype
         return costs[^1];
     }
 
-    private enum Lang { Ja, En, Neutral }
-    private sealed record Edge(Utf16Span Span, Lang Lang, double Score, string Origin);
-    private sealed record Node(double Score, Lang Last, Edge? Edge, Node? Prev);
+    internal enum Lang { Ja, En, Neutral }
+    internal sealed record Edge(Utf16Span Span, Lang Lang, double Score, string Origin);
+    internal sealed record Node(double Score, Lang Last, Edge? Edge, Node? Prev);
     public sealed record Analysis(string Raw, IReadOnlyList<H10BoundaryPrototype.Edge> Edges,
         IReadOnlyList<BoundaryRoute> Routes, bool NeedsConfirmation)
     {
@@ -93,7 +93,11 @@ public sealed class H11BoundaryPrototype
         offset > 0 && offset < raw.Length &&
         char.IsHighSurrogate(raw[offset - 1]) && char.IsLowSurrogate(raw[offset]);
 
-    public Analysis Analyze(string raw, BoundaryEvidence? evidence = null)
+    public Analysis Analyze(string raw, BoundaryEvidence? evidence = null) =>
+        AnalyzeCore(raw, evidence, diagnostics: null);
+
+    private Analysis AnalyzeCore(string raw, BoundaryEvidence? evidence,
+        TraceCollector? diagnostics)
     {
         ArgumentNullException.ThrowIfNull(raw);
         if (raw.Length > MaxInputLength) throw new ArgumentOutOfRangeException(nameof(raw));
@@ -120,14 +124,33 @@ public sealed class H11BoundaryPrototype
 
         var edges = new List<Edge>[raw.Length + 1];
         for (int i = 0; i <= raw.Length; i++) edges[i] = [];
-        void Add(Utf16Span x, Lang lang, double score, string origin)
+        void Add(Utf16Span x, Lang lang, double score, string origin,
+            int? englishRunEnd = null)
         {
             if (x.Start < 0 || x.End > raw.Length || x.Start >= x.End ||
-                PairSplit(raw, x.Start) || PairSplit(raw, x.End)) return;
-            if (hard.Any(y => y.Overlaps(x) && y != x)) return;
-            if (hard.Contains(x) && lang != Lang.En) return;
-            if (lang == Lang.En && explicitJa.Any(y => y.Overlaps(x))) return;
-            edges[x.Start].Add(new Edge(x, lang, score, origin));
+                PairSplit(raw, x.Start) || PairSplit(raw, x.End))
+            {
+                diagnostics?.Reject("invalid-utf16-or-empty-span");
+                return;
+            }
+            if (hard.Any(y => y.Overlaps(x) && y != x))
+            {
+                diagnostics?.Reject("overlap-protected-or-english-lock");
+                return;
+            }
+            if (hard.Contains(x) && lang != Lang.En)
+            {
+                diagnostics?.Reject("lock-requires-english");
+                return;
+            }
+            if (lang == Lang.En && explicitJa.Any(y => y.Overlaps(x)))
+            {
+                diagnostics?.Reject("english-in-japanese-lock");
+                return;
+            }
+            var candidate = new Edge(x, lang, score, origin);
+            edges[x.Start].Add(candidate);
+            diagnostics?.Accept(candidate, englishRunEnd);
         }
         foreach (var x in hard) Add(x, Lang.En, 100, "mandatory");
         foreach (Match m in Structure.Matches(raw))
@@ -255,7 +278,7 @@ public sealed class H11BoundaryPrototype
                     (lexical || char.IsUpper(word[0]))) spell += 3.2;
                 if (isolatedOne) spell += 2.0;
                 Add(new Utf16Span(i, end), Lang.En, spell, lexical
-                    ? "baseline-lexicon-word" : "orthographic-word");
+                    ? "baseline-lexicon-word" : "orthographic-word", endRun);
             }
         }
         // Numeric+Latin terms: 50cc, 3D, 100GB. Their *whole* digit-prefixed
@@ -306,6 +329,8 @@ public sealed class H11BoundaryPrototype
                 if (destination.Count > Width * 2)
                 {
                     destination.Sort((a, b) => b.Score.CompareTo(a.Score));
+                    diagnostics?.Drop(i, last, destination.Skip(Width),
+                        destination[Width - 1].Score);
                     destination.RemoveRange(Width, destination.Count - Width);
                 }
             }
@@ -333,8 +358,11 @@ public sealed class H11BoundaryPrototype
             string signature = string.Join(";", en.Select(x => $"{x.Start}:{x.End}"));
             if (!seen.Add(signature)) continue;
             results.Add(new BoundaryRoute(en, finalist.Score));
+            diagnostics?.Selected(finalist);
             if (results.Count == 8) break;
         }
+        diagnostics?.Finalists(Enum.GetValues<Lang>()
+            .SelectMany(lang => dp[raw.Length, (int)lang]));
         bool uncertainty = results.Count > 1 &&
             results[0].Score - results[1].Score < 1.5;
         return new Analysis(raw, edges.SelectMany(x => x)
