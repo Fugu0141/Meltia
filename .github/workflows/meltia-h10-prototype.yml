@@ -4,7 +4,9 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
     paths:
-      - 'src/Meltia.Core/Boundary/H10*.cs'
+      # H11 and shared Core logic can change frozen fingerprints.
+      - 'src/Meltia.Core/**'
+      - 'dictionaries/english.txt'
       - 'tests/Meltia.H10Evaluation/**'
       - 'docs/MELTIA_H10_*.md'
       - '.github/workflows/meltia-h10-prototype.yml'
@@ -30,15 +32,19 @@ jobs:
           dotnet-version: 10.0.x
       - name: Existing Meltia Core contract tests
         run: dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
+      - name: H11 baseline validator negative regression tests
+        run: >
+          dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj
+          -c Release -- --test-baseline-validator tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
       - name: H10 prototype contract checks and issue diagnostics
         run: >
           dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj
-          -c Release -- --output artifacts/h10/h10-comparison.json
+          -c Release -- --output artifacts/h10/h10-comparison.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
       - name: Compare additional open and closed Meltype issue reports
         run: >
           dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj
           -c Release -- --input tests/Meltia.H10Evaluation/issue_intents_extra_20261014.jsonl
-          --output artifacts/h10/h10-extra-issue-comparison.json
+          --output artifacts/h10/h10-extra-issue-comparison.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
       - name: Upload full before-after case-level report
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

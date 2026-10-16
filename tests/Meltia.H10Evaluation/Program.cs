@@ -6,13 +6,28 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Meltia.Core.Boundary;
 
+// Standalone negative tests for the baseline verifier (no decoder run).
+if (args.Length == 2 && args[0] == "--test-baseline-validator")
+{
+    H11Snapshot.ValidatorSelfTest(args[1]);
+    return 0;
+}
+
 var input = Path.Combine(AppContext.BaseDirectory, "issue_intents_v2.jsonl");
 string output = "artifacts/h10-comparison.json";
+string? verifyBaseline = null;
+bool emitBaseline = false;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--output" && i + 1 < args.Length) output = args[++i];
     else if (args[i] == "--input" && i + 1 < args.Length) input = args[++i];
-    else throw new ArgumentException("Usage: --input corpus.jsonl --output report.json");
+    else if (args[i] == "--verify-baseline" && i + 1 < args.Length)
+        verifyBaseline = args[++i];
+    else if (args[i] == "--emit-baseline") emitBaseline = true;
+    else throw new ArgumentException(
+        "Usage: --input corpus.jsonl --output report.json " +
+        "[--verify-baseline frozen.jsonl] [--emit-baseline] | " +
+        "--test-baseline-validator frozen.jsonl");
 }
 var cases = File.ReadLines(input).Where(x => !string.IsNullOrWhiteSpace(x))
     .Select(x => JsonSerializer.Deserialize<Case>(x, new JsonSerializerOptions
@@ -186,6 +201,9 @@ for (int iteration = 0; iteration < 120; iteration++)
 // H10's issue-source snapshot. The data includes intentionally contradictory
 // intent for identical raw input, and must NOT be used as a learned dictionary.
 var diagnostics = new List<CaseReport>();
+var frozen = new List<H11CaseSnapshot>(cases.Length);
+string corpusName = Path.GetFileName(input);
+string corpusSha = H11Snapshot.CorpusSha(input);
 var timings = new Dictionary<string, List<double>>
 {
     ["v1.0-flank-independent"] = [],
@@ -201,6 +219,7 @@ foreach (var c in cases)
     var oldResult = old.Analyze(c.Raw);
     var h10Result = prototype.Analyze(c.Raw);
     var h11Result = challenger.Analyze(c.Raw);
+    frozen.Add(H11Snapshot.Capture(corpusName, c.Id, corpusSha, h11Result));
     // Warm both engines, then take 5 samples of a single independent Analyze.
     for (int i = 0; i < 5; i++)
     {
@@ -259,6 +278,10 @@ var report = new
     Runtime = Environment.Version.ToString(),
     OS = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
     SampleCount = cases.Length,
+    CorpusSha256 = corpusSha,
+    DictionarySha256 = H11Snapshot.EmbeddedDictionarySha(),
+    RepositoryCommit = Environment.GetEnvironmentVariable("GITHUB_SHA") ?? "local-unspecified",
+    SnapshotKind = "Immutable diagnostic fingerprint: candidates, routes, order, scores, confirmation",
     Summaries = summaries,
     Timings = timings.ToDictionary(x => x.Key, x => Timing(x.Value)),
     Cases = diagnostics
@@ -308,6 +331,8 @@ foreach (var entry in timings)
         $"p50={P(.50):F4}ms, p95={P(.95):F4}ms, p99={P(.99):F4}ms");
 }
 Console.WriteLine("Report: " + Path.GetFullPath(output));
+if (emitBaseline) H11Snapshot.Emit(frozen);
+if (verifyBaseline is not null) H11Snapshot.Verify(verifyBaseline, corpusName, frozen);
 return 0;
 
 static void Check(bool condition, string message)

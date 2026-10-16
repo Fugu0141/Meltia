@@ -36,6 +36,7 @@
 - [H11語・音韻同時分割の修正計画（103ケースの失敗分析）](docs/MELTIA_H11_JOINT_SEGMENTATION_PLAN_20261014.md)
 - [H11の実装・103ケースの新旧実測・未解決31件・処理速度](docs/MELTIA_H11_RESEARCH_RESULTS_20261014.md)
 - [H11統合後の課題一覧・改修優先順位・次期開発の実装手順と受け入れ条件](docs/MELTIA_H11_NEXT_DEVELOPMENT_READINESS_20261016.md)
+- [H11 Phase 0-A1：103ケースの不変ベースライン・再現性ゲート](docs/MELTIA_H11_PHASE0_BASELINE_20261017.md)
 - [開発バージョン管理（v0.5〜v1.0-dev）](docs/MELTIA_VERSIONING.md)
 - [v0.7 未知英語候補生成の実験・検証](docs/MELTIA_V07_UNKNOWN_LATIN_20261012.md)
 - [v0.8 音韻ラティス・経路探索の実装と実測](docs/MELTIA_V08_PHONETIC_LATTICE_20261012.md)

@@ -1,0 +1,10 @@
+{
+  "Schema": "meltia-h11-baseline-metadata-v1",
+  "DictionaryResource": "Meltia.H11EnglishWords",
+  "DictionarySha256": "9ff04ffe969c393d85d2ec67e3e6e494ac2c9e4d1b0b1f0d6c53648f3a4efd1f",
+  "CaseCount": 103,
+  "CorpusCounts": {
+    "issue_intents_v2.jsonl": 47,
+    "issue_intents_extra_20261014.jsonl": 56
+  }
+}
