@@ -13,6 +13,7 @@ import subprocess
 import sys
 import unittest
 import urllib.request
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,7 +48,9 @@ def hazards(text):
 
 
 def git(*args):
-    return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+    return subprocess.check_output(
+        ["git", *args], cwd=ROOT, text=True, encoding="utf-8"
+    ).strip()
 
 
 def api_get(path):
@@ -172,6 +175,24 @@ def verify_live():
 
 
 class LegacyLinuxGuardTests(unittest.TestCase):
+    def test_git_output_is_utf8_independent_of_windows_codepage(self):
+        """git show reads UTF-8 even when the OS locale would default to cp932."""
+        expected = "name: Linux 版の検証"
+        git_bytes = (expected + "\\n").encode("utf-8")
+
+        def simulate_windows_check_output(command, **kwargs):
+            # On Japanese Windows, text=True without encoding uses cp932.
+            # Simulate that locale so this test also catches the bug on Linux.
+            return git_bytes.decode(kwargs.get("encoding") or "cp932")
+
+        with mock.patch("subprocess.check_output",
+                        side_effect=simulate_windows_check_output) as check:
+            self.assertEqual(git("show", "HEAD:README.md"), expected)
+            check.assert_called_once_with(
+                ["git", "show", "HEAD:README.md"],
+                cwd=ROOT, text=True, encoding="utf-8"
+            )
+
     def test_reproduction_old_tag_is_release_writer(self):
         """Reproduce by reading the historical commit; never execute the workflow."""
         historical = git("show", f"{TAG_SHA}:{OLD_PATH}")
