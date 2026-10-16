@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Fugu0141
 """Offline schema and leakage audit for custodian-held H11 natural-text data.
 
 Never uploads or prints raw text, source identifiers, or individual labels.
@@ -25,6 +26,11 @@ KNOWN_ISSUE_FILES = (
     REPO_ROOT / "tests/Meltia.H10Evaluation/issue_intents_v2.jsonl",
     REPO_ROOT / "tests/Meltia.H10Evaluation/issue_intents_extra_20261014.jsonl",
 )
+SCRIPT_GROUPS = frozenset({
+    "romaji-only", "english-only", "mixed-latin", "mixed-script",
+    "japanese-script", "code-url", "other",
+})
+
 REQUIRED_TAGS = (
     "english_dictionary_hit", "explicit_english", "japanese_protection",
     "seam", "compound",
@@ -91,7 +97,9 @@ def check_source(source: object, allow_synthetic: bool) -> str:
     return source["source_id"]
 
 
-def check_labels(intents: object, boundaries: set[int], max_len: int) -> None:
+def check_labels(
+    intents: object, boundaries: set[int], max_len: int,
+) -> frozenset[tuple[tuple[int, int], ...]]:
     if not isinstance(intents, list) or not intents:
         raise HoldoutValidationError("Missing interpretation labels")
     label_ids: set[str] = set()
@@ -124,13 +132,66 @@ def check_labels(intents: object, boundaries: set[int], max_len: int) -> None:
         if fingerprint in distinct_interpretations:
             raise HoldoutValidationError("Duplicate interpretation spans")
         distinct_interpretations.add(fingerprint)
+    return frozenset(distinct_interpretations)
+
+
+def check_annotation(
+    annotation: object, final_labels: frozenset[tuple[tuple[int, int], ...]],
+    boundaries: set[int], max_len: int, mode: str,
+) -> None:
+    if not isinstance(annotation, dict) or type(annotation.get("adjudicated")) is not bool:
+        raise HoldoutValidationError("Missing annotation status")
+    if mode == "draft":
+        # An unreviewed draft is never silently accepted as sealed test data.
+        if annotation["adjudicated"] or not nonempty(annotation.get("annotator_id")):
+            raise HoldoutValidationError("Draft requires one pending annotation")
+        return
+    if annotation["adjudicated"] is not True:
+        raise HoldoutValidationError("Final holdout needs completed adjudication")
+    submissions = annotation.get("independent_submissions")
+    if not isinstance(submissions, list) or len(submissions) < 2:
+        raise HoldoutValidationError("Final holdout needs two independent annotations")
+    annotators: set[str] = set()
+    decisions: list[frozenset[tuple[tuple[int, int], ...]]] = []
+    for submission in submissions:
+        if not isinstance(submission, dict) or not nonempty(submission.get("annotator_id")):
+            raise HoldoutValidationError("Missing independent annotator ID")
+        annotator_id = submission["annotator_id"]
+        if annotator_id in annotators:
+            raise HoldoutValidationError("Duplicated independent annotator")
+        annotators.add(annotator_id)
+        decisions.append(check_labels(submission.get("intents"), boundaries, max_len))
+    decision = annotation.get("adjudication")
+    if not isinstance(decision, dict) or decision.get("status") != "complete" or \
+            decision.get("method") not in ("agreement", "third-party") or \
+            not nonempty(decision.get("recorded_utc")) or \
+            not nonempty(decision.get("reason")):
+        raise HoldoutValidationError("Final adjudication audit record missing")
+    recorded = decision["recorded_utc"]
+    if not isinstance(recorded, str) or not recorded.endswith("Z"):
+        raise HoldoutValidationError("Final adjudication timestamp must be UTC")
+    try:
+        datetime.fromisoformat(recorded.replace("Z", "+00:00"))
+    except ValueError:
+        raise HoldoutValidationError("Invalid adjudication timestamp") from None
+    same = all(item == decisions[0] for item in decisions[1:])
+    if decision["method"] == "agreement":
+        if not same or final_labels != decisions[0]:
+            raise HoldoutValidationError("Agreement does not match submitted labels")
+    else:
+        if same or not nonempty(decision.get("adjudicator_id")) or \
+                decision["adjudicator_id"] in annotators:
+            raise HoldoutValidationError("Disagreement requires an independent third party")
+        # The top-level intents are the third party\x27s adjudicated outcome.
 
 
 def validate_rows(
     rows: list[object], reference_raw: set[str] | None = None,
-    *, allow_synthetic: bool = False,
+    *, allow_synthetic: bool = False, mode: str = "final",
 ) -> dict[str, int]:
     """Audit both splits together. A custodian runs this only on private storage."""
+    if mode not in ("draft", "final"):
+        raise HoldoutValidationError("Unknown holdout validation mode")
     if not rows:
         raise HoldoutValidationError("Empty holdout corpus")
     if reference_raw is None:
@@ -167,15 +228,11 @@ def validate_rows(
             if source_id in source_splits and source_splits[source_id] != split:
                 raise HoldoutValidationError("Source crosses dev/test boundary")
             source_splits[source_id] = split
-            check_labels(row.get("intents"), boundaries, size)
-            annotation = row.get("annotation")
-            if not isinstance(annotation, dict) or not nonempty(
-                annotation.get("annotator_id")
-            ) or type(annotation.get("adjudicated")) is not bool:
-                raise HoldoutValidationError("Missing annotation adjudication record")
+            labels = check_labels(row.get("intents"), boundaries, size)
+            check_annotation(row.get("annotation"), labels, boundaries, size, mode)
             tags = row.get("tags")
-            if not isinstance(tags, dict) or not nonempty(tags.get("script_group")):
-                raise HoldoutValidationError("Missing script-group tag")
+            if not isinstance(tags, dict) or tags.get("script_group") not in SCRIPT_GROUPS:
+                raise HoldoutValidationError("Invalid script-group tag")
             if any(type(tags.get(key)) is not bool for key in REQUIRED_TAGS):
                 raise HoldoutValidationError("Missing or invalid strata tags")
             counts[split] += 1
@@ -188,25 +245,31 @@ def validate_rows(
 
 
 def read_jsonl(path: Path) -> list[object]:
-    with path.open(encoding="utf-8") as stream:
-        output = []
-        for number, line in enumerate(stream, 1):
-            if not line.strip():
-                continue
-            try:
-                output.append(json.loads(line))
-            except json.JSONDecodeError:
-                raise HoldoutValidationError(f"Row {number}: malformed JSON") from None
-        return output
+    try:
+        with path.open(encoding="utf-8") as stream:
+            output = []
+            for number, line in enumerate(stream, 1):
+                if not line.strip():
+                    continue
+                try:
+                    output.append(json.loads(line))
+                except json.JSONDecodeError:
+                    raise HoldoutValidationError(f"Row {number}: malformed JSON") from None
+            return output
+    except UnicodeError:
+        # UnicodeDecodeError otherwise exposes potentially private byte values.
+        raise HoldoutValidationError("Local corpus is not valid UTF-8") from None
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path,
                         help="Private JSONL path on custodian's local machine")
+    parser.add_argument("--mode", choices=("draft", "final"), default="final",
+                        help="final requires two independent labels and completed adjudication")
     args = parser.parse_args()
     try:
-        summary = validate_rows(read_jsonl(args.input))
+        summary = validate_rows(read_jsonl(args.input), mode=args.mode)
     except (HoldoutValidationError, OSError) as exc:
         if isinstance(exc, OSError):
             # File path may reveal private folders: don't echo it.
