@@ -178,7 +178,7 @@ class LegacyLinuxGuardTests(unittest.TestCase):
     def test_git_output_is_utf8_independent_of_windows_codepage(self):
         """git show reads UTF-8 even when the OS locale would default to cp932."""
         expected = "name: Linux 版の検証"
-        git_bytes = (expected + "\\n").encode("utf-8")
+        git_bytes = (expected + "\n").encode("utf-8")
 
         def simulate_windows_check_output(command, **kwargs):
             # On Japanese Windows, text=True without encoding uses cp932.
