@@ -111,3 +111,16 @@ gh workflow list --all -R Fugu0141/Meltia
 - PRの分岐元 `32ac40618b5298d1362a1a33b22ff602729b69ec` から `main` が28コミット進んでいたため、`5b55e7b42a97c99981bc2099f0f770a624db674c` を対象にPR専用ブランチへ統合する。競合するREADMEは最新mainのIssue #22・#32の参照を保持し、Issue #23のリンクを追加する。他のIssueで変更したファイルは上書きしない。
 - **安全ゲート未完了**。公開タグ・Release/Assetsは変更せず、危険な旧workflowをDispatch/Re-runせず、PRはDraft/未マージ、Issue #23はOpenを維持する。
 - 統合HEADの `legacy-linux-release-guard`（固定歴史SHA＋モック検証10件）、`meltia-strict-quality`、必要なLinux/Windows Build/PR checksはGitHub Actionsの同じHEADで区別して確認する。Draft/paths条件によるskippedを成功として扱わない。
+
+
+## 2026-10-17 追加調査・修正 — 過去実行のRe-run条件を非破壊監査
+
+Issue #23の受け入れ条件にある「過去runのRe-runで既存Releaseに追記できないこと」の確認を、管理者設定と区別して補強する。公開GitHub API `GET /repos/Fugu0141/Meltia/actions/runs` のページを全走査し、旧ワークフローID **`380655837`** に対応する記録は調査時点で **38件**（通常のbranch push **22件**、PR **16件**）。記録された38件にタグ起動・手動起動はなかった。対象タグコミット `7894860d9a8b0960bf6a25d27fec5c0712deb059` に紐づく実行9件にも旧Linuxワークフローは含まれず、リポジトリ全体の `workflow_dispatch` 実行も公開APIのフィルタでは0件だった。
+
+過去タグ版 `.github/workflows/linux.yml` では Release upload のステップは `if: startsWith(github.ref, 'refs/tags/v')` に限定されている。GitHub公式は **Re-runが元の `GITHUB_REF` を保持**することを明記している。したがって、今回確認できたbranch / PR実行履歴はその条件ではRelease uploadを起動しないと判断できる。ただし、これは**観測した履歴と当該YAMLの条件に基づく判断**であり、無効化前の将来のタグDispatchを防いだ証拠や、GitHubの永続的な保証ではない。
+
+`tools/test_legacy_linux_release_guard.py --live` に、旧workflow IDの `GET /actions/workflows/{id}/runs` の全ページ取得と、履歴実行イベント・元のブランチ情報の **fail-closed** 検査を追加した。タグと区別できない `v*` で始まるref名、`workflow_dispatch`、不明なイベント、履歴不足・重複・workflow ID不一致があれば失敗する。テスト用モックでは通常branch/PRの正常系と、タグ/手動・件数不足/ID不一致・重複を検証する。実際の過去runを **Dispatch / Re-run しない**。
+
+この変更後の監査が`PASS`するためには、上記の履歴検査に加え、**管理者が旧workflow IDを `disabled_manually` にした実測**が必要。現時点では無効化の管理操作および現在の状態を確認できていないため、`--live`の実環境成功は未確認。コード側のCI成功だけでIssue完了とはしない。
+
+**残る作業**: 管理者が旧ID `380655837` の Disable を実施し、状態・日時・根拠を記録する。その後、危険な公開ワークフローを実行せずに `python3 tools/test_legacy_linux_release_guard.py --live` を実行し、取得できる実行履歴が安全条件に一致することを確認する。PRは引き続きDraft、Issue #23はOpen、mainへのマージは禁止。
