@@ -32,6 +32,10 @@ jobs:
           dotnet-version: 10.0.x
       - name: Existing Meltia Core contract tests
         run: dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
+      - name: H11 baseline validator negative regression tests
+        run: >
+          dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj
+          -c Release -- --test-baseline-validator tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
       - name: H10 prototype contract checks and issue diagnostics
         run: >
           dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj
