@@ -95,14 +95,23 @@ internal static class Program
             ["H11-word-phonetic"] = FileSha(Path.Combine(root,
                 "src/Meltia.Core/Boundary/H11BoundaryPrototype.cs"))
         };
+        string? actualCheckout = Environment.GetEnvironmentVariable("MELTIA_ACTUAL_CHECKOUT_SHA");
+        if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true" &&
+            string.IsNullOrWhiteSpace(actualCheckout))
+            throw new InvalidDataException("Missing actual checkout commit in GitHub Actions");
+        string checkoutCommit = actualCheckout ?? "local-unspecified";
         var report = new
         {
             Schema = "meltia-h11-synthetic-performance-v1",
             DataKind = "Synthetic unlabelled benchmark, NOT a natural-language holdout or keyboard E2E",
             CapturedAtUtc = DateTimeOffset.UtcNow,
             Mode = mode[2..],
-            RepositoryCommit = Environment.GetEnvironmentVariable("MELTIA_SOURCE_SHA")
-                ?? Environment.GetEnvironmentVariable("GITHUB_SHA") ?? "local-unspecified",
+            // PR builds use the synthetic merge commit, not the PR head.
+            // RepositoryCommit is kept as a compatibility alias for the actual checkout.
+            RepositoryCommit = checkoutCommit,
+            ActualCheckoutCommit = checkoutCommit,
+            PrHeadCommit = Environment.GetEnvironmentVariable("MELTIA_PR_HEAD_SHA")
+                ?? "local-unspecified",
             SdkVersion = DotnetSdkVersion(),
             Runtime = RuntimeInformation.FrameworkDescription,
             RuntimeInformation.OSDescription,
