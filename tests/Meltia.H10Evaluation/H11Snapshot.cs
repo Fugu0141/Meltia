@@ -233,7 +233,7 @@ internal static class H11Snapshot
 
             void CheckRows(string scenario, IEnumerable<H11CaseSnapshot> rows)
             {
-                File.WriteAllLines(badPath, rows.Select(JsonSerializer.Serialize));
+                File.WriteAllLines(badPath, rows.Select(x => JsonSerializer.Serialize(x)));
                 MustReject(() => Verify(badPath, corpus, good, emitSuccess: false), scenario);
             }
 
@@ -245,7 +245,7 @@ internal static class H11Snapshot
                 ? x with { Corpus = "unexpected_corpus.jsonl" } : x));
 
             // Restore the 103 lines and test dictionary version tampering.
-            File.WriteAllLines(badPath, all.Select(JsonSerializer.Serialize));
+            File.WriteAllLines(badPath, all.Select(x => JsonSerializer.Serialize(x)));
             var originalMetadata = JsonSerializer.Deserialize<H11BaselineMetadata>(
                 File.ReadAllText(badMetadata))!;
             File.WriteAllText(badMetadata, JsonSerializer.Serialize(originalMetadata with
