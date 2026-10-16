@@ -231,7 +231,8 @@ def validate_rows(
             labels = check_labels(row.get("intents"), boundaries, size)
             check_annotation(row.get("annotation"), labels, boundaries, size, mode)
             tags = row.get("tags")
-            if not isinstance(tags, dict) or tags.get("script_group") not in SCRIPT_GROUPS:
+            if not isinstance(tags, dict) or not isinstance(tags.get("script_group"), str) or \
+                    tags["script_group"] not in SCRIPT_GROUPS:
                 raise HoldoutValidationError("Invalid script-group tag")
             if any(type(tags.get(key)) is not bool for key in REQUIRED_TAGS):
                 raise HoldoutValidationError("Missing or invalid strata tags")
