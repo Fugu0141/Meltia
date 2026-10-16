@@ -101,7 +101,6 @@ internal static class Program
             DataKind = "Synthetic unlabelled benchmark, NOT a natural-language holdout or keyboard E2E",
             CapturedAtUtc = DateTimeOffset.UtcNow,
             Mode = mode[2..],
-            Environment.GetEnvironmentVariable("MELTIA_SOURCE_SHA"),
             RepositoryCommit = Environment.GetEnvironmentVariable("MELTIA_SOURCE_SHA")
                 ?? Environment.GetEnvironmentVariable("GITHUB_SHA") ?? "local-unspecified",
             SdkVersion = DotnetSdkVersion(),
@@ -238,7 +237,7 @@ internal static class Program
                     ["cursor-move", "paste", "backspace", "delete-forward"]))
             throw new InvalidDataException("Incomplete edit sequence");
         if (fixtures.Where(x => x.Family == "editing")
-            .Select(x => x.Raw).Distinct().Count() != 3)
+            .Select(x => x.Raw).Distinct().Count() != 4)
         {
             // Cursor movement must preserve input and edit operations should
             // not all collapse to the same raw string.
