@@ -20,6 +20,7 @@ H11はMeltype Issue由来103件でTop1 **72/103**、Top-K **94/103**、非EN21�
 | H11用既存英語辞書 | `dictionaries/english.txt`（埋込リソース `Meltia.H11EnglishWords`） |
 | 精度の正本 | [H11研究結果](MELTIA_H11_RESEARCH_RESULTS_20261014.md) |
 | 固定スナップショット | `tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl` |
+| 固定メタデータ（辞書ハッシュ・コーパス件数） | `tests/Meltia.H10Evaluation/h11_issue_baseline_v1.meta.json` |
 | スナップショット生成・検証 | `tests/Meltia.H10Evaluation/H11Snapshot.cs`、既存`Program.cs` |
 | 再実行 | `.github/workflows/meltia-h10-prototype.yml` |
 
@@ -31,7 +32,7 @@ H11はMeltype Issue由来103件でTop1 **72/103**、Top-K **94/103**、非EN21�
 
 - **候補・経路の指紋**：候補のUTF-16開始・終了、言語、出自、列挙順、全Top-Kの英字スパンと経路順、不確実性/自動確定フラグをSHA-256に含める。ルートの文字区間だけ変わらない「見えない退行」も検知する。
 - **得点の指紋**：各候補・各ルートの`double.ToString("R", InvariantCulture)`を同順で別SHA-256にする。浮動小数点演算の順序や実装差を厳しく検出する（機種間で違うときは**黙って再生成せず、根拠と比較結果を調べる**）。
-- **生データ・辞書の出自**：rawはUTF-8のSHA-256。診断コーパスはCRLFをLFへ正規化して計算。H11が実際に読み込む埋込辞書のバイト列SHA-256をレポートに記載し、辞書版の取り違えを防ぐ。
+- **生データ・辞書の出自**：rawはUTF-8のSHA-256。診断コーパスはCRLFをLFへ正規化して計算。H11が実際に読み込む埋込辞書のバイト列SHA-256をレポートと固定メタデータに記載し、CIで両者を厳密照合する。固定値は `9ff04ffe969c393d85d2ec67e3e6e494ac2c9e4d1b0b1f0d6c53648f3a4efd1f`。辞書の意図的変更時には固定メタデータをレビュー根拠とともに更新し、無断の再生成を禁止する。
 - **公開性**：ゴールド固定ファイルには個人のキー入力・ユーザー設定や生の秘密情報を保存せず、既に公開されたIssueのID/ハッシュ/英字スパンのみ扱う。プライベート入力で`--emit-baseline`を使わない。
 - **評価と測定の分離**：従来の参考p50/p95/p99は引き続き生成するが、変動する経過時間は決定的なgoldの比較に入れない。CIのジョブでのタイミングをWindowsの遅延や精度と混同しない。
 
@@ -41,6 +42,9 @@ H11はMeltype Issue由来103件でTop1 **72/103**、Top-K **94/103**、非EN21�
 # 既存Coreの回帰
 dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
 
+# 固定検証器の負例（候補/スコア/raw/Top1/Top-K/フラグ、件数/未知コーパス/辞書）
+dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --test-baseline-validator tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
+
 # 47件：全候補・Top-K・スコア・確認要否が固定値と完全一致すること
 dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --output artifacts/h11/old47.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
 
@@ -48,12 +52,12 @@ dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c R
 dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --input tests/Meltia.H10Evaluation/issue_intents_extra_20261014.jsonl --output artifacts/h11/extra56.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
 ```
 
-CIは各ケースIDの一致、コーパスhash、raw hash、候補/経路hash、得点hash、Top1/Top-K/件数/フラグを比較し、**1件でも異なれば失敗**する。差分があれば自動更新しない。
+CIは許可するコーパス2種の件数（47+56、合計103）と重複/未知行の不存在、メタデータに固定された埋込辞書SHA-256、各ケースIDの一致、コーパスhash、raw hash、候補/経路hash、得点hash、Top1/Top-K/件数/フラグを比較し、**1件でも異なれば失敗**する。`--test-baseline-validator` は15種類の改ざん/構造不正を検証器が拒否することをチェックする。差分があれば自動更新しない。
 
 ### 基準更新の手順（精度の意図的変更のみ）
 
 1. 別PRで新アルゴリズムまたは理由がある動作修正を提案し、**変更前後のgold103件・保護負例・独立holdout**を比較。
-2. 研究用固定入力のみで `--emit-baseline` を実行し、`H11_SNAPSHOT`行を抽出。対象コミット、辞書ハッシュ、元コーパス、レビュー根拠を記録する。
+2. 研究用固定入力のみで `--emit-baseline` を実行し、`H11_SNAPSHOT`行を抽出。対象コミット、辞書ハッシュ、元コーパス、レビュー根拠を記録する。辞書変更を許可する場合は、埋込リソースの実測SHA-256と `h11_issue_baseline_v1.meta.json` の照合値を明示的に更新する。
 3. **変更の理由と前後の英字区間の差分**を示し、レビュー済みの値だけをコミットする。原則、過去の基準ファイルは履歴に残し、versionを増やす。
 4. 決定性のない変更や計測環境の違いによるスコア差は、再現条件を先に特定する。
 
@@ -75,7 +79,7 @@ CIは各ケースIDの一致、コーパスhash、raw hash、候補/経路hash�
 
 ## 6. このPRと今後のPhase 0残作業
 
-**このPRで実装する受け入れ条件**：47/56両方のスナップショット生成をCIで確認し、その実測を固定した103行の基準ファイルをコミット。CIでは通常の比較実行で固定値と照合して成功を確認。元のTop1・Top-K・誤EN数が変化していないことを再実行ログで確認する。
+**このPRで実装する受け入れ条件**：H11の変更を取り逃がさないようPRのpathsに `src/Meltia.Core/**`・`dictionaries/english.txt` を追加。検証器への15種類の負例テストと辞書バイトSHA-256の固定照合を追加。47/56両方のスナップショット生成をCIで確認し、その実測を固定した103行の基準ファイルをコミット。CIでは通常の比較実行で固定値と照合して成功を確認。元のTop1・Top-K・誤EN数が変化していないことを再実行ログで確認する。
 
 **このPRには含めない（Phase 0-A2以降）**：英語/日本語混在の32/128/256/512/1024文字負荷、データ割り当て測定、端末別CPUのばらつき、編集列とフル再解析の性能比較、独立自然文holdoutの収集・ラベル監査、辞書非命中の層別評価。これらを検証済みとして記載しない。
 
