@@ -124,3 +124,18 @@ Issue #23の受け入れ条件にある「過去runのRe-runで既存Releaseに�
 この変更後の監査が`PASS`するためには、上記の履歴検査に加え、**管理者が旧workflow IDを `disabled_manually` にした実測**が必要。現時点では無効化の管理操作および現在の状態を確認できていないため、`--live`の実環境成功は未確認。コード側のCI成功だけでIssue完了とはしない。
 
 **残る作業**: 管理者が旧ID `380655837` の Disable を実施し、状態・日時・根拠を記録する。その後、危険な公開ワークフローを実行せずに `python3 tools/test_legacy_linux_release_guard.py --live` を実行し、取得できる実行履歴が安全条件に一致することを確認する。PRは引き続きDraft、Issue #23はOpen、mainへのマージは禁止。
+
+
+## 2026-10-17 日本語版Windows実行結果と文字コード修正
+
+利用者がWindows（Python 3.14、既定コードページ `cp932`）でPR #30を取得して `py -3 tools/test_legacy_linux_release_guard.py --live` を実行した結果、読み取り専用の**実環境監査**で以下を確認した（利用者から共有された標準出力に基づく）。
+
+- `PASS: legacy workflow ID=380655837 disabled_manually; tag SHA and 2 published Windows assets unchanged.`
+- `PASS: 38 historical runs audited; none was a tag/manual run eligible for the old Release upload step.`
+- 旧Releaseは `immutable=False`。設定変更だけで既存Releaseは保護されないため、タグ・Release・既存アセットは変更しない。
+
+ただし同一コマンドのユニットテストでは **13件中12件成功・1件ERROR**。 `test_reproduction_old_tag_is_release_writer` が `git show <history-SHA>:.github/workflows/linux.yml` のUTF-8日本語コメントをWindowsの既定 `cp932` で解読して `UnicodeDecodeError` となった。**監査条件の失敗ではなく、読み取り処理の文字コード不具合**である。ただし全テストは失敗として扱う。
+
+PR #30の修正ではGit読み取りヘルパー `subprocess.check_output(..., text=True, encoding="utf-8")` を明示し、OSの既定文字コードから分離した。加えて、`cp932` を模したモックからUTF-8の日本語を正しく復号する回帰テストを追加し、Linux CIでもWindows固有の不具合を検出可能にした。通常CIはネットワーク・Release変更を行わない。
+
+**最終確認**: 修正後のCIで新テストを含む全件の成功を確認し、Windows環境で `py -3 tools/test_legacy_linux_release_guard.py --live` を再実行して全テストが `OK` になること。旧ワークフローのDisable状態を維持し、タグで旧workflowを実行しない。mainマージの前に最新mainとの差分、必要CI、Issue #23の受け入れ条件をレビューする。
