@@ -1,0 +1,61 @@
+name: Meltia H11 synthetic benchmarks
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'tests/Meltia.H11Benchmark/**'
+      - 'docs/MELTIA_H11_PHASE0_A2_*.md'
+      - '.github/workflows/meltia-h11-benchmark.yml'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Benchmark mode'
+        type: choice
+        required: true
+        default: full
+        options: [smoke, full]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meltia-h11-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MELTIA_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Print measurement environment
+        run: dotnet --info
+      - name: Validate fixed UTF-16 and edit workload
+        run: >
+          dotnet run --project tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj
+          -c Release -- --self-test
+      - name: Benchmark 3 engines under the same synthetic workload
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
+            MODE='${{ inputs.mode }}'
+          else
+            MODE='full'
+          fi
+          dotnet run --project tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj \
+            -c Release -- --"$MODE" --output "artifacts/h11-benchmark/$MODE.json"
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: h11-synthetic-benchmark-${{ github.run_id }}
+          path: artifacts/h11-benchmark/
+          if-no-files-found: warn
+          retention-days: 14
