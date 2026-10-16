@@ -139,3 +139,27 @@ Issue #23の受け入れ条件にある「過去runのRe-runで既存Releaseに�
 PR #30の修正ではGit読み取りヘルパー `subprocess.check_output(..., text=True, encoding="utf-8")` を明示し、OSの既定文字コードから分離した。加えて、`cp932` を模したモックからUTF-8の日本語を正しく復号する回帰テストを追加し、Linux CIでもWindows固有の不具合を検出可能にした。通常CIはネットワーク・Release変更を行わない。
 
 **最終確認**: 修正後のCIで新テストを含む全件の成功を確認し、Windows環境で `py -3 tools/test_legacy_linux_release_guard.py --live` を再実行して全テストが `OK` になること。旧ワークフローのDisable状態を維持し、タグで旧workflowを実行しない。mainマージの前に最新mainとの差分、必要CI、Issue #23の受け入れ条件をレビューする。
+
+
+## 2026-10-17 Windows再実行：監査と全14テストPASS（最終レビュー用）
+
+ユーザーが日本語Windowsで更新後のPR #30ブランチに対して
+`py -3 tools/test_legacy_linux_release_guard.py --live` を再実行し、以下の標準出力を報告した。
+
+```text
+PASS: legacy workflow ID=380655837 disabled_manually; tag SHA and 2 published Windows assets unchanged.
+PASS: 38 historical runs audited; none was a tag/manual run eligible for the old Release upload step.
+NOTE: this verifies recorded runs and present settings; it does not establish a permanent GitHub platform guarantee.
+INFO: existing release immutable=False; changing the repository setting alone is not retroactive.
+..............
+----------------------------------------------------------------------
+Ran 14 tests in 0.066s
+
+OK
+```
+
+- **実測確認済み**：管理者の旧ID `380655837` は `disabled_manually`、タグ・公開済みWindows 2アセットの識別情報は変化なし。既知の38実行のいずれも旧タグ向けRelease upload条件を満たさない。
+- **Windows文字コード修正の確認**：`cp932` の旧 `UnicodeDecodeError` は再発せず、ユニットテスト14件がすべて成功。GitHub Actionsの [run #38923551894](https://github.com/Fugu0141/Meltia/actions/runs/38923551894) もUbuntuで14件成功。strict qualityは [run #38923551848](https://github.com/Fugu0141/Meltia/actions/runs/38923551848) でUbuntu/Windowsとも成功。
+- **再実行リスクの判断**：GitHub公式は過去runのRe-runで元の `GITHUB_REF` を使用すると説明する。監査済み38実行の記録にはタグ・手動refがなく、旧公開処理の `refs/tags/v` 条件に到達しない。ただしGitHubの恒久的保証や、履歴外のすべての脅威に対する証明ではない。旧workflowを再度有効化したり過去タグでDispatchしない。
+- **残存事項**：既存Releaseの `immutable=False` は今回変更しない。今回の受け入れは **特定の旧Linux workflow ID と観測された過去実行に限る安全化** であり、Release全般の不変性や全ワークフローの最小権限を保証しない。別の権限・Release保護方針の整備は別Issueに切り出す。
+- **マージ前の技術ゲート**：最新mainとの統合後に、Ready PRで `legacy-linux-release-guard`、`linux-artifact-ci`、`meltia-strict-quality` 等をレビューし、スキップを成功と誤認しない。
