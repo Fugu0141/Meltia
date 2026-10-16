@@ -47,7 +47,7 @@ jobs:
           if [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
             MODE='${{ inputs.mode }}'
           else
-            MODE='full'
+            MODE='smoke'
           fi
           dotnet run --project tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj \
             -c Release -- --"$MODE" --output "artifacts/h11-benchmark/$MODE.json"
