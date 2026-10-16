@@ -100,6 +100,9 @@ class H11HoldoutValidatorTests(unittest.TestCase):
     def test_reject_empty_split(self):
         self.reject(lambda d: d[1].update(split="dev"))
 
+    def test_reject_unhashable_split_type(self):
+        self.reject(lambda d: d[1].update(split=[]))
+
     def test_reject_known_issue_overlap(self):
         data = copy.deepcopy(self.data)
         data[0]["raw"] = "known Issue diagnostic"
