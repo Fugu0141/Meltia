@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Fugu0141
 // H10 diagnostic runner: both engines see the SAME raw, with NO issue-derived hints.
 using System.Diagnostics;
 using System.Text.Json;
