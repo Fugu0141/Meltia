@@ -149,7 +149,7 @@ def validate_rows(
                 raise HoldoutValidationError("Duplicated case ID")
             case_ids.add(case_id)
             split = row.get("split")
-            if split not in counts:
+            if not isinstance(split, str) or split not in counts:
                 raise HoldoutValidationError("Split must be dev or test")
             raw = row.get("raw")
             if not nonempty(raw):
