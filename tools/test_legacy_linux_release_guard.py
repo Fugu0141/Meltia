@@ -92,14 +92,81 @@ def verify_live_snapshot(tag, release, workflows):
     return old[0]["id"], len(assets)
 
 
+def fetch_historical_runs(workflow_id):
+    """Read every recorded run for the retired workflow (GET requests only)."""
+    all_runs = []
+    page = 1
+    expected_count = None
+    while True:
+        snapshot = api_get(
+            f"/repos/{REPO}/actions/workflows/{workflow_id}/runs"
+            f"?per_page=100&page={page}"
+        )
+        count = snapshot.get("total_count")
+        batch = snapshot.get("workflow_runs")
+        if not isinstance(count, int) or not isinstance(batch, list):
+            raise RuntimeError("Cannot audit historical workflow runs")
+        if expected_count is None:
+            expected_count = count
+        elif count != expected_count:
+            raise RuntimeError("Historical workflow run list changed during audit")
+        all_runs.extend(batch)
+        if len(all_runs) >= expected_count:
+            break
+        if not batch:
+            raise RuntimeError("Historical workflow runs were truncated")
+        page += 1
+    return {"total_count": expected_count, "workflow_runs": all_runs}
+
+
+def verify_historical_runs(workflow_id, history):
+    """Fail closed when an old run might have a tag ref on re-run.
+
+    GitHub re-runs keep the original GITHUB_REF. The old publisher step only
+    runs on refs/tags/v*, not on branch pushes or refs/pull/*/merge.
+    """
+    count = history.get("total_count")
+    runs = history.get("workflow_runs")
+    if not isinstance(count, int) or not isinstance(runs, list):
+        raise RuntimeError("Historical workflow run audit is incomplete")
+    if count < 1 or len(runs) != count:
+        raise RuntimeError("Historical workflow run count is incomplete")
+    ids = set()
+    for run in runs:
+        run_id = run.get("id")
+        if not isinstance(run_id, int) or run_id in ids:
+            raise RuntimeError("Missing or duplicated historical workflow run ID")
+        ids.add(run_id)
+        if run.get("workflow_id") != workflow_id or run.get("path") != OLD_PATH:
+            raise RuntimeError(f"Historical workflow run {run_id} has wrong identity")
+        event = run.get("event")
+        branch = run.get("head_branch")
+        # Tag pushes can report the tag as head_branch. A missing ref or a
+        # v-prefixed name is ambiguous: refuse to assert historical safety.
+        if (event not in ("push", "pull_request")
+                or not isinstance(branch, str) or not branch
+                or branch.startswith("v")):
+            raise RuntimeError(
+                f"Historical run {run_id} may re-run a Release publisher "
+                f"(event={event!r}, head_branch={branch!r})"
+            )
+    return count
+
+
 def verify_live():
     """Read-only remote audit; never dispatch, re-run or write any release."""
     tag = api_get(f"/repos/{REPO}/git/ref/tags/{TAG}")
     release = api_get(f"/repos/{REPO}/releases/tags/{TAG}")
     workflows = api_get(f"/repos/{REPO}/actions/workflows?per_page=100")
     workflow_id, asset_count = verify_live_snapshot(tag, release, workflows)
-    print(f"PASS: legacy workflow ID={workflow_id} disabled; "
+    history = fetch_historical_runs(workflow_id)
+    historical_run_count = verify_historical_runs(workflow_id, history)
+    print(f"PASS: legacy workflow ID={workflow_id} disabled_manually; "
           f"tag SHA and {asset_count} published Windows assets unchanged.")
+    print(f"PASS: {historical_run_count} historical runs audited; none was "
+          "a tag/manual run eligible for the old Release upload step.")
+    print("NOTE: this verifies recorded runs and present settings; it does "
+          "not establish a permanent GitHub platform guarantee.")
     print(f"INFO: existing release immutable={release.get('immutable')!r}; "
           "changing the repository setting alone is not retroactive.")
 
@@ -191,6 +258,44 @@ class LegacyLinuxGuardTests(unittest.TestCase):
         release["assets"][0]["id"] += 1
         with self.assertRaisesRegex(RuntimeError, "asset IDs/names/digests changed"):
             verify_live_snapshot(tag, release, workflows)
+
+    @staticmethod
+    def _history_fixture():
+        return {"total_count": 2, "workflow_runs": [
+            {"id": 1, "workflow_id": 12345, "path": OLD_PATH,
+             "event": "push", "head_branch": "main"},
+            {"id": 2, "workflow_id": 12345, "path": OLD_PATH,
+             "event": "pull_request", "head_branch": "feature/ci"},
+        ]}
+
+    def test_history_audit_accepts_only_branch_and_pr_runs(self):
+        self.assertEqual(
+            verify_historical_runs(12345, self._history_fixture()), 2
+        )
+
+    def test_history_audit_rejects_tag_or_manual_runs(self):
+        history = self._history_fixture()
+        history["workflow_runs"][0]["head_branch"] = "v1.0.0-beta.1"
+        with self.assertRaisesRegex(RuntimeError, "may re-run"):
+            verify_historical_runs(12345, history)
+        history["workflow_runs"][0]["head_branch"] = "main"
+        history["workflow_runs"][0]["event"] = "workflow_dispatch"
+        with self.assertRaisesRegex(RuntimeError, "may re-run"):
+            verify_historical_runs(12345, history)
+
+    def test_history_audit_rejects_incomplete_or_misattributed_runs(self):
+        history = self._history_fixture()
+        history["total_count"] = 3
+        with self.assertRaisesRegex(RuntimeError, "count is incomplete"):
+            verify_historical_runs(12345, history)
+        history = self._history_fixture()
+        history["workflow_runs"][1]["workflow_id"] = 9876
+        with self.assertRaisesRegex(RuntimeError, "wrong identity"):
+            verify_historical_runs(12345, history)
+        history = self._history_fixture()
+        history["workflow_runs"][1]["id"] = 1
+        with self.assertRaisesRegex(RuntimeError, "duplicated"):
+            verify_historical_runs(12345, history)
 
     def test_live_gate_rejects_added_asset_or_draft(self):
         tag, release, workflows = self._live_fixture()
