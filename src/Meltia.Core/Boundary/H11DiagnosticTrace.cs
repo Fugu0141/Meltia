@@ -12,9 +12,18 @@ public sealed partial class H11BoundaryPrototype
         Utf16Span RawUtf16Span, string Language, string Origin, double LocalScore,
         IReadOnlyList<ScoreTerm> Contributions, double RoundingResidual);
     public sealed record DiagnosticRejection(string Reason, int Count);
+    /// <summary>
+    /// A node was removed from the DP beam at the destination of IncomingEdgeSpan.
+    /// The legacy List.Sort is not stable, so a score tie cannot imply
+    /// insertion-order precedence or explain which equal-scored path survived.
+    /// </summary>
     public sealed record DiagnosticBeamDrop(
         int AtUtf16Position, string LastLanguage, double DroppedScore,
-        double LowestKeptScore, string Reason);
+        double LowestKeptScore, string Reason, Utf16Span IncomingEdgeSpan)
+    {
+        public static string ClassifyReason(double droppedScore, double lowestKeptScore) =>
+            droppedScore == lowestKeptScore ? "tie-at-width" : "beam-width-overflow";
+    }
     public sealed record DiagnosticStep(
         Utf16Span RawUtf16Span, string Language, string Origin,
         string PreviousLanguage, double PreviousScore, double LocalScore,
@@ -221,10 +230,16 @@ public sealed partial class H11BoundaryPrototype
             {
                 _totalDropped++;
                 if (_drops.Count < MaxDropEvents)
+                {
+                    var incoming = node.Edge ??
+                        throw new InvalidDataException("Pruned H11 node has no incoming edge");
+                    if (incoming.Span.End != position)
+                        throw new InvalidDataException("Beam drop position differs from DP destination");
                     _drops.Add(new DiagnosticBeamDrop(position, last.ToString(),
                         node.Score, lowestKeptScore,
-                        node.Score == lowestKeptScore
-                            ? "stable-sort-tie-at-width" : "beam-width-overflow"));
+                        DiagnosticBeamDrop.ClassifyReason(node.Score, lowestKeptScore),
+                        incoming.Span));
+                }
             }
         }
         public void Selected(Node route) => _routes.Add(route);
