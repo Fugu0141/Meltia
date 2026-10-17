@@ -9,6 +9,10 @@
 ## 実装
 
 - `tools/test_meltia_keyboard_preview_isolation.py`（Python標準ライブラリだけ、レジストリ・ネットワーク・ユーザーデータ・Windows APIを使用しない）：
+  - **レビュー修正（P1/P2）**：`#if`で有効な枝を選んだ後、C#の行コメント・ブロックコメントを空白化してから調べる。実行文のチェックでは文字列/文字リテラルも除外し、コメントや文字列に残ったガードで偽の成功にならないことを確認する。
+  - `MeltiaPreviewSafety.Initialize()`より前の**あらゆる有効コード中の`AppPaths.`参照**を拒否する（`ConfigFile`/`ModelFile`なども含む）。
+  - 実際のソースを読み替えることなく、ガード代入を`//`/`/* */`でコメントアウトする、初期化前に`AppPaths.ConfigFile`/`ModelFile`/`DataDirectory`を置く、文字列内に偽の代入を埋め込むミューテーションで**テスト自身が失敗を検出すること**を固定。コメント/文字列中の`AppPaths.`は誤検出しない。
+
   1. `Meltia.Windows.csproj` が独立した`Meltia`実行ファイルとして`MELTIA_PREVIEW`を定義し、継承したCompositionとMeltia Bridgeを使うが、`native/tip`や登録スクリプトをコンパイル対象に含めないこと。
   2. `Program.cs`の`#if MELTIA_PREVIEW`条件をテスト用に解析し、Previewビルドで`settings.Mode=Keyboard`、`AutoUpdate=false`、`Updater.ApplyStagedAtStartup`非実行、`AppPaths.MigrateFromOldName`非実行、隔離された`MeltiaPreviewSafety.Initialize()`が先行すること。
   3. `Startup.cs`のPreview側起動名が`MeltiaPreview`であり、Meltype本家を上書きしないこと。
@@ -18,7 +22,7 @@
 
 ## 検証と制限
 
-- **このテストは静的な意図・構成上の退行ガードであって、実際のWindowsキー処理やコンパイラによるすべての副作用の存在を否定する安全証明ではない。** シンボル条件や実行構造の変更に気づけるよう、解釈不能な`#if`は黙って通さず失敗させる。
+- **このテストは静的な意図・構成上の退行ガードであって、実際のWindowsキー処理やコンパイラによるすべての副作用の存在を否定する安全証明ではない。** C#の全構文解析・実行フロー到達性・補間式の評価を再現するものではなく、同じ代入が死んだコードに移された場合まで検出できる保証はない。 シンボル条件や実行構造の変更に気づけるよう、解釈不能な`#if`は黙って通さず失敗させる。
 - 上流の新しいコールサイト、間接実行、COM操作やパッケージ経路の全網羅は保証しない。実行時の入力損失、GUI、文字列の欠落/重複、低整合性やx86/x64のTIPは別のWindows実機E2Eで確認する。
 - 本番IMEの実装時は`MELTIA_PREVIEW`既定動作を変更せず、別の明示的ビルド／設定フラグでTSFを用意する。ガードを消してテストを通過させるのではなく、**Keyboard Previewが今後も安全に動作すること**を確認する。
 
@@ -37,3 +41,9 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-meltia-windows-preview.ps
 - [Meltia Windows Preview CI / run 39003324338](https://github.com/Fugu0141/Meltia/actions/runs/39003324338) は**success**。Windowsジョブで新しい**5項目の静的ガードが成功**し、後続の継承Core回帰・Meltia.exeの無フックスモーク/ZIP監査、Ubuntu側の1,067合成例・Bridge品質・ベンチマークの両ジョブがsuccess。
 - [build / run 39003324364](https://github.com/Fugu0141/Meltia/actions/runs/39003324364) は**success**（test / Ubuntu Core / macOS Core / installer-script がsuccess、依存条件の`mozc`/`package`はskipped）。[pr-checks / run 39003324332](https://github.com/Fugu0141/Meltia/actions/runs/39003324332) もsuccess。
 - **実機Windowsのキー入力・TSF DLLの登録は行っていない。** これは現行Keyboard Previewを守る構造と既存回帰の証拠であり、新規IME機能を承認する根拠ではない。
+
+### レビュー指摘（2026-10-17）への対応
+
+- [P1](https://github.com/Fugu0141/Meltia/pull/53#discussion_r4301424653)：コメントアウトされた重要な代入を見逃す問題を修正。行コメント・ブロックコメント・文字列偽装を含む負例を追加。
+- [P2](https://github.com/Fugu0141/Meltia/pull/53#discussion_r4301424657)：初期化前の全 `AppPaths.` アクセスを拒否するよう変更。`ConfigFile`/`ModelFile` の負例を追加。
+- CI結果は最新HEADのワークフロー完了後に追記する。既存Keyboard Preview・TSFは変更していない。
