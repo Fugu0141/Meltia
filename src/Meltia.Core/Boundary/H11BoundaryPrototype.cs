@@ -217,7 +217,7 @@ public sealed partial class H11BoundaryPrototype
             {
                 string word = raw[i..end];
                 bool readable = RomajiReadable(word);
-                double difference = Model.Difference(word);
+                double difference = Model.Difference(raw.AsSpan(i, end - i));
                 if (readable)
                 {
                     // Reward a *complete* Japanese phonetic segment, not each

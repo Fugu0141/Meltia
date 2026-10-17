@@ -44,6 +44,7 @@
 - [H11 Phase 2 / PR-C2：H10の重複ポリシーとUTF-16/ロック互換性の段階的共通化](docs/MELTIA_H11_PHASE2_C2_H10_SAFETY_20261017.md)
 - [H11 Phase 2 / PR-C3：従来CoreのUTF-16・URL/メール・ロック互換共通化](docs/MELTIA_H11_PHASE2_C3_LEGACY_SAFETY_20261017.md)
 - [H11 Phase 3 / PR-D1a：ローマ字判定のSpan化と割り当て削減の要件・検証](docs/MELTIA_H11_PHASE3_D1A_ROMAJI_SPAN_20261017.md)
+- [H11 Phase 3 / PR-D1b：文字尤度のSpan化とモデル完全互換の検証](docs/MELTIA_H11_PHASE3_D1B_CHARACTER_EVIDENCE_20261017.md)
 - [開発バージョン管理（v0.5〜v1.0-dev）](docs/MELTIA_VERSIONING.md)
 - [v0.7 未知英語候補生成の実験・検証](docs/MELTIA_V07_UNKNOWN_LATIN_20261012.md)
 - [v0.8 音韻ラティス・経路探索の実装と実測](docs/MELTIA_V08_PHONETIC_LATTICE_20261012.md)
