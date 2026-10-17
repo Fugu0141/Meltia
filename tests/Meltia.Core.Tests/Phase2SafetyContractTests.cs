@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Fugu0141
 using Meltia.Core.Boundary;
+using System.Text.RegularExpressions;
 
 internal static class Phase2SafetyContractTests
 {
@@ -17,6 +18,76 @@ internal static class Phase2SafetyContractTests
 
         const string urlWithEmail = "https://user@example.com";
         var entire = new Utf16Span(0, urlWithEmail.Length);
+        var emailAt = urlWithEmail.IndexOf("user@example.com", StringComparison.Ordinal);
+        var emailInsideUrl = new Utf16Span(emailAt, urlWithEmail.Length);
+        var urlRegex = new Regex(@"https?://[^\s]+", RegexOptions.CultureInvariant);
+        var emailRegex = new Regex(
+            @"(?<![\w.@])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}",
+            RegexOptions.CultureInvariant);
+
+        // Fix both helper branches directly before moving H10/legacy to them.
+        var skipAny = new List<Utf16Span>();
+        ProtectedSpanDetector.AppendMatches(urlWithEmail, skipAny,
+            ProtectionOverlapPolicy.SkipAnyOverlap, urlRegex, emailRegex);
+        check(skipAny.SequenceEqual([entire]),
+            "Phase2 helper SkipAnyOverlap keeps URL before nested email");
+
+        var skipExact = new List<Utf16Span>();
+        ProtectedSpanDetector.AppendMatches(urlWithEmail, skipExact,
+            ProtectionOverlapPolicy.SkipExactDuplicate, urlRegex, emailRegex);
+        check(skipExact.SequenceEqual([entire, emailInsideUrl]),
+            "Phase2 helper SkipExactDuplicate keeps distinct nested email");
+        ProtectedSpanDetector.AppendMatches(urlWithEmail, skipExact,
+            ProtectionOverlapPolicy.SkipExactDuplicate, urlRegex, emailRegex);
+        check(skipExact.SequenceEqual([entire, emailInsideUrl]),
+            "Phase2 helper SkipExactDuplicate collapses exact matches");
+        var repeatAny = new List<Utf16Span>();
+        ProtectedSpanDetector.AppendMatches(urlWithEmail, repeatAny,
+            ProtectionOverlapPolicy.SkipAnyOverlap, urlRegex, urlRegex, emailRegex);
+        check(repeatAny.SequenceEqual([entire]),
+            "Phase2 helper SkipAnyOverlap also collapses exact matches");
+
+        // User hard ranges are collected before automatic URL/email detection.
+        // A partially overlapping hard range suppresses BOTH auto-matches.
+        var manualPart = new Utf16Span(0, urlWithEmail.Length - 2);
+        var skipAgainstManual = new List<Utf16Span> { manualPart };
+        ProtectedSpanDetector.AppendMatches(urlWithEmail, skipAgainstManual,
+            ProtectionOverlapPolicy.SkipAnyOverlap, urlRegex, emailRegex);
+        check(skipAgainstManual.SequenceEqual([manualPart]),
+            "Phase2 helper preserves partial manual lock before URL/email");
+
+        foreach (var manualEvidence in new[] {
+            new BoundaryEvidence(ExplicitEnglish: [manualPart]),
+            new BoundaryEvidence(Protected: [manualPart])
+        })
+        {
+            var analyzed = h11.Analyze(urlWithEmail, manualEvidence);
+            check(analyzed.Raw == urlWithEmail &&
+                analyzed.Edges.Where(e => e.Origin == "mandatory")
+                    .Select(e => e.Span).SequenceEqual([manualPart]),
+                "Phase2 H11 partial explicit/protected EN overrides auto URL");
+        }
+
+        static bool ThrowsWithMessage(Action action, string expected)
+        {
+            try { action(); return false; }
+            catch (ArgumentException ex) { return ex.Message == expected; }
+        }
+        check(ThrowsWithMessage(() => h11.Analyze("😀a",
+            new BoundaryEvidence(ExplicitEnglish: [new Utf16Span(1, 2)])),
+            "Invalid UTF-16 language lock"),
+            "Phase2 H11 retains exact invalid UTF-16 error message");
+        check(ThrowsWithMessage(() => h11.Analyze(urlWithEmail,
+            new BoundaryEvidence(
+                ExplicitEnglish: [manualPart],
+                Protected: [new Utf16Span(2, urlWithEmail.Length)])),
+            "Contradictory language locks"),
+            "Phase2 H11 partial manual EN/protected conflict retains exact error");
+        check(ThrowsWithMessage(() => h11.Analyze(urlWithEmail,
+            new BoundaryEvidence(ExplicitJapanese: [manualPart])),
+            "Contradictory language locks"),
+            "Phase2 H11 JA vs detected URL retains exact conflict message");
+
         check(h11.Analyze(urlWithEmail).Routes.All(r =>
             r.EnglishSpans.SequenceEqual([entire])),
             "Phase2 H11 URL has precedence over overlapping email");
