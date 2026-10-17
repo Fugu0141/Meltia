@@ -31,4 +31,10 @@
 
 ## 4. 実装・検証ログ
 
-- 要件/基本設計：本書。E1の実装・否定ケース・CI証拠・残課題を追記する。
+- **E1実装**：`src/Meltia.Core/Boundary/ForwardLatticeDecoder.cs` に、入力位置×状態×経路×候補を回る内部ジェネリック探索器。候補Provider、遷移Scorer、ビームPolicyの3契約を定義。`H11ForwardLatticeAdapters.cs` にH11専用の互換アダプターを配置。既存 `H11BoundaryPrototype.AnalyzeCore`の探索ループは変更なしの`else`枝へ移し、`useForwardDecoder=false`既定。`AnalyzeWithSharedDecoder`と`AnalyzeWithSharedDecoderTrace`だけが明示的に新経路へ入る。どちらも`internal`なので製品APIを広げない。
+- **E1テスト**：`tests/Meltia.Core.Tests/Phase4E1ForwardDecoderTests.cs`。独立toyグラフで状態遷移/beam保持/不正な後退・範囲外エッジを検査。旧H11 vs 共通H11について、47+56=**103 raw**の**候補の全順序・スコア/全Top-K・Trace（Drop・Reject・スコア項・ルート）を完全比較**。明示EN/JA・Protected、メール/URL、絵文字、数値英語、名前、空文字を検証。さらにseed固定125例の混在入力、32/128/256/512/1024 UTF-16、セッション外での後続再実行、最大長/ロック不正・surrogate分断時の例外型の一致を検証。
+- **初回CIの不合格・是正記録**：最初のテストでTraceの公開プロパティ名を誤って`OmittedDropEvents`と記述しCS1061で停止した。実際の公開名`OmittedBeamDropEvents`に修正して再実行。**アルゴリズム誤差ではないがテスト作成上の不具合**として記録する。
+- **Core CI**：[Actions #38997919213](https://github.com/Fugu0141/Meltia/actions/runs/38997919213) で **ALL PASS 238**（10件のE1追加契約）。同値ゲートの合格はH11の**新Decoderとの互換性**の証拠であり、旧モデル自体の認識精度改善や独立した言語ラベルの新規評価ではない。
+- **既存ゲート**：同HEADのH11 Phase1 DiagnosticTrace、H10比較、合成ベンチ、入力品質などのActions成功も確認する。CI status URLは[PR #46](https://github.com/Fugu0141/Meltia/pull/46/checks)を参照。
+- **明確な未完了事項（E2以降）**：旧H11のルート復元/Top-K射影インターフェースの抽出、候補生成器の完全分離、共通Decoderの**本番経路採用・性能の同一runner比較**、H10/v0.8の仕様差別個のアダプター、Windows実機E2E。今回のPRではすべて保留。通常`Analyze`を共通エンジンへ自動切替しない。
+
