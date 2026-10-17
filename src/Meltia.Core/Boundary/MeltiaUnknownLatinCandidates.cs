@@ -80,13 +80,13 @@ internal static class MeltiaUnknownLatinCandidates
 
         for (int i = 1; i <= chunk.Length; i++)
         {
-            leftReadable[i] = MeltiaRomaji.CanRead(chunk[..i]);
+            leftReadable[i] = MeltiaRomaji.CanRead(chunk.AsSpan(0, i));
             leftSeam[i] = LeftSeams.Any(p =>
                 chunk[..i].EndsWith(p, StringComparison.OrdinalIgnoreCase));
         }
         for (int i = 0; i < chunk.Length; i++)
         {
-            rightReadable[i] = MeltiaRomaji.CanRead(chunk[i..]);
+            rightReadable[i] = MeltiaRomaji.CanRead(chunk.AsSpan(i));
             rightSeam[i] = RightSeams.Any(p =>
                 chunk[i..].StartsWith(p, StringComparison.OrdinalIgnoreCase));
         }
@@ -98,8 +98,8 @@ internal static class MeltiaUnknownLatinCandidates
                  end <= Math.Min(chunk.Length, start + MaxLatinLength); end++)
             {
                 if (!rightReadable[end] && !rightSeam[end]) continue;
-                var word = chunk.Substring(start, end - start);
-                if (MeltiaRomaji.CanRead(word)) continue;
+                int length = end - start;
+                if (MeltiaRomaji.CanRead(chunk.AsSpan(start, length))) continue;
 
                 // Keep inherited v0.7 scores unchanged, preserving the
                 // <=96-character experimental baseline exactly.
@@ -108,8 +108,8 @@ internal static class MeltiaUnknownLatinCandidates
                 if (end < chunk.Length && rightReadable[end]) score += 0.65;
                 if (start > 0 && leftSeam[start]) score += 0.35;
                 if (end < chunk.Length && rightSeam[end]) score += 0.35;
-                score += Math.Min(word.Length, 18) * 0.035;
-                score -= Math.Abs(word.Length - 9) * 0.04;
+                score += Math.Min(length, 18) * 0.035;
+                score -= Math.Abs(length - 9) * 0.04;
 
                 yield return new BoundaryCandidate(
                     new Utf16Span(absoluteStart + start, absoluteStart + end),
