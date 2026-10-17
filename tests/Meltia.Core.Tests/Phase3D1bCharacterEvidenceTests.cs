@@ -33,22 +33,39 @@ internal static class Phase3D1bCharacterEvidenceTests
             -2.0, 2.0);
     }
 
-    private static (long Bytes, double Milliseconds, long Checksum) Measure(
+    // A repeated XOR cancels for even iteration counts. Mix each score in
+    // sequence instead, so repetitions=1200 still detects changed output.
+    private const ulong ChecksumOffset = 14695981039346656037UL;
+    private const ulong ChecksumPrime = 1099511628211UL;
+
+    private static ulong AppendScore(ulong checksum, double score) =>
+        unchecked((checksum ^ (ulong)BitConverter.DoubleToInt64Bits(score)) *
+            ChecksumPrime);
+
+    private static ulong Fingerprint(double[] scores, int repetitions)
+    {
+        ulong checksum = ChecksumOffset;
+        for (int repeat = 0; repeat < repetitions; repeat++)
+            foreach (double score in scores)
+                checksum = AppendScore(checksum, score);
+        return checksum;
+    }
+
+    private static (long Bytes, double Milliseconds, ulong Checksum) Measure(
         Func<string, double> score, string[] samples, int repetitions)
     {
-        long checksum = 0;
         for (int n = 0; n < 3; n++)
             foreach (var sample in samples)
-                checksum ^= BitConverter.DoubleToInt64Bits(score(sample));
-        checksum = 0;
+                _ = score(sample);
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
+        ulong checksum = ChecksumOffset;
         long before = GC.GetAllocatedBytesForCurrentThread();
         var clock = Stopwatch.StartNew();
         for (int n = 0; n < repetitions; n++)
             foreach (var sample in samples)
-                checksum ^= BitConverter.DoubleToInt64Bits(score(sample));
+                checksum = AppendScore(checksum, score(sample));
         clock.Stop();
         return (GC.GetAllocatedBytesForCurrentThread() - before,
             clock.Elapsed.TotalMilliseconds, checksum);
@@ -130,12 +147,23 @@ internal static class Phase3D1bCharacterEvidenceTests
         check(seeded,
             "Phase3 D1b 3,000 mixedcase/ASCII seeded cases, 1024/1025 lengths");
 
+        // Regression for PR #44 review: an even repetition count previously
+        // reduced every XOR checksum to zero regardless of score changes.
+        const int repetitions = 1200;
+        var referenceScores = new[] { 0.125, -0.125, 0.5 };
+        var changedScores = new[] { 0.125, -0.125, 0.75 };
+        ulong referenceFingerprint = Fingerprint(referenceScores, repetitions);
+        check(referenceFingerprint ==
+                Fingerprint((double[])referenceScores.Clone(), repetitions) &&
+              referenceFingerprint != Fingerprint(changedScores, repetitions) &&
+              referenceFingerprint != ChecksumOffset,
+            "Phase3 D1b even-repeat checksum detects intentionally changed score");
+
         var perf = new[] {
             "kyouhacommitdesu", "kinouhastrategywakaru", "deployer",
             "Konnichiwa", "README", "foobar", "nihongowotamesu",
             "ci", "vscode", "meltia", "nonnn", "API"
         };
-        const int repetitions = 1200;
         var oldRun = Measure(s => LegacyDifference(s, english, japanese), perf, repetitions);
         var newRun = Measure(model.Difference, perf, repetitions);
         check(oldRun.Checksum == newRun.Checksum,
