@@ -79,11 +79,16 @@ internal static class Phase4E1ForwardDecoderTests
                 using var parsed = JsonDocument.Parse(line);
                 var raw = parsed.RootElement.GetProperty("raw").GetString()!;
                 Compare(h11, raw, null);
+                var legacyTrace = h11.AnalyzeWithTrace(raw);
+                var sharedTrace = h11.AnalyzeWithSharedDecoderTrace(raw);
+                if (!Same(legacyTrace.Result, sharedTrace.Result) ||
+                    !SameTrace(legacyTrace.Trace, sharedTrace.Trace))
+                    throw new Exception("E1 frozen Trace mismatch: " + raw);
                 frozenCount++;
             }
         }
         check(frozenCount == 103,
-            "E1 shared decoder equals legacy H11 on all 103 labelled input raws, all candidates and Top-K scores");
+            "E1 shared decoder equals legacy H11 on all 103 frozen raws, candidates, Top-K scores and full trace");
 
         var cases = new (string Raw, BoundaryEvidence? Evidence)[]
         {
@@ -106,8 +111,8 @@ internal static class Phase4E1ForwardDecoderTests
         foreach (var (raw, evidence) in cases) Compare(h11, raw, evidence);
         check(true, "E1 shared/legacy H11 agree on protected, locked, Unicode, romanized and empty inputs");
 
-        // Reuse the old frozen candidate graph for both trace paths. Trace is
-        // deliberately not an accuracy metric or human-language gold label.
+        // Compare special-case evidence+Trace beyond the 103 label-only raw
+        // inputs. Gold labels never enter either engine at inference time.
         foreach (var (raw, evidence) in cases.Take(12))
         {
             var previous = h11.AnalyzeWithTrace(raw, evidence);
@@ -128,6 +133,14 @@ internal static class Phase4E1ForwardDecoderTests
             Compare(h11, raw, null);
         }
         check(true, "E1 125 seeded mixed and emoji raw inputs preserve all routes");
+
+        foreach (int length in new[] { 32, 128, 256, 512, 1024 })
+        {
+            var raw = string.Concat(Enumerable.Repeat("nihongo", (length + 6) / 7))
+                [..length];
+            Compare(h11, raw, null);
+        }
+        check(true, "E1 shared decoder equals H11 from 32 to 1024 UTF-16 characters");
 
         // Test that a previous decode cannot mutate state retained by the next.
         var first = h11.AnalyzeWithSharedDecoder("kyouhaGitHubde");
