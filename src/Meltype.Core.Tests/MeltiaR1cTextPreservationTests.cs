@@ -105,6 +105,22 @@ internal static class MeltiaR1cTextPreservationTests
                 "segmentation must preserve exact protected text");
             AssertRawInvariant(text, sample);
         }
+
+        // A non-BMP character is TWO UTF-16 code units. Code-point-based
+        // offsets would incorrectly report 1 instead of 2 here.
+        const string email = "user@example.com";
+        var embedded = "😀" + email;
+        var embeddedText = NewText();
+        foreach (var c in embedded) embeddedText.Append(c);
+        AssertRawInvariant(embeddedText, embedded);
+        var embeddedSpans = embeddedText.ProtectedSpans();
+        Assert.True(embeddedSpans.Any(s =>
+            s.Start == 2 && s.End == embedded.Length &&
+            embedded.Substring(s.Start, s.Length) == email),
+            "email must begin at UTF-16 offset 2 after the surrogate pair");
+        Assert.True(embeddedText.Segments().Any(s => s.IsProtected && s.Raw == email),
+            "protected email segment must retain its exact text");
+        AssertRawInvariant(embeddedText, embedded);
     }
 
     [Test]
