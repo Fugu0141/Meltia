@@ -35,3 +35,11 @@ dotnet run --project src/Meltype.Core.Tests/Meltype.Core.Tests.csproj -c Release
 - **Unicodeの一文字=1キーの前提は誤り。** UTF-16保全と絵文字/結合文字をユーザー可視の書記素として編集できることは別の問題。現状を勝手に改善しない。
 - 実際のIMEホストとMeltia Coreの境界射影/UTF-16インデックスの一致性は後続R2・E2Eで検証する。テストが指摘した退行はPR内で修正し、発見された製品バグは個別Issueに分離。
 - 本PRは`CompositionText`の状態分割自体を達成しない。#58/#72はOpenを維持する。
+
+
+## 検証結果（2026-10-17）
+
+- PR：[#79](https://github.com/Fugu0141/Meltia/pull/79)、初回検証HEAD `6317fe9ac028aaec005b33d8705119a9357892dc`。
+- [Windows Preview CI](https://github.com/Fugu0141/Meltia/actions/runs/39035865298)にて`MeltiaR1cTextPreservationTests` **新規8/8 PASS**、継承Core全体 **371/371 PASS**。
+- `meltia-strict-quality`、`linux-artifact-ci`、`build`、`pr-checks`を含む**5つのPRワークフローが成功**。
+- Native TIP・Windows実機キー入力のE2Eを実施したという意味ではない。今後のリファクタリング時は同じテストセットを再利用する。
