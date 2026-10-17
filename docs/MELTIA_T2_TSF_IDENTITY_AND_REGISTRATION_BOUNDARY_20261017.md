@@ -13,7 +13,7 @@
 
 ## 2. 採番済み・固定予定の識別子
 
-source-of-truth: [`config/tsf/meltia-t2-identity.json`](../config/tsf/meltia-t2-identity.json)。UUIDv4を生成し、既存リポジトリに書かれている本家・Windows系のGUID文字列と重複しないことをオフラインで検査する（**Windows登録全件を照会していない**）。
+source-of-truth: [`config/tsf/meltia-t2-identity.json`](../config/tsf/meltia-t2-identity.json)。UUIDv4を生成し、**`native/tip/*.h`・`native/tip/*.cpp`・`native/tip/*.ps1`・`src/Meltype/Tip/*.cs`に書かれたリテラルGUID**と重複しないことだけをオフラインで検査する。**リポジトリ全域のGUID検査、ヘッダーに名前だけ出てくるWindows OS共有カテゴリGUIDの数値照合、Windowsレジストリに登録された全CLSID/プロファイルとの衝突確認は行っていない。** 実OSの登録検証はT4で行う。
 
 | 用途 | Meltia設計候補 GUID | 本家で使われる値 |
 | --- | --- | --- |
@@ -40,11 +40,20 @@ source-of-truth: [`config/tsf/meltia-t2-identity.json`](../config/tsf/meltia-t2-
 | インストール先 | `%ProgramFiles%\Meltia\tip`（x86配備経路を別途確認） | `C:\Program Files\Meltype\tip` を一切更新しない |
 | 学習/設定 | `%LOCALAPPDATA%\Meltia` | 本家の`Meltype`以下を読込・移行・削除しない |
 | ログ | `%LOCALAPPDATA%\Meltia\logs` | キー入力本文をログに出さない |
-| COM/TIP登録 | MeltiaのCLSID/プロファイル/属性のみ | T4隔離VMでdry-run差分→明示レビュー→登録。既存のCLSID/TSF登録は変更・削除しない |
-| アンインストール | **Meltiaに属する登録キー、ファイルのみ** | 設置時マニフェストで検証、任意の外部製品キーを削除しない |
+| COM/TIP登録 | MeltiaのCLSID/プロファイル/属性と**Meltia CLSIDを所有者とするTSFカテゴリ関連付け** | T4隔離VMでdry-run差分→明示レビュー→登録。OS共有カテゴリ定義や他製品の登録は変更しない |
+| アンインストール | **MeltiaのCLSID、言語プロファイル、Meltia CLSIDに紐づくTSFカテゴリ関連付け、Meltia専用設置ファイル** | 設置時の所有マニフェストで厳密に照合。**Windows共通カテゴリのGUID定義、Meltype/別製品の関連付け・登録・ファイル、ユーザーデータ/ログを自動削除しない** |
 | Windows Preview | `MELTIA_PREVIEW`、Keyboardのみ | T3/T4に至るまで常にそのまま |
 
 ※ 正式な登録に必要なレジストリキー/COMクラス/属性プロバイダー/カテゴリーは`native/tip/Dll.cpp`の`DllRegisterServer`、`RegisterProfile`、`RegisterCategories`を調査してT3で**新しい実装構成へ明示的に移す**。名称変更のみで本家DLLの実行・上書きは不可。
+
+### TSFカテゴリとアンインストールの所有権（PR #78レビューP2）
+
+継承元`native/tip/Dll.cpp`では、`RegisterCategories(true)`が`RegisterCategory(CLSID_TextService, categoryGUID, CLSID_TextService)`を呼び、解除は`RegisterCategories(false)`で`UnregisterCategory(CLSID_TextService, categoryGUID, CLSID_TextService)`を呼ぶ。T3のMeltia専用実装も**登録されたペアの所有者がMeltia CLSIDである場合に限って**対称に解除する。Windowsが共有するカテゴリ定義のGUID自体は解除・削除しない。
+
+T2マニフェストの`distribution.uninstallOwnership`には、COM CLSID、言語プロファイル、カテゴリ所有者CLSID、対象カテゴリリスト、設置ファイルのルート、共有カテゴリ・他製品登録・ユーザーデータを削除しないフラグを記録。対象カテゴリは`GUID_TFCAT_TIP_KEYBOARD`、`GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER`、`GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT`、`GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT`、`GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT`。T2の静的テストは`Dll.cpp`の`kCategories`とマニフェストの一致を確認する。
+
+将来T3で追加/削除するカテゴリがある場合、登録と解除の両方向、属性GUIDの登録所有権、失敗時ロールバックを**同時に設計レビュー**する。設置ファイルはMeltiaが配置した物だけ削除し、本家ディレクトリやWindows共通TSFキーをディレクトリごと消す動作は許可しない。上記の設計は**登録・削除コードの実行や実機検証を意味しない**。
+
 
 ## 5. T3へ進む前の契約・検証
 
@@ -54,7 +63,7 @@ python tools/test_meltia_tip_ipc_contract.py
 python tools/test_meltia_keyboard_preview_isolation.py
 ```
 
-`test_meltia_t2_identity_contract.py`は標準ライブラリのみで実行する6テスト。5 GUIDの正規UUIDv4性・重複/本家衝突・Meltia固有Pipe・SID・バージョン・無効化フラグ・配布先を確認し、重複GUID/本家GUID/登録有効化/名前誤りを故意に混ぜて**テストが拒否すること**も検査する。**無登録・静的設計テスト**でありOSとの共存・通信成功を保証しない。
+`test_meltia_t2_identity_contract.py`は標準ライブラリのみで実行する**9テスト**。5 GUIDの正規UUIDv4性・重複/対象ファイル内の本家GUIDとの衝突・Meltia固有Pipe・SID・バージョン・無効化フラグ・配布先・カテゴリ関連付け所有権を確認し、重複GUID/本家GUID/登録有効化/名前誤り/カテゴリ解除対象や他製品削除フラグを故意に混ぜて**テストが拒否すること**も検査する。**無登録・静的設計テスト**でありOSとの共存・通信成功を保証しない。
 
 T3以降の必須チェック：
 
@@ -64,3 +73,8 @@ T3以降の必須チェック：
 4. T5の実キー入力E2E・負荷/長文/フォーカス/アプリ別差の合格前にReleaseしない。
 
 **T2完了は設計と静的検証が整ったことを意味するだけで、MeltiaがWindowsのIME一覧に出ることを意味しない。**
+
+## PR #78 レビュー対応（2026-10-17）
+
+- **P2**：マニフェストの`uninstallScope`をCLSIDとprofileだけでなく、Meltia CLSIDに所属するTSFカテゴリ関連付け・Meltia専用設置ファイルまで明記。`uninstallOwnership`で所有範囲・削除禁止対象を構造化し、元の`Dll.cpp`のカテゴリ配列との照合と改変負例を追加。
+- **P3**：GUID衝突検査の対象を`native/tip`のC++ソース・ヘッダー・PowerShellと`src/Meltype/Tip`のC#に拡大し、**それ以外のファイル・OS実機のレジストリ・Windows SDKのカテゴリ定義は未確認**と限定した。リポジトリ全件や実OS全件の保証は主張しない。
