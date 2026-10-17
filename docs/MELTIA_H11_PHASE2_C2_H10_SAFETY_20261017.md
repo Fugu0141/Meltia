@@ -44,3 +44,30 @@ dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c R
 ```
 
 本ブランチの実測結果・Actions状態はPR作成後に追記する。評価したという主張は実際のCIを確認してから行う。
+
+## 4. PR #41 初回CI検証（2026-10-17）
+
+検査対象コミット：`11c45e9ec79a5b0934650ac75c830e4953cc49c8`（本節追記前）。**9種類のActionsがSUCCESS**。
+
+| ゲート | 実行 | 結果 |
+| --- | --- | --- |
+| Core契約（C2の新規25チェックを含む182件） | [#38987748327](https://github.com/Fugu0141/Meltia/actions/runs/38987748327) | ALL PASS 182 |
+| H10の47＋56件Issue診断＋H11凍結103件 | [#38987748261](https://github.com/Fugu0141/Meltia/actions/runs/38987748261) | SUCCESS、H11指紋47/47＋56/56 |
+| H11 Phase 1 DiagnosticTrace | [#38987748211](https://github.com/Fugu0141/Meltia/actions/runs/38987748211) | SUCCESS |
+| H11 synthetic benchmarks | [#38987748304](https://github.com/Fugu0141/Meltia/actions/runs/38987748304) | SUCCESS |
+| Core boundary quality | [#38987748278](https://github.com/Fugu0141/Meltia/actions/runs/38987748278) | SUCCESS |
+| Input matrix quality | [#38987748197](https://github.com/Fugu0141/Meltia/actions/runs/38987748197) | SUCCESS |
+| strict-quality（Ubuntu/Windows） | [#38987748263](https://github.com/Fugu0141/Meltia/actions/runs/38987748263) | SUCCESS |
+| Windows Previewビルド・無フックセルフテストとCore/Bridge合成試験 | [#38987748265](https://github.com/Fugu0141/Meltia/actions/runs/38987748265) | SUCCESS |
+| pr-checks | [#38987748270](https://github.com/Fugu0141/Meltia/actions/runs/38987748270) | SUCCESS |
+
+### 変更前mainと変更後PRの診断の比較
+
+変更前（[main側C1完了時 #38986989041](https://github.com/Fugu0141/Meltia/actions/runs/38986989041)）と、変更後（[C2 #38987748261](https://github.com/Fugu0141/Meltia/actions/runs/38987748261)）のIssueランナーログを照合した。H10旧値→新値：
+
+| 既知診断 | 候補recall | Top-K | Top1 | 日本語誤英語 |
+| --- | --- | --- | --- | --- |
+| 47件 | 47/47 → 47/47 | 38/47 → 38/47 | 28/47 → 28/47 | 3/8 → 3/8 |
+| 56件 | 54/56 → 54/56 | 42/56 → 42/56 | 26/56 → 26/56 | 5/13 → 5/13 |
+
+**解釈の制限**：H10についてはランナーログの**集計値一致**であり、候補とルートの全ケース別SHA指紋の完全一致証明ではない。H11だけは凍結103件の厳密一致を機械検証済み。両CIは異なる実行環境/負荷であり、p50/p95が変わっても性能改善・悪化を本PRから断定しない。既知Issue中の`H10_ERROR`は正解との不一致例を表す診断出力であって、Actionsそのものの失敗ではない。Windows実機キー入力E2E・独立自然文holdoutは未実施。
