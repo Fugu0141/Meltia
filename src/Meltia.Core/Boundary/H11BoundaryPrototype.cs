@@ -130,22 +130,22 @@ public sealed partial class H11BoundaryPrototype
             if (x.Start < 0 || x.End > raw.Length || x.Start >= x.End ||
                 PairSplit(raw, x.Start) || PairSplit(raw, x.End))
             {
-                diagnostics?.Reject("invalid-utf16-or-empty-span");
+                diagnostics?.Reject("add-rejected/invalid-utf16-or-empty-span");
                 return;
             }
             if (hard.Any(y => y.Overlaps(x) && y != x))
             {
-                diagnostics?.Reject("overlap-protected-or-english-lock");
+                diagnostics?.Reject("add-rejected/overlap-protected-or-english-lock");
                 return;
             }
             if (hard.Contains(x) && lang != Lang.En)
             {
-                diagnostics?.Reject("lock-requires-english");
+                diagnostics?.Reject("add-rejected/lock-requires-english");
                 return;
             }
             if (lang == Lang.En && explicitJa.Any(y => y.Overlaps(x)))
             {
-                diagnostics?.Reject("english-in-japanese-lock");
+                diagnostics?.Reject("add-rejected/english-in-japanese-lock");
                 return;
             }
             var candidate = new Edge(x, lang, score, origin);
@@ -158,7 +158,10 @@ public sealed partial class H11BoundaryPrototype
             var hyphen = m.Value.Split('-', 2);
             if (hyphen.Length == 2 && RomajiReadable(hyphen[0]) &&
                 RomajiReadable(hyphen[1]))
+            {
+                diagnostics?.Reject("generation-skipped/structural-japanese-hyphen");
                 continue; // Japanese readings like sha-nashi: punctuation is not English.
+            }
             Add(new Utf16Span(m.Index, m.Index + m.Length), Lang.En,
                 15.0 + Math.Min(m.Length, 16) * 0.3, "structural");
         }
@@ -227,7 +230,11 @@ public sealed partial class H11BoundaryPrototype
                      word == "I") &&
                     i > 0 && char.IsWhiteSpace(raw[i - 1]) &&
                     (end == raw.Length || char.IsWhiteSpace(raw[end]));
-                if (word.Length < 2 && !isolatedOne) continue;
+                if (word.Length < 2 && !isolatedOne)
+                {
+                    diagnostics?.Reject("generation-skipped/english-single-letter-without-context");
+                    continue;
+                }
                 bool lexical = Lexicon.Contains(word.ToLowerInvariant());
                 bool naturalWord = word.Length >= 4 &&
                     (Lexicon.Contains(word[..^1].ToLowerInvariant()) && word.EndsWith('s') ||
@@ -329,7 +336,7 @@ public sealed partial class H11BoundaryPrototype
                 if (destination.Count > Width * 2)
                 {
                     destination.Sort((a, b) => b.Score.CompareTo(a.Score));
-                    diagnostics?.Drop(i, last, destination.Skip(Width),
+                    diagnostics?.Drop(candidate.Span.End, last, destination.Skip(Width),
                         destination[Width - 1].Score);
                     destination.RemoveRange(Width, destination.Count - Width);
                 }
