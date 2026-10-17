@@ -11,7 +11,7 @@
 - `OnKey`による同じキーのDown/Up、および修飾キーのキーアップを失わず、`SuspendInput`で保留入力を**1度だけFIFOで再送**する。
 - 送信通知`_signal()`が失敗しても、既にキューにある保留イベントを`Abort`から取り出せる（**自動で復旧するという保証ではない**）。
 - `ICompositionHost.ReplaceBackward`の継承デフォルト実装は**DeleteBackward→CommitText**の順であり、ホスト操作列を契約として凍結（実際のOSへの操作のatomicityは**非保証**）。
-- Ctrl+Shift+Z / Ctrl+クリックは**確定→修飾キー再送→操作キー/クリック**の順で、必要なキーアップも渡す。既存Windowsのメッセージループ/競合テストは別途行う。
+- Ctrl+Shift+Z / Ctrl+クリックは**確定→修飾キー再送→操作キー/クリック**の順。Ctrl+Shift+Zでは操作キー`Z`のDown/Upを**各1回**、Z-upがZ-downより後、Shift/Ctrlのキーアップも`up`または`passed-up`を**各1回**として固定する。既存Windowsのメッセージループ/競合テストは別途行う。
 - `Reset`/`Abandon`はセッションの可変状態を破棄する。`CaptureGate.Abort`と`CompositionController.SuspendInput`の関係を明示し、全ての例外を自動処理するような未実装保証を行わない。
 
 ## 実装範囲
@@ -42,3 +42,8 @@ CIでCore・Windows Preview・品質テストを維持。実Windowsでの`SendIn
 
 - **R1c**：UTF-16生文字列・途中ローマ字・Undo・URL/メール/結合文字について、原文・境界・再入力の同値性を追加。
 - **R2 / #59**：固定された契約に沿って`CompositionController`の状態遷移とホスト側操作を段階的に分離。テストだけではIssue #59の受け入れ条件は満たさないので**Open維持**。
+
+## PR #77 レビュー対応（P2、2026-10-17）
+
+- `R1b_Keyboard_ControlShortcut_CommitsBeforeReplayingAndPairsUp` に`up:5A`／`passed-up:5A`の**exactly-once**確認を追加。Z-upがZ-downより後に起こることも記録する。
+- `Shift(A0)`と`Ctrl(A2)`のkeyupを`Any`から`Count==1`に厳格化し、キーアップの消失と二重配送の両方を検知する。実入力ハードウェアの時系列ではなく`FakeHost.Events`の契約である点は維持。
