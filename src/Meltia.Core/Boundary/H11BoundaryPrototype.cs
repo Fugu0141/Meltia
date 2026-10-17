@@ -320,7 +320,10 @@ public sealed partial class H11BoundaryPrototype
         for (int i = 0; i < raw.Length; i++)
         {
             foreach (Lang stateLang in Enum.GetValues<Lang>())
-            foreach (var previous in dp[i, (int)stateLang].ToArray())
+            // Every legal edge moves forward (End > i), so no transition
+            // can append to the list currently being iterated. Avoid the
+            // per-state snapshot allocation without changing visit order.
+            foreach (var previous in dp[i, (int)stateLang])
             foreach (var candidate in edges[i])
             {
                 bool swap = previous.Last != Lang.Neutral &&
@@ -338,6 +341,8 @@ public sealed partial class H11BoundaryPrototype
                 destination.Add(next);
                 if (destination.Count > Width * 2)
                 {
+                    // The D2 small-beam selector regressed full Analyze on long
+                    // workloads; keep the legacy ordering for every trace mode.
                     destination.Sort((a, b) => b.Score.CompareTo(a.Score));
                     diagnostics?.Drop(candidate.Span.End, last, destination.Skip(Width),
                         destination[Width - 1].Score);

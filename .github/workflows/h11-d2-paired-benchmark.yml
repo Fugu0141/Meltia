@@ -1,0 +1,85 @@
+name: H11 Phase 3 D2 paired full benchmark
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'src/Meltia.Core/Boundary/H11BeamSelection.cs'
+      - 'src/Meltia.Core/Boundary/H11BoundaryPrototype.cs'
+      - 'tools/h11_d2_paired_compare.py'
+      - '.github/workflows/h11-d2-paired-benchmark.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: h11-d2-paired-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  paired-full:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout reviewed PR HEAD (not synthetic merge)
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          persist-credentials: false
+      - name: Checkout frozen D1b main baseline
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: bb8ec3b344dc8b111626b2885daa3c2e68c1d9ef
+          path: base
+          persist-credentials: false
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Record and check environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet --info
+          echo "BASE_SHA=$(git -C base rev-parse HEAD)"
+          echo "HEAD_SHA=$(git -C head rev-parse HEAD)"
+          test "$(git -C base rev-parse HEAD)" = bb8ec3b344dc8b111626b2885daa3c2e68c1d9ef
+          test "$(git -C head rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          sha256sum base/dictionaries/english.txt head/dictionaries/english.txt
+          cmp base/dictionaries/english.txt head/dictionaries/english.txt
+      - name: Build both frozen versions separately
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet build base/tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj -c Release
+          dotnet build head/tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj -c Release
+      - name: Run identical full 44-fixture benchmark in A-B-B-A order
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          for entry in base-a head-a head-b base-b; do
+            dir="${entry%%-*}"
+            (cd "$dir" && \
+              MELTIA_ACTUAL_CHECKOUT_SHA="$(git rev-parse HEAD)" \
+              dotnet run --no-build --project tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj \
+                -c Release -- --full --output "../reports/$entry.json")
+          done
+      - name: Compare matched fixture provenance and route counts; emit p50/p95 tables
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 head/tools/h11_d2_paired_compare.py \
+            reports/base-a.json reports/head-a.json \
+            reports/head-b.json reports/base-b.json \
+            --markdown reports/paired-full.md --json reports/paired-full-summary.json
+      - name: Preserve full same-runner reports
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: h11-d2-paired-full-${{ github.run_id }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
