@@ -338,6 +338,12 @@ public sealed partial class H11BoundaryPrototype
                 destination.Add(next);
                 if (destination.Count > Width * 2)
                 {
+                    // Traces require the original full dropped-node order.
+                    // Unique top scores are safe to select without sorting all
+                    // 33 states; ties fall back to the exact legacy sorter.
+                    if (diagnostics is null &&
+                        H11BeamSelection.TryPruneUnique(destination, Width))
+                        continue;
                     destination.Sort((a, b) => b.Score.CompareTo(a.Score));
                     diagnostics?.Drop(candidate.Span.End, last, destination.Skip(Width),
                         destination[Width - 1].Score);
