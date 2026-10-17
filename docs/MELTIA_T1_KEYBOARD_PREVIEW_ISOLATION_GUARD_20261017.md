@@ -11,6 +11,7 @@
 - `tools/test_meltia_keyboard_preview_isolation.py`（Python標準ライブラリだけ、レジストリ・ネットワーク・ユーザーデータ・Windows APIを使用しない）：
   - **レビュー修正（P1/P2）**：`#if`で有効な枝を選んだ後、C#の行コメント・ブロックコメントを空白化してから調べる。実行文のチェックでは文字列/文字リテラルも除外し、コメントや文字列に残ったガードで偽の成功にならないことを確認する。
   - `MeltiaPreviewSafety.Initialize()`より前の**あらゆる有効コード中の`AppPaths.`参照**を拒否する（`ConfigFile`/`ModelFile`なども含む）。
+  - **CI負例で発見した追加の盲点**：後続の「TIP未登録時にKeyboardへ戻す」代入は、Preview起動時の無条件Keyboard固定の代用にならない。そのため、設定ロード後・最初の永続化判定前に`settings.Mode=Keyboard`と`settings.AutoUpdate=false`が**有効コードとして存在すること**を要求する。将来起動フローが大きく変わった場合は静的テストを黙って緩めず設計レビューを行う。
   - 実際のソースを読み替えることなく、ガード代入を`//`/`/* */`でコメントアウトする、初期化前に`AppPaths.ConfigFile`/`ModelFile`/`DataDirectory`を置く、文字列内に偽の代入を埋め込むミューテーションで**テスト自身が失敗を検出すること**を固定。コメント/文字列中の`AppPaths.`は誤検出しない。
 
   1. `Meltia.Windows.csproj` が独立した`Meltia`実行ファイルとして`MELTIA_PREVIEW`を定義し、継承したCompositionとMeltia Bridgeを使うが、`native/tip`や登録スクリプトをコンパイル対象に含めないこと。
