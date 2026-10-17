@@ -7,7 +7,6 @@ on:
       - 'src/Meltia.Core/Boundary/H11BeamSelection.cs'
       - 'src/Meltia.Core/Boundary/H11BoundaryPrototype.cs'
       - 'tools/h11_d2_paired_compare.py'
-      - 'docs/MELTIA_H11_PHASE3_D2_BEAM_SELECTION_20261017.md'
       - '.github/workflows/h11-d2-paired-benchmark.yml'
 
 permissions:
