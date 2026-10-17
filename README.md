@@ -46,6 +46,7 @@
 - [H11 Phase 3 / PR-D1a：ローマ字判定のSpan化と割り当て削減の要件・検証](docs/MELTIA_H11_PHASE3_D1A_ROMAJI_SPAN_20261017.md)
 - [H11 Phase 3 / PR-D1b：文字尤度のSpan化とモデル完全互換の検証](docs/MELTIA_H11_PHASE3_D1B_CHARACTER_EVIDENCE_20261017.md)
 - [H11 Phase 3 / PR-D2：ビーム保持最適化の要件・同値テスト・測定](docs/MELTIA_H11_PHASE3_D2_BEAM_SELECTION_20261017.md)
+- [H11 Phase 4 / PR-E1：共通前向きDecoderの設計・オプトイン互換実装・比較ゲート](docs/MELTIA_H11_PHASE4_E1_FORWARD_DECODER_20261017.md)
 - [開発バージョン管理（v0.5〜v1.0-dev）](docs/MELTIA_VERSIONING.md)
 - [v0.7 未知英語候補生成の実験・検証](docs/MELTIA_V07_UNKNOWN_LATIN_20261012.md)
 - [v0.8 音韻ラティス・経路探索の実装と実測](docs/MELTIA_V08_PHONETIC_LATTICE_20261012.md)
