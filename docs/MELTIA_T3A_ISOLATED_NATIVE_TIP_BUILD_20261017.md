@@ -28,3 +28,14 @@ powershell -ExecutionPolicy Bypass -File tools/build-meltia-tip-no-registration.
 - T2で要求した`version=1`のhello/unknown-versionのfail-closedハンドシェイク、C#⇔Nativeパケット互換、実際のTIPキー入力は未実装。**これはT3b**で専用C#サーバーとnativeを結合してから検証。
 - T4以降の独立Windows VMでCOM/TSF登録の衝突検査・登録/解除の対称性・実入力E2Eを実施するまで、登録可能なDLLやインストーラーを作らず本家の資産にも触れない。
 - 本家ソースをステージ生成で機械書換する構成は長期的な設計ではない。T3b/R2以降は所有境界を分割し、コード生成による単一定数ソースへ置き換える。
+
+
+## CI検証結果（2026-10-17）
+
+- PR：[#80](https://github.com/Fugu0141/Meltia/pull/80)。コード検証HEAD `d3c1cdaa805128197a44c690c07a59d7bfeb53ab`。
+- [Windows Preview CI](https://github.com/Fugu0141/Meltia/actions/runs/39036244969)：T2既存契約 **9件PASS**、T3aソース生成・禁止操作の検証 **7件PASS**、継承Core **363/363 PASS**、研究品質 **1,067件+benchmark**のジョブ成功。
+- `rc`+`cl`+`link`の実行で**x64とx86両方のMeltiaTip.dllビルド成功**。CIログの一時生成DLLのSHA-256：
+  - x64：`F380A538F15C684A6DACC840C5D2BC653EA753071C9701F1AB1C4AAD9DFFD56F`
+  - x86：`B011D5249898C1B4B640C288FED2A953147961D16949570C1377E07F51D92638`
+- `pr-checks`、`build`、`Meltia Windows Preview CI`の**3ワークフローが成功**。
+- 初回YAMLのステップ名に含むコロン、続くPowerShell変数のコロン、MSVCの`/Fo`/`/Fd`末尾バックスラッシュ引用符をそれぞれ修正。**成功した上記HEADが実行基準**。DLLをアップロード・登録・配布したわけではない。
