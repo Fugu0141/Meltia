@@ -225,6 +225,34 @@ internal sealed class H10CharacterEvidence
         """;
     private readonly Dictionary<string, int> _en = Build(EnSeeds);
     private readonly Dictionary<string, int> _ja = Build(JaSeeds);
+    private readonly Dictionary<uint, int> _enPacked;
+    private readonly Dictionary<uint, int> _jaPacked;
+
+    public H10CharacterEvidence()
+    {
+        // Derived from precisely the same seed counts. Keep the string-keyed
+        // tables for the non-ASCII invariant-lowercase fallback.
+        _enPacked = PackModel(_en);
+        _jaPacked = PackModel(_ja);
+    }
+
+    // The top byte encodes gram length so embedded NUL characters do not
+    // alias a shorter key. The remaining bytes are ordinal ASCII.
+    private static uint Pack(ReadOnlySpan<char> key)
+    {
+        uint packed = 0;
+        foreach (char c in key)
+            packed = (packed << 8) | (byte)c;
+        return packed | ((uint)key.Length << 24);
+    }
+
+    private static Dictionary<uint, int> PackModel(Dictionary<string, int> source)
+    {
+        var packed = new Dictionary<uint, int>(source.Count);
+        foreach (var entry in source)
+            packed.Add(Pack(entry.Key.AsSpan()), entry.Value);
+        return packed;
+    }
 
     private static Dictionary<string, int> Build(string samples)
     {
@@ -256,11 +284,60 @@ internal sealed class H10CharacterEvidence
         }
         return sum;
     }
+    // Simulate ^^ + lowercase ASCII raw + $ without allocating a padded
+    // string or trigram/bigram substrings. Index i is in the virtual buffer.
+    private static char VirtualChar(ReadOnlySpan<char> raw, int i)
+    {
+        if (i < 2) return '^';
+        if (i == raw.Length + 2) return '
+}
+;
+        char c = raw[i - 2];
+        return c is >= 'A' and <= 'Z' ? (char)(c + ('a' - 'A')) : c;
+    }
+
+    private static double LogLikelihoodAscii(ReadOnlySpan<char> raw,
+        Dictionary<uint, int> model)
+    {
+        double sum = 0;
+        for (int i = 2; i < raw.Length + 3; i++)
+        {
+            char a = VirtualChar(raw, i - 2);
+            char b = VirtualChar(raw, i - 1);
+            char c = VirtualChar(raw, i);
+            uint history = (2u << 24) | ((uint)a << 8) | b;
+            uint eventKey = (3u << 24) | ((uint)a << 16) | ((uint)b << 8) | c;
+            double hits = model.GetValueOrDefault(eventKey);
+            double prefix = model.GetValueOrDefault(history);
+            // Floating-point expression and left-to-right addition order
+            // match the old string-keyed implementation exactly.
+            sum += Math.Log((hits + 0.4) / (prefix + 27 * 0.4));
+        }
+        return sum;
+    }
+
     // Mean difference: English-positive, Japanese-negative.
+    // Keep public string signature and the legacy null exception contract.
     public double Difference(string raw)
     {
-        double english = LogLikelihood(raw, _en);
-        double japanese = LogLikelihood(raw, _ja);
+        _ = raw.Length; // null used to throw NullReferenceException
+        return Difference(raw.AsSpan());
+    }
+
+    internal double Difference(ReadOnlySpan<char> raw)
+    {
+        for (int i = 0; i < raw.Length; ++i)
+        {
+            if (raw[i] <= 0x7F) continue;
+            // Unicode ToLowerInvariant is not ASCII case-folding. Preserve
+            // previous behavior, including surrogate/punctuation semantics.
+            string source = raw.ToString();
+            double enLegacy = LogLikelihood(source, _en);
+            double jaLegacy = LogLikelihood(source, _ja);
+            return Math.Clamp((enLegacy - jaLegacy) / Math.Max(1, raw.Length), -2.0, 2.0);
+        }
+        double english = LogLikelihoodAscii(raw, _enPacked);
+        double japanese = LogLikelihoodAscii(raw, _jaPacked);
         return Math.Clamp((english - japanese) / Math.Max(1, raw.Length), -2.0, 2.0);
     }
 }
