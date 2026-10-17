@@ -99,8 +99,8 @@ public sealed class H10BoundaryPrototype
                 !mandatory.Any(x => x.Start <= runEnd && runEnd < x.End)) runEnd++;
             for (int end = i + 1; end <= Math.Min(runEnd, i + MaxJapaneseEdgeLength); end++)
             {
+                if (!MeltiaRomaji.CanRead(raw.AsSpan(i, end - i))) continue;
                 var spelling = raw[i..end];
-                if (!MeltiaRomaji.CanRead(spelling)) continue;
                 // Both languages have their own likelihood, plus Japanese
                 // phonetic admissibility. English evidence never deletes JA.
                 var length = end - i;
