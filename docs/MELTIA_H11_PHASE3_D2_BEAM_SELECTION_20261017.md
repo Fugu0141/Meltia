@@ -85,6 +85,29 @@ dotnet run --project tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj -c Rel
 
 1. `H11BoundaryPrototype`の33件時 `List.Sort+RemoveRange` を通常/Traceとも旧コードに戻す。D2 Quickselectクラスは**Core本体から削除**し、`tests/Meltia.Core.Tests/H11BeamSelectionExperiment.cs` に実験コードとして保存。テストの参照同値性・ベンチマークは研究の否定証拠として維持する。
 2. `dp[i]`の列挙に使っていた `ToArray` 削減だけは、遷移辺が必ず前方（`End > i`）へ進むため同じ位置のリストを変更しないという意味上の根拠がある。凍結103件/Trace/旧Core等で同値確認する。
-3. **Quickselect不採用+ToArray削減のみ**を同じフルベンチ方法で再測定し、速度と割り当て量の改善・退行を表として追記する。なおプレビュー打鍵E2Eや独立自然文holdoutを実施したとは扱わない。
+3. **Quickselect不採用+ToArray削減のみ**を同じフルベンチ方法で再測定した（第6節、Actions #38996213811）。なおプレビュー打鍵E2Eや独立自然文holdoutを実施したとは扱わない。
 
 P2の新規テスト著作権表示はコミット `b6f736ec26592143377fe63e9b48f6880c0c8138` で追記し、notices botの ✅ とレビュースレッド解決を確認した。
+
+## 6. P1対応の最終再計測 — Quickselect不採用・ToArray削減のみ
+
+[GitHub Actions #38996213811](https://github.com/Fugu0141/Meltia/actions/runs/38996213811) **SUCCESS**、4回のfullレポート・メタデータ・ルート数一致。採用構成コミット `eaf503b63a28c86e807b42087914531d57923a24` と固定base `bb8ec3b344dc8b111626b2885daa3c2e68c1d9ef` を A→B→B→A で**同一runner**比較し、Quickselectを参照する本番コードがないことを確認した。
+
+- **測定環境**：Intel Xeon Platinum 8370C @ 2.80GHz（4論理CPU）、Ubuntu 24.04.5 LTS、.NET SDK 10.0.402 / runtime .NET 10.0.13、GC workstation、Release。辞書/fixture SHA256は第5節と同一、44fixture×3engine、各入力2回warmup・7実測×各版2走。p50/p95は各版の同条件実測を結合しnearest-rankで算出。
+- **重要**：第5節のQuickselect採用実験はAMD EPYC runner、本節はIntel Xeon runner。同一runner内での旧main対HEAD比較はそれぞれ妥当だが、**第5節の絶対時間と第6節の絶対時間を直接差分にしてQuickselectの寄与率を求めてはいけない**。
+- 新HEADではH11のビーム保持は従来と同じ`List.Sort/RemoveRange`。変化は、現在位置 `dp[i]` に遷移が戻らないという前方エッジ不変条件のもとでの`ToArray()`削減のみ。実験用Quickselectはテストアセンブリ内に隔離し、公開Core DLLに含まれない。
+
+| 入力区分 | 旧p50 ms | 最終版p50 ms | 旧p95 ms | 最終版p95 ms | 旧alloc p50 B | 最終版alloc p50 B |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 32 UTF-16 | 0.896 | 0.747 | 6.433 | 6.255 | 312,440 | 303,376 |
+| 128 UTF-16 | 2.398 | 2.342 | 34.002 | 33.003 | 1,472,192 | 1,430,440 |
+| 256 UTF-16 | 3.698 | 3.328 | 47.263 | 45.339 | 3,091,000 | 3,016,128 |
+| 512 UTF-16 | 10.933 | 7.097 | 106.630 | 105.522 | 6,309,880 | 6,156,328 |
+| 1024 UTF-16 | 24.172 | 23.236 | 211.860 | 209.842 | 12,739,536 | 12,429,832 |
+| 編集4種類（編集後の全文Analyze） | 5.408 | 5.128 | 6.353 | 6.150 | 4,556,328 | 4,511,080 |
+
+**系列別の補足**：`1024/romaji-ja` p50 210.652→209.057ms、`1024/mixed` 70.298→69.167ms、`512/romaji-ja` 105.644→104.067ms、`512/mixed` 29.614→28.563ms。編集4種類は各p50が約3.6～5.8%短縮。一方`256/url`（0.056→0.061ms）など極小ケースに見かけの退行もあり、実測揺らぎ/OS・CPU周波数・GC影響を排除した統計的改善とは言わない。p95には少数の系列別上昇もあるため**絶対遅延やSLA改善の保証はしない**。
+
+**採否結果**：Quickselectは第5節の長文/編集退行を理由に不採用、廃棄せずテスト専用ソースと否定データを保存。`ToArray`削減だけを研究Coreの挙動不変最適化として提案する。最終フル比較では主要な長文・編集グループのp50/p95に大幅な退行は確認されなかった。見かけ上の時間差が小さいため、割り当て減少と既存103件fingerprint・Trace/全CIの完全一致を主な採用根拠とする。
+
+本件は自然文精度や正式Windows IMEの遅延改善の証明ではない。レビュー完了までPR #45はMergeしない。
