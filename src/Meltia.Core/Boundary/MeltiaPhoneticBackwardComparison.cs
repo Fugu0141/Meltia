@@ -9,6 +9,11 @@ namespace Meltia.Core.Boundary;
 /// </summary>
 internal static class MeltiaPhoneticBackwardComparison
 {
+    // Frozen independently for oracle comparison; identical to v0.8 constants.
+    private const int MaxJapaneseEdgeLength = 8;
+    private const double UnreadableAsciiCost = 3.5;
+    private const double ReadableJapaneseCharReward = 0.25;
+
     private sealed class Offers(Func<int, IReadOnlyList<BoundaryRoute>[],
         IReadOnlyList<BoundaryRoute>> generator) : IBackwardOfferProvider<BoundaryRoute>
     {
