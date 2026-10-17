@@ -46,7 +46,7 @@ public sealed record MeltiaBoundaryOptions(
 /// Keeps ambiguous lexical matches as candidates without allowing them to fragment
 /// a fully phonetic Japanese island. Top-K routes are provisional and reversible.
 /// </summary>
-public sealed class MeltiaBoundaryEngine
+public sealed partial class MeltiaBoundaryEngine
 {
     public const int MaxInputLength = 1024;
     public const int MaxCandidates = 128;
@@ -99,7 +99,11 @@ public sealed class MeltiaBoundaryEngine
     private static readonly Regex ProtectedUrl = new(@"https?://[^\s]+", RegexOptions.Compiled);
     private static readonly Regex ProtectedEmail = new(@"(?<![\w.@])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", RegexOptions.Compiled);
 
-    public BoundaryResult Analyze(string raw, BoundaryEvidence? evidence = null)
+    public BoundaryResult Analyze(string raw, BoundaryEvidence? evidence = null) =>
+        AnalyzeCore(raw, evidence);
+
+    private BoundaryResult AnalyzeCore(string raw, BoundaryEvidence? evidence,
+        bool useSharedBackward = false)
     {
         ArgumentNullException.ThrowIfNull(raw);
         if (raw.Length > MaxInputLength) throw new ArgumentOutOfRangeException(nameof(raw));
@@ -258,7 +262,9 @@ public sealed class MeltiaBoundaryEngine
                 japanese, perSpanCost, MaxRoutes,
                 _options.ExperimentalContextualIslandScoring,
                 _options.ExperimentalJapaneseFlankScoring)
-            : BuildRoutes(raw.Length, candidates, hard, perSpanCost);
+            : useSharedBackward
+                ? LegacyBackwardComparison.Decode(raw.Length, candidates, hard, perSpanCost)
+                : BuildRoutes(raw.Length, candidates, hard, perSpanCost);
         var review = _options.ExperimentalUncertaintyReview
             ? MeltiaUncertaintyReview.Create(raw, routes, hard, evidence)
             : null;
