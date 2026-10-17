@@ -60,6 +60,7 @@ Phase3D1aRomajiSpanTests.Run(Check);
 Phase3D1bCharacterEvidenceTests.Run(Check);
 Phase3D2BeamTests.Run(Check);
 Phase4E1ForwardDecoderTests.Run(Check);
+Phase4E2PipelineTests.Run(Check);
 
 // Regression: long mixed sentences can contain more than four protected/locked
 // Latin islands. Dropping the fifth mandatory span used to make DP impossible.
