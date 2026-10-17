@@ -24,7 +24,7 @@
 1. `BoundarySpanValidator`（internal, `src/Meltia.Core/Boundary/BoundarySafety.cs`）が`SplitsSurrogatePair`、`IsValid`、`HasDistinctOverlap`、`HasCrossOverlap`を公開する。エンジン個別の例外メッセージと入力上限は各実装に残す。
 2. `ProtectedSpanDetector.AppendMatches`は**受け取った正規表現を指定順に**評価し、`List<Utf16Span>`へ一致範囲を追加する。語彙、Regexのオプション、適用順、重複ポリシーは呼出し側の責務とし、重複時の優先順位を暗黙に変更しない。
 3. **C1はH11のみ**を両共通部品へ移し、`H11DiagnosticTrace`のサロゲート境界判定も同じメソッドを利用する。H10/旧Coreは現行コードを比較オラクルとして保持し、後続の独立PRで各ポリシーを指定して移行する。
-4. `tests/Meltia.Core.Tests/Phase2SafetyContractTests.cs`で、URL内のメール・同一ロック・交差/包含・サロゲート・異なる方式での既存挙動を確認する。**不正入力の比較は例外型に限定**し、入力したロックの内容をログへ出さない。
+4. `tests/Meltia.Core.Tests/Phase2SafetyContractTests.cs`で、URL内のメール・同一ロック・交差/包含・サロゲート・異なる方式での既存挙動を確認する。**不正入力の比較は原則として例外型、互換性に必要なH11の2種類の例外メッセージは完全一致**で検査し、入力したロックの内容をログへ出さない。
 5. Phase 0の凍結103ケース（47+56）で、候補の列挙順・スコア・Top1/TopK・確認要否・辞書SHAが完全一致することを専用CIで検証。Phase 1トレースも別CIで確認する。未収集の独立holdoutを使わず、既知Issueの指標を一般化精度と見なさない。
 
 ## 合格条件 / 留保
@@ -45,3 +45,21 @@
 - [strict-quality #38985951989](https://github.com/Fugu0141/Meltia/actions/runs/38985951989)（Ubuntu/Windows）、[pr-checks #38985952032](https://github.com/Fugu0141/Meltia/actions/runs/38985952032)：**SUCCESS**。
 
 既知IssueのH11既存ベースライン（Top1 **72/103**、TopK **94/103**、誤英語 **1/21**）は凍結照合と整合した。これは**既知診断の出力互換性**であり、自然文holdoutでの精度向上・改善・本家より優秀という根拠ではない。Phase 2 C1はレビュー完了まで未マージとし、H10と旧Coreの移行は別PRへ分離する。
+
+## PR #40 レビュー対応：P2 テスト契約の補強（2026-10-17）
+
+レビュー：[PR #40 コメント](https://github.com/Fugu0141/Meltia/pull/40#pullrequestreview-5555065463)。既存H11の動作欠陥は指摘されず、**将来C2/C3へ展開するときの退行防止**を目的とした、非ブロッキングの2件に対応した。アルゴリズム本体と共通部品の実装・辞書は変更しない。
+
+1. **`ProtectedSpanDetector.AppendMatches` の分岐を直接テスト。** `https://user@example.com`にURL→メールRegexを適用し、`SkipAnyOverlap`ではURLの範囲1件のみ、`SkipExactDuplicate`ではURLと内包メールの2件が順序を保持して残ることを検査。Regexの再実行による完全一致スパンの重複排除を両ポリシーで検査する。
+2. **手動ロックとURLの部分重複を固定。** URL先頭から末尾2文字手前までの手動EN／Protectedロックは、後続のURL/メール自動保護をともに抑制し、H11の`mandatory`候補が手動区間のままであることを検証。一方、互いに部分重複する手動ENとProtectedは`Contradictory language locks`で拒否され、JAロックと自動URLが重なる場合も同文言で拒否される。`😀`の途中にかかるロックは`Invalid UTF-16 language lock`で拒否する。**いずれも`ArgumentException`の型とメッセージ完全一致**を要求する。
+3. **検証の範囲。** `tests/Meltia.Core.Tests/Phase2SafetyContractTests.cs`のみテストコード変更。ロック処理の仕様変更、例外文言の書換え、辞書学習や入力ログ収集は行わない。CIでCore契約→103件凍結fingerprint→Phase 1トレースおよびWindows Preview CIを再実行してから再レビューする。
+
+再現コマンド（.NET 10 / Release）：
+
+```sh
+dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
+dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --output artifacts/h10/phase2-review.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
+dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --input tests/Meltia.H10Evaluation/issue_intents_extra_20261014.jsonl --output artifacts/h10/phase2-review-extra.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
+```
+
+これらは既知Issueの出力固定テストであり、独立自然文の精度やWindows実キーE2Eの代替ではない。
