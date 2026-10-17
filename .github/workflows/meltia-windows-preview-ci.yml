@@ -20,6 +20,7 @@ on:
       - 'dictionaries/**'
       - 'tools/run-meltia-quality.py'
       - 'tools/build-meltia-windows-preview.ps1'
+      - 'tools/test_meltia_keyboard_preview_isolation.py'
       - 'tools/Test-MeltiaWindowsPreviewArtifact.ps1'
       - 'tools/meltia-publish.nuget.config'
       - 'docs/MELTIA_WINDOWS_PREVIEW.md'
@@ -45,6 +46,7 @@ on:
       - 'dictionaries/**'
       - 'tools/run-meltia-quality.py'
       - 'tools/build-meltia-windows-preview.ps1'
+      - 'tools/test_meltia_keyboard_preview_isolation.py'
       - 'tools/Test-MeltiaWindowsPreviewArtifact.ps1'
       - 'tools/meltia-publish.nuget.config'
       - 'docs/MELTIA_WINDOWS_PREVIEW.md'
@@ -76,6 +78,11 @@ jobs:
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: 10.0.x
+      - name: Guard Keyboard Preview against accidental upstream TSF/update wiring
+        shell: pwsh
+        run: |
+          python tools/test_meltia_keyboard_preview_isolation.py
+          if ($LASTEXITCODE -ne 0) { throw 'Meltia Keyboard Preview isolation guard failed.' }
       - name: Inherited Meltype Core regression tests
         shell: pwsh
         run: |
