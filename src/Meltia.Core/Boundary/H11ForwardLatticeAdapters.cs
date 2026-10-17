@@ -33,19 +33,21 @@ public sealed partial class H11BoundaryPrototype
     }
 
     private sealed record H11GenerationRequest(string Raw,
-        IReadOnlyList<Utf16Span> Hard, IReadOnlyList<Utf16Span> ExplicitJa,
+        List<Utf16Span> Hard, Utf16Span[] ExplicitJa,
         TraceCollector? Diagnostics);
 
     private sealed class H11CandidateGenerator :
-        IForwardCandidateGenerator<H11GenerationRequest, Edge>
+        IForwardCandidateGenerator<H11GenerationRequest, Edge, H11OrderedCandidates>
     {
-        public IForwardCandidateGraph<Edge> Generate(H11GenerationRequest request) =>
+        public H11OrderedCandidates Generate(H11GenerationRequest request) =>
             new H11OrderedCandidates(BuildCandidateEdges(request));
     }
 
     private sealed class H11OrderedCandidates(List<Edge>[] candidates)
         : IForwardCandidateGraph<Edge>
     {
+        public List<Edge>[] Buckets => candidates;
+
         public IReadOnlyList<Edge> At(int utf16Position) => candidates[utf16Position];
 
         public IEnumerable<Edge> InStartPositionOrder() =>
