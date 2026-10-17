@@ -32,6 +32,8 @@
 - [開発ロードマップ](docs/MELTIA_ROADMAP.md)
 - [Meltype上流変更の受け入れとMeltia段階的リファクタリング方針（レビュー用）](docs/MELTIA_UPSTREAM_MELTYPE_INTAKE_AND_REFACTORING_POLICY_20261017.md)
 - [Meltype上流変更の受け入れ判定シート（複製用）](docs/MELTIA_UPSTREAM_INTAKE_TEMPLATE.md)
+- [Meltype v1.2.1差分78ファイルの三方比較・R0棚卸し台帳](docs/MELTIA_MELTYPE_V121_R0_FILE_INVENTORY_20261017.md)
+- [Meltia TSF/IME化の独立性・実機ゲート・バージョン更新要件](docs/MELTIA_TSF_IME_READINESS_AND_VERSION_GATE_20261017.md)
 - [H11 Phase 0-A3：独立自然文holdoutの収集・封印・評価手順](docs/MELTIA_H11_PHASE0_A3_HOLDOUT_POLICY_20261017.md)
 - [H10 境界判定v2 要件定義（Meltype Issue駆動・研究フェーズ）](docs/MELTIA_H10_BOUNDARY_V2_REQUIREMENTS_20261014.md)
 - [H10 境界判定v2 試作実装・47件の新旧診断・再現手順](docs/MELTIA_H10_PROTOTYPE_COMPARISON_20261014.md)
