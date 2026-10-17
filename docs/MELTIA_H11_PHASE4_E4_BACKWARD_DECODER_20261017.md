@@ -28,4 +28,8 @@ Phase4-E1/E2は前向き3状態×有限ビームのH11/H10用であり、v0.8の
 
 ## 検証記録
 
-- 検証後、コミットとCI証拠、失敗事例、性能留保を追記する。
+- PR [#49](https://github.com/Fugu0141/Meltia/pull/49) に `BackwardLatticeDecoder` と `MeltiaPhoneticBackwardComparison` を追加。旧 `MeltiaPhoneticLatticeDecoder.Decode` は**一切編集せず**、2経路を明示的に比較した。新比較経路の候補展開ループは旧v0.8の該当2,914文字の実装と文字単位で完全一致することを確認した。
+- **初回のコンパイル失敗**：新クラスからprivate定数 `MaxJapaneseEdgeLength` / `UnreadableAsciiCost` / `ReadableJapaneseCharReward` を参照できずCS0103。値は旧v0.8と同じ `8 / 3.5 / 0.25` を比較器内に明示して再実行。旧本体は変更なし。
+- [Core boundary diagnostics / Actions #39000607801](https://github.com/Fugu0141/Meltia/actions/runs/39000607801) **SUCCESS / ALL PASS 256**。E4追加6契約：v0.8/v0.9/contextual/flank全Top-Kの一致、110 seed混在、103凍結raw、UTF-16長32/128/256/512/1024、区間数多様性・Top-K上限・forced、重複flank例外型とメッセージがPASS。
+- 最新の**コードHEAD `382d835ad2ee4650f901f4ec9a52ee9a00b3d2a6` の8種類のActions（Core・H10比較・H11 Phase1 Trace・合成ベンチ・境界品質・Windows Preview・strict-quality・PR checks）はすべてsuccess**。これは共通化した実験経路の互換性に限定され、自然文精度やWindows打鍵E2Eを示さない。
+- 引き続きE3 [#48](https://github.com/Fugu0141/Meltia/pull/48) の上に積まれた依存PR。さらにE5 [#50](https://github.com/Fugu0141/Meltia/pull/50) では従来Coreの単純Top-K後向きDPを別のRetentionで接続する。いずれもレビューを経ずにmainへMergeしない。
