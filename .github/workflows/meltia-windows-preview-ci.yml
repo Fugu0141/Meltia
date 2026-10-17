@@ -16,6 +16,9 @@ on:
       - 'native/tip/**'
       - 'config/tsf/**'
       - 'tools/test_meltia_t2_identity_contract.py'
+      - 'tools/prepare_meltia_tip_stage.py'
+      - 'tools/test_meltia_t3a_stage.py'
+      - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
       - 'tests/Meltia.CompositionBridge.Tests/**'
       - 'tests/Meltia.BoundaryEvaluation/**'
@@ -46,6 +49,9 @@ on:
       - 'native/tip/**'
       - 'config/tsf/**'
       - 'tools/test_meltia_t2_identity_contract.py'
+      - 'tools/prepare_meltia_tip_stage.py'
+      - 'tools/test_meltia_t3a_stage.py'
+      - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
       - 'tests/Meltia.CompositionBridge.Tests/**'
       - 'tests/Meltia.BoundaryEvaluation/**'
@@ -91,6 +97,16 @@ jobs:
         run: |
           python tools/test_meltia_t2_identity_contract.py
           if ($LASTEXITCODE -ne 0) { throw 'Meltia T2 identity contract failed.' }
+      - name: "T3a: validate isolated native TIP staging (never install)"
+        shell: pwsh
+        run: |
+          python tools/test_meltia_t3a_stage.py
+          if ($LASTEXITCODE -ne 0) { throw 'Meltia T3a staging contracts failed.' }
+      - name: "T3a: build experimental MeltiaTip.dll x64 and x86 (no registration)"
+        shell: pwsh
+        run: |
+          ./tools/build-meltia-tip-no-registration.ps1 -Architecture Both
+          if ($LASTEXITCODE -ne 0) { throw 'Meltia T3a isolated native compile failed.' }
       - name: Verify inherited TIP IPC cross-layer source contract (no TSF registration)
         shell: pwsh
         run: |
