@@ -63,3 +63,21 @@ dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c R
 ```
 
 これらは既知Issueの出力固定テストであり、独立自然文の精度やWindows実キーE2Eの代替ではない。
+
+## PR #40 レビュー修正後のCI実測（2026-10-17）
+
+レビュー指摘を反映したコード・契約テスト・本ドキュメントのコミット `f5a2b27beed970053887f2d9f03fe97cc4fdad97` に対する**9ワークフローすべて成功**。実行・結果を以下に固定する。
+
+| 種類 | GitHub Actions run | 結果 |
+| --- | --- | --- |
+| H11 Phase 0-A1凍結103件＋Core/負例 | [#38986756822](https://github.com/Fugu0141/Meltia/actions/runs/38986756822) | SUCCESS |
+| Phase 1 DiagnosticTrace | [#38986756769](https://github.com/Fugu0141/Meltia/actions/runs/38986756769) | SUCCESS |
+| Core boundary contracts | [#38986756913](https://github.com/Fugu0141/Meltia/actions/runs/38986756913) | SUCCESS |
+| H11 synthetic benchmark smoke | [#38986756750](https://github.com/Fugu0141/Meltia/actions/runs/38986756750) | SUCCESS |
+| Boundary quality | [#38986756827](https://github.com/Fugu0141/Meltia/actions/runs/38986756827) | SUCCESS |
+| Input matrix quality | [#38986757074](https://github.com/Fugu0141/Meltia/actions/runs/38986757074) | SUCCESS |
+| Windows Preview CI（無フックセルフテスト＋Core/Bridge合成評価） | [#38986756789](https://github.com/Fugu0141/Meltia/actions/runs/38986756789) | SUCCESS |
+| strict-quality（Ubuntu/Windows） | [#38986756865](https://github.com/Fugu0141/Meltia/actions/runs/38986756865) | SUCCESS |
+| pr-checks | [#38986756787](https://github.com/Fugu0141/Meltia/actions/runs/38986756787) | SUCCESS |
+
+**結論：** 新規の内部ヘルパー分岐、部分重複の手動ロック、および例外メッセージの正負例を含むCoreテストは成功し、既知103ケースの凍結出力比較にも差分を生じなかった。**これは従来挙動と一致することの確認であり、精度・処理速度の改善やWindows実キー入力E2Eの合格を意味しない。** CIの成功後も、PR-C2/C3への展開は別PRで扱う。
