@@ -42,3 +42,40 @@ dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c R
 dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --input tests/Meltia.H10Evaluation/issue_intents_extra_20261014.jsonl --output artifacts/phase3-d1a-56.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
 dotnet run --project tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj -c Release -- --smoke --output artifacts/phase3-d1a-smoke.json
 ```
+
+## 5. PR #43 初回CI実測（2026-10-17）
+
+コード・テスト・README実装コミット：`94cdd71e4a99db4b097e0a6f3366612af68a84b4`（本節追加前）。**9種類のGitHub ActionsワークフローがすべてSUCCESS**。次の各CIが既存の品質ゲートであり、自然文精度や実Windowsキー入力の実測ではない。
+
+| CIゲート | URL | 結果 |
+| --- | --- | --- |
+| Core契約＋旧CanRead独立oracle | [#38990682616](https://github.com/Fugu0141/Meltia/actions/runs/38990682616) | **ALL PASS 218** |
+| H10比較、H11 47＋56凍結fingerprint | [#38990682709](https://github.com/Fugu0141/Meltia/actions/runs/38990682709) | SUCCESS |
+| H11 Phase 1 DiagnosticTrace | [#38990682754](https://github.com/Fugu0141/Meltia/actions/runs/38990682754) | SUCCESS |
+| H11 synthetic benchmark smoke | [#38990682704](https://github.com/Fugu0141/Meltia/actions/runs/38990682704) | SUCCESS |
+| Boundary quality | [#38990682630](https://github.com/Fugu0141/Meltia/actions/runs/38990682630) | SUCCESS |
+| Input matrix quality | [#38990682634](https://github.com/Fugu0141/Meltia/actions/runs/38990682634) | SUCCESS |
+| Windows Preview CI（無フックセルフテスト、Core/Bridge合成評価） | [#38990682579](https://github.com/Fugu0141/Meltia/actions/runs/38990682579) | SUCCESS |
+| strict-quality（Ubuntu + Windows） | [#38990682769](https://github.com/Fugu0141/Meltia/actions/runs/38990682769) | SUCCESS |
+| pr-checks | [#38990682541](https://github.com/Fugu0141/Meltia/actions/runs/38990682541) | SUCCESS |
+
+### 旧実装との同一プロセス比較（Coreテストログ）
+
+`Phase3D1aRomajiSpanTests`は**変更前main `c5479724` の`CanRead`ソースを独立複製**し、以下を自動比較した。
+
+- ASCII長1〜3の**18,278件全列挙**、固定seedの長短・大文字混在5,000件、文字数1024/1025境界、`n/nn`、促音、代替キー`ci/cye/cyu/cyo`、無効サロゲート・非ASCII、`Islands`の切断ルール。すべて旧実装とstring/Spanの判定が一致。
+- Core契約の総数218件はチェック群を数えたもの。18,278/5,000をそれぞれ個別`check`呼出しで数えた数字ではない。
+- MicrobenchmarkはGitHub ActionsのLinuxランナー・.NET 10/Release、公開合成短文10個×1,500回（計15,000件/方式）。同一ジョブ・同一プロセス内でウォームアップ後、`Stopwatch`と`GC.GetAllocatedBytesForCurrentThread`を使用。旧方式→新方式：
+
+| Microbenchmark指標 | 旧 `CanRead` | Span版 |
+| --- | ---: | ---: |
+| 割り当て量 | **6,132,040 bytes** | **40 bytes** |
+| 合計測定時間 | **19.310 ms** | **10.557 ms** |
+
+**限界：** スレッド割当量には計測に伴う微小オーバーヘッドも入り、Span版自体の絶対的「0 byte」を証明する数値ではない。初回単一測定の時間差を一般的な速度向上率やWindows打鍵レイテンシーの改善率とみなさない。CI合否に性能閾値を加えていない。H11長文・編集の総コストを下げた度合いは、この局所ベンチだけでは判断できず、追加同一環境実験で検証する。
+
+### スコープ外と次の設計判断
+
+`H10CharacterEvidence.Difference`内の頻繁な文字列生成・log-likelihood計算、H11ビーム状態のアロケーションは未変更。1024文字長文の本格的な有意差を調べるには、[Phase 0-A2の全長ベンチ](MELTIA_H11_PHASE0_A2_BENCHMARK_20261017.md)を同一ハードウェア/同負荷/同辞書で前後実行する。PR-D1b（必要なら）とD2（ビーム改善）を**別PR**として扱い、現在のH11 103件指紋を引き続き不変条件とする。
+
+本記録はレビュー前のCI合格証跡であり、レビューなしで本番IME・mainへ取り込んでよいという判断ではない。
