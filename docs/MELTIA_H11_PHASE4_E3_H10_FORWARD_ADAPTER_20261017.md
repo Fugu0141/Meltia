@@ -26,4 +26,9 @@
 
 ## 4. 実装・検証ログ
 
-- 実装、CI run、結果、保留事項を本節に追記する。
+- PR [#48](https://github.com/Fugu0141/Meltia/pull/48) にH10モデル固有のGenerator/Transition/Beam/Projectorと内部 `AnalyzeWithSharedPipeline` を追加。元の候補生成ループ・旧前向き検索・旧経路射影は比較オラクルとして維持した。
+- 最初のCIで `states` のshadow変数がCS0136/CS0165を起こした。内側宣言を外側の代入へ修正。修正後のコンパイルは成功した。
+- 次のCoreテストでは `https://a.co/x?m=a@b.co` がH10本来のURL/mail保護重複エラーになるにもかかわらず成功ケースへ入っていた。H10の `SkipExactDuplicate` とロック衝突ポリシーを変えず、**例外一致ケースへ移して修正**した。これらは実装移植で変えてはならない旧仕様である。
+- [Core boundary diagnostics / Actions #39000262563](https://github.com/Fugu0141/Meltia/actions/runs/39000262563) は **SUCCESS / ALL PASS 250**。E3追加6契約：固定103rawの全候補・全Top-Kスコア・確認要一致、ロック/URL/Unicode、seed混在120、UTF-16長32/128/256/512/1024、例外型**と文字列**、連続呼び出しの状態分離が成功。
+- 同HEAD `f07cd32fdc5e63a9d1884b98784f640ca6d36933` の9種類のActions（Core/境界品質/H10/H11 Trace/合成ベンチ/入力品質/Windows Preview/strict-quality/PR checks）がすべてsuccess。後日作成されたE4はこのE3ブランチに依存するスタックPRで、E3がMergeされた後にbaseをmainへ切替える。
+- 以上は**互換性の証拠**であって、H10精度向上、新Decoderの本番採用や同一runnerでの性能改善、Windows実機打鍵E2E、自然文holdoutの達成を意味しない。レビュー完了までPR #48はMergeしない。
