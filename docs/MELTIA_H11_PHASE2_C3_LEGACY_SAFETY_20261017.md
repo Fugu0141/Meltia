@@ -46,3 +46,34 @@ dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
 dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --output artifacts/h10/phase2-c3-47.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
 dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --input tests/Meltia.H10Evaluation/issue_intents_extra_20261014.jsonl --output artifacts/h10/phase2-c3-56.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
 ```
+
+## PR #42 初回CI検証（2026-10-17）
+
+対象のコード・契約テスト・READMEコミット：`7308aabe9a407f7e0f348d43c3b5a5b0cfa3009a`（この節を追記する前）。**全9ワークフローがSUCCESS**。
+
+| CIゲート | GitHub Actions | 結果 |
+| --- | --- | --- |
+| Core boundary diagnostics（C3の追加29件を含む） | [#38988572101](https://github.com/Fugu0141/Meltia/actions/runs/38988572101) | **ALL PASS 211** |
+| H10比較＋H11凍結103件 | [#38988572075](https://github.com/Fugu0141/Meltia/actions/runs/38988572075) | **SUCCESS**、47件＋56件fingerprint一致 |
+| H11 Phase 1 DiagnosticTrace | [#38988572085](https://github.com/Fugu0141/Meltia/actions/runs/38988572085) | SUCCESS |
+| H11 synthetic benchmarks | [#38988572138](https://github.com/Fugu0141/Meltia/actions/runs/38988572138) | SUCCESS |
+| Boundary quality | [#38988572045](https://github.com/Fugu0141/Meltia/actions/runs/38988572045) | SUCCESS |
+| Input matrix quality | [#38988572123](https://github.com/Fugu0141/Meltia/actions/runs/38988572123) | SUCCESS |
+| strict-quality（Ubuntu / Windows） | [#38988572081](https://github.com/Fugu0141/Meltia/actions/runs/38988572081) | SUCCESS |
+| Windows Preview（無フックセルフテスト＋Core/Bridgeの1,067合成ケース） | [#38988572086](https://github.com/Fugu0141/Meltia/actions/runs/38988572086) | SUCCESS |
+| pr-checks | [#38988572147](https://github.com/Fugu0141/Meltia/actions/runs/38988572147) | SUCCESS |
+
+### C2マージ直前とC3の比較
+
+[PR #41の最終HEAD #38987921819](https://github.com/Fugu0141/Meltia/actions/runs/38987921819) と [C3 #38988572075](https://github.com/Fugu0141/Meltia/actions/runs/38988572075) のランナーログを照合：
+
+| モデルと集合 | 変更前→変更後の候補recall | Top-K | Top1 | 純JAの誤EN |
+| --- | --- | --- | --- | --- |
+| H10 47件 | 47/47→47/47 | 38/47→38/47 | 28/47→28/47 | 3/8→3/8 |
+| H10 56件 | 54/56→54/56 | 42/56→42/56 | 26/56→26/56 | 5/13→5/13 |
+| H11 47件 | 47/47→47/47 | 42/47→42/47 | 32/47→32/47 | 1/8→1/8 |
+| H11 56件 | 56/56→56/56 | 52/56→52/56 | 40/56→40/56 | 0/13→0/13 |
+
+H11は集計値に加えて**103件の全候補・全Top-K指紋を既存凍結baselineで検査**した。従来Coreは既存の全オプションCore/Bridge契約とC3の正負例が成功したものの、全103件の従来Core専用fingerprintはまだ未作成。これは後続の独立した研究・品質ゲート候補とし、現段階で過剰な同値性を宣言しない。
+
+**留保**：異なるCI実行のms比較で速度改善を主張しない。今回の契約テストは本家MeltypeのWindows実キー入力E2Eや自然文holdoutの正答率を保証しない。研究用C3はコードレビュー後に統合判定する。
