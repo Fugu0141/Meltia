@@ -174,7 +174,7 @@ internal static class Phase4E1ForwardDecoderTests
         if (!Same(old, shared)) throw new Exception("E1 H11 route/edge mismatch: " + raw);
     }
 
-    private static bool Same(H11BoundaryPrototype.Analysis a,
+    internal static bool Same(H11BoundaryPrototype.Analysis a,
         H11BoundaryPrototype.Analysis b)
     {
         if (a.Raw != b.Raw || a.NeedsConfirmation != b.NeedsConfirmation ||
@@ -190,7 +190,7 @@ internal static class Phase4E1ForwardDecoderTests
         return true;
     }
 
-    private static bool SameTrace(H11BoundaryPrototype.DiagnosticTrace a,
+    internal static bool SameTrace(H11BoundaryPrototype.DiagnosticTrace a,
         H11BoundaryPrototype.DiagnosticTrace b)
     {
         if (a.TotalBeamDropped != b.TotalBeamDropped ||
@@ -221,7 +221,7 @@ internal static class Phase4E1ForwardDecoderTests
         return true;
     }
 
-    private static string FindRepoRoot()
+    internal static string FindRepoRoot()
     {
         foreach (var starting in new[] { Directory.GetCurrentDirectory(),
                      AppContext.BaseDirectory })

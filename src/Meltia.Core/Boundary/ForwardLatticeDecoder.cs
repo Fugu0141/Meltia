@@ -32,6 +32,35 @@ internal interface IForwardBeamRetention<TNode>
 }
 
 /// <summary>
+/// An ordered per-position graph. Enumeration for observed output is in
+/// start-position bucket order, not chronological Add() order.
+/// </summary>
+internal interface IForwardCandidateGraph<TEdge> : IForwardCandidateProvider<TEdge>
+{
+    IEnumerable<TEdge> InStartPositionOrder();
+}
+
+/// <summary>
+/// Model-specific input-to-graph generation. Validation and scoring semantics
+/// belong to the model, not to the generic forward decoder.
+/// </summary>
+internal interface IForwardCandidateGenerator<in TRequest, TEdge, out TGraph>
+    where TGraph : IForwardCandidateGraph<TEdge>
+{
+    TGraph Generate(TRequest request);
+}
+
+/// <summary>
+/// Model-specific final-state reconstruction and output projection, including
+/// deduplication and tie handling. No assumptions about route meaning here.
+/// </summary>
+internal interface IForwardRouteProjector<TNode, TEdge, TResult>
+{
+    TResult Project(string raw, List<TNode>[,] states,
+        IForwardCandidateGraph<TEdge> graph);
+}
+
+/// <summary>
 /// Reusable forward UTF-16 lattice traversal (H11 opt-in in Phase 4/E1).
 /// Does not create candidates, compute transition weights, change pruning,
 /// deduplicate paths or project final Top-K. The legacy H11 loop stays the
