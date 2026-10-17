@@ -29,7 +29,7 @@ RUN_FIELDS = (
     "Schema", "Mode", "FixtureSetSha256", "DictionaryFileSha256",
     "EmbeddedDictionarySha256", "SdkVersion", "Runtime", "OSDescription",
     "Architecture", "CpuModel", "GCMode", "LogicalProcessorCount",
-    "StopwatchFrequency", "FixtureGenerator", "FixtureCount",
+    "Frequency", "FixtureGenerator", "FixtureCount",
     "WarmupsPerFixtureAndModel", "RepetitionsPerFixtureAndModel",
 )
 IDENTITY = ("Model", "Family", "Operation", "Utf16Length", "RawSha256", "Evidence")
@@ -137,15 +137,15 @@ def main() -> int:
     lines = [
         "# H11 Phase 3 D2: 同一runner A-B-B-A全長ペア測定",
         "",
-        f"- baseline: \`{ba['ActualCheckoutCommit']}\`",
-        f"- PR HEAD: \`{ha['ActualCheckoutCommit']}\`",
+        f"- baseline: `{ba['ActualCheckoutCommit']}`",
+        f"- PR HEAD: `{ha['ActualCheckoutCommit']}`",
         "- 順序: base → D2 → D2 → base（全実行を同一GitHub Actionsジョブで順番に行う）",
         "- 各レポートは.NET Release、各入力2回warmup・7回測定。"
         "入力集合8種×長さ5種類+4編集操作=44件、各バージョン2レポート。",
-        f"- fixture SHA-256: \`{ba['FixtureSetSha256']}\`",
-        f"- dictionary SHA-256: \`{ba['DictionaryFileSha256']}\`",
-        f"- CPU: \`{ba['CpuModel']}\`; OS: \`{ba['OSDescription']}\`",
-        f"- .NET SDK: \`{ba['SdkVersion']}\`; runtime: \`{ba['Runtime']}\`;"
+        f"- fixture SHA-256: `{ba['FixtureSetSha256']}`",
+        f"- dictionary SHA-256: `{ba['DictionaryFileSha256']}`",
+        f"- CPU: `{ba['CpuModel']}`; OS: `{ba['OSDescription']}`",
+        f"- .NET SDK: `{ba['SdkVersion']}`; runtime: `{ba['Runtime']}`;"
         f" cores: {ba['LogicalProcessorCount']}; GC: {ba['GCMode']}",
         "- 50/95パーセンタイル：モデル=H11、同一カテゴリ内の全入力・7試行・2実行を"
         "結合しnearest-rankで集計。allocは現スレッドの各Analyze呼出し差分。"
