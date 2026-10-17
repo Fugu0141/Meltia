@@ -37,7 +37,7 @@ foreach ($arch in $targets) {
          ' /link /Brepro /DEF:MeltiaTip.def /IMPLIB:' + $q + (Join-Path $obj 'MeltiaTip.lib') + $q +
          ' /OUT:' + $q + (Join-Path $out 'MeltiaTip.dll') + $q + ' ' + $libs)
     ) -join ' && '
-    Write-Host "T3a compiling $arch: staged MeltiaTip.dll (NO REGISTRATION)"
+    Write-Host "T3a compiling $($arch): staged MeltiaTip.dll (NO REGISTRATION)"
     cmd /c $cmd
     if ($LASTEXITCODE -ne 0) { throw "T3a native build failed: $arch" }
     $dll = Join-Path $out 'MeltiaTip.dll'
