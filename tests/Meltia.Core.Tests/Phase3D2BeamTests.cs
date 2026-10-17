@@ -86,17 +86,40 @@ internal static class Phase3D2BeamTests
         {
             var cases = fixtures.Where((_, i) =>
                 mode == "tie" ? i % 5 == 1 : i % 5 == 3).Take(160).ToArray();
-            _ = Measure(cases, fast: false);
-            _ = Measure(cases, fast: true);
-            var before = Measure(cases, fast: false);
-            var after = Measure(cases, fast: true);
-            if (before.Checksum != after.Checksum)
+            const int loops = 64; // 10,240 independently reconstructed beams per trial
+            _ = Measure(cases, fast: false, loops);
+            _ = Measure(cases, fast: true, loops);
+            var oldResults = new List<(double Milliseconds, long AllocatedBytes, ulong Checksum)>();
+            var newResults = new List<(double Milliseconds, long AllocatedBytes, ulong Checksum)>();
+            for (int trial = 0; trial < 6; trial++)
+            {
+                // Alternate order to reduce warmed-code and scheduler order bias.
+                if (trial % 2 == 0)
+                {
+                    oldResults.Add(Measure(cases, fast: false, loops));
+                    newResults.Add(Measure(cases, fast: true, loops));
+                }
+                else
+                {
+                    newResults.Add(Measure(cases, fast: true, loops));
+                    oldResults.Add(Measure(cases, fast: false, loops));
+                }
+            }
+            ulong expected = oldResults[0].Checksum;
+            if (oldResults.Concat(newResults).Any(x => x.Checksum != expected))
                 throw new Exception("D2 benchmark outputs differ; score/order hash mismatch");
+            static double Median(IEnumerable<double> values)
+            {
+                var ordered = values.Order().ToArray();
+                return (ordered[ordered.Length / 2 - 1] + ordered[ordered.Length / 2]) / 2;
+            }
             Console.WriteLine($"H11_D2_BENCH mode={mode} " +
-                $"fixtures={cases.Length} width={Width} " +
-                $"legacy_ms={before.Milliseconds:F3} fast_ms={after.Milliseconds:F3} " +
-                $"legacy_alloc_bytes={before.AllocatedBytes} fast_alloc_bytes={after.AllocatedBytes} " +
-                $"checksum={after.Checksum:X16}");
+                $"beams_per_trial={cases.Length * loops} width={Width} trials=6 " +
+                $"legacy_median_ms={Median(oldResults.Select(x => x.Milliseconds)):F3} " +
+                $"fast_median_ms={Median(newResults.Select(x => x.Milliseconds)):F3} " +
+                $"legacy_alloc_bytes={oldResults[0].AllocatedBytes} " +
+                $"fast_alloc_bytes={newResults[0].AllocatedBytes} " +
+                $"checksum={expected:X16}");
         }
         check(true, "H11 D2 ordered benchmark hash matches original comparator for distinct and tied scores");
     }
@@ -131,11 +154,12 @@ internal static class Phase3D2BeamTests
     }
 
     private static (double Milliseconds, long AllocatedBytes, ulong Checksum)
-        Measure(H11BoundaryPrototype.Node[][] fixtures, bool fast)
+        Measure(H11BoundaryPrototype.Node[][] fixtures, bool fast, int loops)
     {
         ulong checksum = Offset;
         long startAlloc = GC.GetAllocatedBytesForCurrentThread();
         long start = Stopwatch.GetTimestamp();
+        for (int iteration = 0; iteration < loops; iteration++)
         foreach (var fixture in fixtures)
         {
             var nodes = new List<H11BoundaryPrototype.Node>(fixture);
