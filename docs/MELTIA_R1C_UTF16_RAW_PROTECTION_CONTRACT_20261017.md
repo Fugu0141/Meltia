@@ -10,6 +10,7 @@
 - `k` / `ky`等の未完成ローマ字とバックスペース、`Clear`による初期状態への復帰を確認。
 - `AppendKana(raw,kana)`のUTF-16・Unicode文字コード保持を確認。サロゲートペアや結合文字の**コード単位**が失われないことを確認し、Unicode grapheme cluster単位の削除・レンダリングを保証するわけではない。
 - URLとメールの保護区間は原文を参照するUTF-16開始・終端位置で定義され、既存`Segments`の保護属性付き区間で完全な原文を保持する。対象はテスト例のみでURL網羅や他の保護種別は未完。
+- **レビューP2対応**：非BMP文字`😀`の直後にある`user@example.com`を使い、メール保護区間の開始が**UTF-16で2**、終了が`sample.Length`であること、切り出したRawと保護Segmentが元メール文字列と一致することを明示的に検証する（コードポイント数の1と区別）。
 - `Segments(final:false/true)`は同じ入力に対して呼んでも`Raw`を書き換えない。結果のキャッシュの安定性を確認するが、異なる`final`で区間が一致することまでは要求しない。
 
 ## 実装とテスト
@@ -43,3 +44,8 @@ dotnet run --project src/Meltype.Core.Tests/Meltype.Core.Tests.csproj -c Release
 - [Windows Preview CI](https://github.com/Fugu0141/Meltia/actions/runs/39035865298)にて`MeltiaR1cTextPreservationTests` **新規8/8 PASS**、継承Core全体 **371/371 PASS**。
 - `meltia-strict-quality`、`linux-artifact-ci`、`build`、`pr-checks`を含む**5つのPRワークフローが成功**。
 - Native TIP・Windows実機キー入力のE2Eを実施したという意味ではない。今後のリファクタリング時は同じテストセットを再利用する。
+
+## PR #79 レビュー対応（2026-10-17）
+
+- P2：ASCIIかつStart=0だけではUTF-16とコードポイントoffsetの誤用を検出できないため、非BMPプレフィクス+メールのStart=2/End=Raw.Length・Raw一致・保護Segments一致を同じcharacterization testへ追加。製品コードは変更しない。
+- 本テストは現在の保護scannerのUTF-16座標の一例を固定するものであり、あらゆるUnicode位置やホスト側編集を保証しない。
