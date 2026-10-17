@@ -68,6 +68,7 @@
 - [T1-A：Keyboard Previewの本家TSF・更新経路への誤接続防止ガード](docs/MELTIA_T1_KEYBOARD_PREVIEW_ISOLATION_GUARD_20261017.md)
 - [R1：Meltype継承Compositionの入力・確定・副作用契約とcharacterization tests](docs/MELTIA_R1_COMPOSITION_BEHAVIOR_CONTRACT_20261017.md)
 - [T1-B：継承TIPのC#／C++ IPC通信契約と独立IME移行ゲート](docs/MELTIA_T1B_TIP_IPC_PROTOCOL_CONTRACT_20261017.md)
+- [T2：Meltia専用TSF識別子・独立登録の設計と無登録ガード](docs/MELTIA_T2_TSF_IDENTITY_AND_REGISTRATION_BOUNDARY_20261017.md)
 - [2026-10-13 Windows実機入力フィードバック・改修の検証計画](docs/MELTIA_WINDOWS_FIELD_TEST_20261013.md)
 - [Issue #32: `changesuru` の英日境界修正・再現テストと実機確認手順](docs/MELTIA_ISSUE_32_CHANGE_SURU_20261014.md)
 - [2026-10-13 Issue / ブランチ整理（完了Issue・削除候補・安全な削除手順）](docs/MELTIA_ISSUE_BRANCH_CLEANUP_20261013.md)
