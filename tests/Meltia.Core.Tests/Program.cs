@@ -54,6 +54,7 @@ session.Insert("😀a"); session.MoveCaret(2); session.Backspace();
 Check(session.Raw=="a", "UTF-16-aware backspace");
 Issue28SessionNoOpTests.Run(engine, Check);
 Phase2SafetyContractTests.Run(Check);
+Phase2H10SafetyContractTests.Run(Check);
 
 // Regression: long mixed sentences can contain more than four protected/locked
 // Latin islands. Dropping the fifth mandatory span used to make DP impossible.
