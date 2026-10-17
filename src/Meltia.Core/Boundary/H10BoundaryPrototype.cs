@@ -41,22 +41,17 @@ public sealed class H10BoundaryPrototype
         var explicitJapanese = (evidence.ExplicitJapanese ?? []).Distinct().ToArray();
         var mandatory = (evidence.ExplicitEnglish ?? [])
             .Concat(evidence.Protected ?? []).Distinct().ToList();
-        foreach (Match match in Url.Matches(raw).Cast<Match>().Concat(Email.Matches(raw).Cast<Match>()))
-        {
-            var span = new Utf16Span(match.Index, match.Index + match.Length);
-            if (!mandatory.Any(x => x == span)) mandatory.Add(span);
-        }
+        // H10 keeps distinct overlapping URL/email matches, unlike H11.
+        // Later lock validation must still reject their conflicting ranges.
+        ProtectedSpanDetector.AppendMatches(raw, mandatory,
+            ProtectionOverlapPolicy.SkipExactDuplicate, Url, Email);
         foreach (var span in explicitJapanese.Concat(mandatory))
             Validate(raw, span);
-        foreach (var span in mandatory)
-        {
-            if (explicitJapanese.Any(x => x.Overlaps(span)) ||
-                mandatory.Any(x => x != span && x.Overlaps(span)))
-                throw new ArgumentException("Conflicting mandatory spans");
-        }
-        foreach (var span in explicitJapanese)
-            if (explicitJapanese.Any(x => x != span && x.Overlaps(span)))
-                throw new ArgumentException("Overlapping Japanese locks");
+        if (BoundarySpanValidator.HasCrossOverlap(mandatory, explicitJapanese) ||
+            BoundarySpanValidator.HasDistinctOverlap(mandatory))
+            throw new ArgumentException("Conflicting mandatory spans");
+        if (BoundarySpanValidator.HasDistinctOverlap(explicitJapanese))
+            throw new ArgumentException("Overlapping Japanese locks");
 
         var byStart = new List<Step>[raw.Length + 1];
         for (int i = 0; i <= raw.Length; i++) byStart[i] = [];
@@ -200,12 +195,12 @@ public sealed class H10BoundaryPrototype
     {
         if (span.Start < 0 || span.End > raw.Length || span.Start >= span.End)
             throw new ArgumentException("Invalid H10 span");
-        if (SplitsPair(raw, span.Start) || SplitsPair(raw, span.End))
+        // Preserve H10's error precedence: numeric range validation runs
+        // before the shared surrogate-pair boundary check.
+        if (BoundarySpanValidator.SplitsSurrogatePair(raw, span.Start) ||
+            BoundarySpanValidator.SplitsSurrogatePair(raw, span.End))
             throw new ArgumentException("H10 span splits UTF-16 surrogate pair");
     }
-    private static bool SplitsPair(string raw, int offset) =>
-        offset > 0 && offset < raw.Length &&
-        char.IsHighSurrogate(raw[offset - 1]) && char.IsLowSurrogate(raw[offset]);
 }
 
 /// <summary>Transparent, fixed-seed bi/tri-gram likelihood ratio; no user data.</summary>
