@@ -103,7 +103,7 @@ public sealed partial class H11BoundaryPrototype
         AnalyzeCore(raw, evidence, diagnostics: null);
 
     private Analysis AnalyzeCore(string raw, BoundaryEvidence? evidence,
-        TraceCollector? diagnostics)
+        TraceCollector? diagnostics, bool useForwardDecoder = false)
     {
         ArgumentNullException.ThrowIfNull(raw);
         if (raw.Length > MaxInputLength) throw new ArgumentOutOfRangeException(nameof(raw));
@@ -313,40 +313,53 @@ public sealed partial class H11BoundaryPrototype
             }
         }
 
-        var dp = new List<Node>[raw.Length + 1, 3];
-        for (int i = 0; i <= raw.Length; i++)
-            for (int lang = 0; lang < 3; lang++) dp[i, lang] = [];
-        dp[0, (int)Lang.Neutral].Add(new Node(0, Lang.Neutral, null, null));
-        for (int i = 0; i < raw.Length; i++)
+        List<Node>[,] dp;
+        if (useForwardDecoder)
         {
-            foreach (Lang stateLang in Enum.GetValues<Lang>())
-            // Every legal edge moves forward (End > i), so no transition
-            // can append to the list currently being iterated. Avoid the
-            // per-state snapshot allocation without changing visit order.
-            foreach (var previous in dp[i, (int)stateLang])
-            foreach (var candidate in edges[i])
+            // Phase 4/E1: explicit test-only challenger. The same candidates,
+            // scorer arithmetic, beam policy and output projection are used.
+            dp = ForwardLatticeDecoder.Decode(raw.Length, 3, (int)Lang.Neutral,
+                new Node(0, Lang.Neutral, null, null),
+                new H11OrderedCandidates(edges), new H11ForwardTransition(),
+                new H11OrderedBeam(diagnostics));
+        }
+        else
+        {
+            dp = new List<Node>[raw.Length + 1, 3];
+            for (int i = 0; i <= raw.Length; i++)
+                for (int lang = 0; lang < 3; lang++) dp[i, lang] = [];
+            dp[0, (int)Lang.Neutral].Add(new Node(0, Lang.Neutral, null, null));
+            for (int i = 0; i < raw.Length; i++)
             {
-                bool swap = previous.Last != Lang.Neutral &&
-                    candidate.Lang != Lang.Neutral && previous.Last != candidate.Lang;
-                var last = candidate.Lang == Lang.Neutral ? previous.Last : candidate.Lang;
-                double transition = swap ? -1.6 : 0;
-                // Close a lexical English island before a phonetic Japanese
-                // suffix; do not give a generic reward to all English seams.
-                if (candidate.Lang == Lang.Ja && swap && previous.Edge is { } prior &&
-                    prior.Lang == Lang.En && prior.Origin == "baseline-lexicon-word" &&
-                    candidate.Span.Length >= 2) transition += 0.9;
-                var next = new Node(previous.Score + candidate.Score + transition,
-                    last, candidate, previous);
-                var destination = dp[candidate.Span.End, (int)last];
-                destination.Add(next);
-                if (destination.Count > Width * 2)
+                foreach (Lang stateLang in Enum.GetValues<Lang>())
+                // Every legal edge moves forward (End > i), so no transition
+                // can append to the list currently being iterated. Avoid the
+                // per-state snapshot allocation without changing visit order.
+                foreach (var previous in dp[i, (int)stateLang])
+                foreach (var candidate in edges[i])
                 {
-                    // The D2 small-beam selector regressed full Analyze on long
-                    // workloads; keep the legacy ordering for every trace mode.
-                    destination.Sort((a, b) => b.Score.CompareTo(a.Score));
-                    diagnostics?.Drop(candidate.Span.End, last, destination.Skip(Width),
-                        destination[Width - 1].Score);
-                    destination.RemoveRange(Width, destination.Count - Width);
+                    bool swap = previous.Last != Lang.Neutral &&
+                        candidate.Lang != Lang.Neutral && previous.Last != candidate.Lang;
+                    var last = candidate.Lang == Lang.Neutral ? previous.Last : candidate.Lang;
+                    double transition = swap ? -1.6 : 0;
+                    // Close a lexical English island before a phonetic Japanese
+                    // suffix; do not give a generic reward to all English seams.
+                    if (candidate.Lang == Lang.Ja && swap && previous.Edge is { } prior &&
+                        prior.Lang == Lang.En && prior.Origin == "baseline-lexicon-word" &&
+                        candidate.Span.Length >= 2) transition += 0.9;
+                    var next = new Node(previous.Score + candidate.Score + transition,
+                        last, candidate, previous);
+                    var destination = dp[candidate.Span.End, (int)last];
+                    destination.Add(next);
+                    if (destination.Count > Width * 2)
+                    {
+                        // The D2 small-beam selector regressed full Analyze on long
+                        // workloads; keep the legacy ordering for every trace mode.
+                        destination.Sort((a, b) => b.Score.CompareTo(a.Score));
+                        diagnostics?.Drop(candidate.Span.End, last, destination.Skip(Width),
+                            destination[Width - 1].Score);
+                        destination.RemoveRange(Width, destination.Count - Width);
+                    }
                 }
             }
         }
