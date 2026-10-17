@@ -74,7 +74,7 @@ public sealed partial class H10BoundaryPrototype
         }
         else
         {
-        var states = new List<State>[raw.Length + 1, 3];
+        states = new List<State>[raw.Length + 1, 3];
         for (int i = 0; i <= raw.Length; i++)
             for (int lang = 0; lang < 3; lang++) states[i, lang] = [];
         states[0, (int)Language.Neutral].Add(new State(0, Language.Neutral, null, null));
