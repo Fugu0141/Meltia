@@ -181,7 +181,7 @@ internal static class Phase4E1ForwardDecoderTests
         H11BoundaryPrototype.DiagnosticTrace b)
     {
         if (a.TotalBeamDropped != b.TotalBeamDropped ||
-            a.OmittedDropEvents != b.OmittedDropEvents ||
+            a.OmittedBeamDropEvents != b.OmittedBeamDropEvents ||
             a.BeamDrops.Count != b.BeamDrops.Count ||
             a.Rejections.Count != b.Rejections.Count ||
             a.Edges.Count != b.Edges.Count ||
