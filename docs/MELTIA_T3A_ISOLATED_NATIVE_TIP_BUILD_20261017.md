@@ -10,7 +10,8 @@
 2. `Globals.h`内のCLSID、profile、3種の表示属性GUIDと表示名をマニフェスト値へ差し替える。`Pipe.cpp`は`Meltia.Tip.v1.<SID>`へ分離し、`TextService.cpp`の自プロセス識別をMeltia.exeへ変更、再注入マーカーを独立させる。
 3. `Dll.cpp`のログ先・有効化環境変数をMeltiaへ分離。`DllRegisterServer`／`DllUnregisterServer`は**どちらも`SELFREG_E_CLASS`を返して登録や解除を実行しない**。試験用に残るCOMクラスファクトリーとコンパイル済み機能の**安全性を保証するわけではない**。
 4. `MeltypeTip.rc`から本家アイコン参照を削除し、製品表示文字列をMeltiaに変更。`MeltiaTip.def`へ改名、出力を`MeltiaTip.dll`にする。**旧インストーラー・本家アイコン・登録スクリプトはコピーしない。**
-5. 前提のソース文字列が変化した場合は**例外で停止**し、黙って本家識別子でビルドすることを許さない。既存の出力先やリポジトリ配下への生成も拒否する。
+   - 生成時に`DisplayAttributes.cpp`の3属性説明、`LangBar.cpp`の説明・2ツールチップ、`CandidateWindow.cpp`の2ウィンドウクラス名もMeltia化。C++内部の`namespace meltype`とコメントは可視名称対象外とし、T3bで別途責務整理する。
+5. 前提のソース文字列が変化した場合は**例外で停止**し、黙って本家識別子でビルドすることを許さない。既存の出力先やリポジトリ配下への生成も拒否する。 **`DllRegisterServer`と`DllUnregisterServer`の継承元関数本体とファイル終端を厳密に照合**してから置換し、未知の追加exportを黙って切り捨てない。
 6. CIでは`tools/test_meltia_t3a_stage.py`の静的/一時生成テストと、Windows上の`tools/build-meltia-tip-no-registration.ps1`によるx64/x86コンパイルを実行し、公開アーティファクトとしてアップロード・配布しない。
 
 ## ビルド方法（Windows + VC++ Build Tools）
@@ -39,3 +40,10 @@ powershell -ExecutionPolicy Bypass -File tools/build-meltia-tip-no-registration.
   - x86：`B011D5249898C1B4B640C288FED2A953147961D16949570C1377E07F51D92638`
 - `pr-checks`、`build`、`Meltia Windows Preview CI`の**3ワークフローが成功**。
 - 初回YAMLのステップ名に含むコロン、続くPowerShell変数のコロン、MSVCの`/Fo`/`/Fd`末尾バックスラッシュ引用符をそれぞれ修正。**成功した上記HEADが実行基準**。DLLをアップロード・登録・配布したわけではない。
+
+## PR #80 レビュー対応（2026-10-17）
+
+- **P2（DLLの末尾）**：`DllRegisterServer`/`DllUnregisterServer`の原コードと終端を完全一致させたうえで登録無効化スタブに変更。新しい関数・exportや登録内容が増減すれば例外とし、追記したコードを黙って削除しない。追加export・関数内容変更のミューテーションテストを追加。
+- **P2（ネイティブの表示名）**：`DisplayAttributes.cpp`の入力中・変換済み・選択中、`LangBar.cpp`の入力モード説明と両ツールチップ、`CandidateWindow.cpp`の候補／意味ウィンドウクラス名をMeltia化。元のMeltype文字列が公開識別子として残らないことをテスト。
+- **P3（GUIDキーの順序）**：`ORIGINAL_GUIDS`を名前付きフィールド辞書に変更し、`GUID_IDENTITIES`によりコメントとC++定数を同じ明示フィールドに対応付けた。JSONのidentityキー順序を逆転してもコメントと初期化子が一致するテストを追加。
+- 無登録・未配布・実通信なしというT3aの制約は継続。追加テストとネイティブx86/x64ビルドを最新HEADで再検証する。
