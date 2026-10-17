@@ -97,7 +97,7 @@ internal static class MeltiaR1CompositionContractTests
         Assert.True(!session.IsComposing, "composition cleared");
         var second = session.CommitForPassThrough();
         Assert.Equal(0, second.Commits.Count, "repeated call cannot commit duplicate text");
-        Assert.True(!second.Consumed);
+        Assert.True(!second.Consumed, "original event remains unconsumed");
     }
 
     [Test]
@@ -109,7 +109,7 @@ internal static class MeltiaR1CompositionContractTests
         Assert.True(first.Consumed, "CommitPending owns its host operation");
         Assert.Equal(1, first.Commits.Count);
         Assert.Equal("きょうは", first.Commits[0].Text);
-        Assert.True(!session.IsComposing);
+        Assert.True(!session.IsComposing, "composition cleared");
         var second = session.CommitPending();
         Assert.Equal(0, second.Commits.Count, "no duplicate commit on repeated focus callback");
     }
@@ -125,7 +125,7 @@ internal static class MeltiaR1CompositionContractTests
         Assert.True(abandoned, "pending composition discarded");
         Assert.Equal(before, keyboard.Host.Output.Count,
             "focus loss cannot write into another target");
-        Assert.True(!keyboard.Controller.IsComposing);
+        Assert.True(!keyboard.Controller.IsComposing, "abandon cleared composition");
         Assert.True(keyboard.Host.View is null, "candidate UI hidden");
         Assert.True(!keyboard.Controller.Abandon("already idle"),
             "repeated focus change is not another commit");
@@ -136,9 +136,9 @@ internal static class MeltiaR1CompositionContractTests
     {
         var session = CreateSession();
         var bypass = session.PassThrough();
-        Assert.True(!bypass.Consumed);
+        Assert.True(!bypass.Consumed, "idle event is not consumed");
         Assert.Equal(0, bypass.Commits.Count);
-        Assert.True(bypass.View is null);
-        Assert.True(!session.IsComposing);
+        Assert.True(bypass.View is null, "no view while idle");
+        Assert.True(!session.IsComposing, "composition cleared");
     }
 }
