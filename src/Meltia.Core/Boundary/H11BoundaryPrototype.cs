@@ -128,6 +128,7 @@ public sealed partial class H11BoundaryPrototype
         // experimental forward paths; preserve the original buckets and order.
         var graph = new H11CandidateGenerator().Generate(
             new H11GenerationRequest(raw, hard, explicitJa, diagnostics));
+        var edges = graph.Buckets;
 
         List<Node>[,] dp;
         if (useForwardDecoder)
@@ -152,7 +153,7 @@ public sealed partial class H11BoundaryPrototype
                 // can append to the list currently being iterated. Avoid the
                 // per-state snapshot allocation without changing visit order.
                 foreach (var previous in dp[i, (int)stateLang])
-                foreach (var candidate in graph.At(i))
+                foreach (var candidate in edges[i])
                 {
                     bool swap = previous.Last != Lang.Neutral &&
                         candidate.Lang != Lang.Neutral && previous.Last != candidate.Lang;
@@ -213,7 +214,7 @@ public sealed partial class H11BoundaryPrototype
             .SelectMany(lang => dp[raw.Length, (int)lang]));
         bool uncertainty = results.Count > 1 &&
             results[0].Score - results[1].Score < 1.5;
-        return new Analysis(raw, graph.InStartPositionOrder()
+        return new Analysis(raw, edges.SelectMany(x => x)
             .Select(x => new H10BoundaryPrototype.Edge(x.Span,
                 x.Lang == Lang.En ? "English" :
                 x.Lang == Lang.Ja ? "Japanese" : "Neutral",
