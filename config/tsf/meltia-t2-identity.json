@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "phase": "T2",
+  "status": "design-only",
+  "registrationEnabled": false,
+  "protocolVersion": 1,
+  "product": "Meltia",
+  "displayName": "Meltia",
+  "languageId": "0x0411",
+  "identity": {
+    "clsid": "d57fa595-ddbd-442a-ad59-aa5142456d64",
+    "profileGuid": "e2357811-7199-43b7-829b-ca1c784e39b8",
+    "inputAttributeGuid": "5c575d03-bed4-49a1-991d-9138c8714da4",
+    "convertedAttributeGuid": "831a603d-f822-4809-885e-4c0bc707761a",
+    "targetAttributeGuid": "cca9bc86-e9fd-4e89-b7e7-2e9275045aa9"
+  },
+  "ipc": {
+    "pipePrefix": "Meltia.Tip.v1.",
+    "userSuffix": "<SID>",
+    "wireContract": "T1-B",
+    "requireVersionHandshake": true,
+    "unknownVersionPolicy": "inactive",
+    "unknownOperationPolicy": "inactive"
+  },
+  "distribution": {
+    "assemblyBaseName": "MeltiaTip",
+    "installDirectory": "%ProgramFiles%\\Meltia\\tip",
+    "dataDirectory": "%LOCALAPPDATA%\\Meltia",
+    "logDirectory": "%LOCALAPPDATA%\\Meltia\\logs",
+    "uninstallScope": "Meltia CLSID and profile only"
+  },
+  "deployment": {
+    "performRegistration": false,
+    "modifyMeltypeRegistration": false,
+    "enableTsfMode": false,
+    "copyNativeArtifacts": false
+  }
+}
