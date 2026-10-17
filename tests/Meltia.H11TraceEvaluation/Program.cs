@@ -22,6 +22,7 @@ var engine = new H11BoundaryPrototype();
 var files = new[] { "issue_intents_v2.jsonl", "issue_intents_extra_20261014.jsonl" };
 var summaries = new List<object>();
 int total = 0, top1 = 0, topk = 0, missing = 0, pruned = 0, omitted = 0;
+int checkedBeamDrops = 0, multiUnitBeamDrops = 0;
 var observed = new List<(string Name, string Id, H11CaseSnapshot Snapshot)>();
 foreach (string file in files)
 {
@@ -49,6 +50,24 @@ foreach (string file in files)
             "missing trace candidates: " + id);
         Check(trace.Routes.Count == traced.Result.Routes.Count,
             "missing diagnostic routes: " + id);
+        foreach (var drop in trace.BeamDrops)
+        {
+            checkedBeamDrops++;
+            // The reported position is dp[edge.End, last], NOT the edge's
+            // originating cursor position. Check multi-unit edges explicitly.
+            Check(drop.AtUtf16Position == drop.IncomingEdgeSpan.End &&
+                drop.IncomingEdgeSpan.Start < drop.AtUtf16Position &&
+                drop.AtUtf16Position <= raw.Length,
+                "beam event must point to its incoming edge destination: " + id);
+            if (drop.IncomingEdgeSpan.Length > 1) multiUnitBeamDrops++;
+            Check(drop.Reason ==
+                H11BoundaryPrototype.DiagnosticBeamDrop.ClassifyReason(
+                    drop.DroppedScore, drop.LowestKeptScore),
+                "beam drop reason must match scores: " + id);
+        }
+        Check(trace.TotalBeamDropped ==
+            trace.BeamDrops.Count + trace.OmittedBeamDropEvents,
+            "beam event cap accounting mismatch: " + id);
         foreach (var edge in trace.Edges)
         {
             double subtotal = edge.Contributions.Sum(x => x.Value) +
@@ -119,6 +138,20 @@ foreach (string file in files)
 Check(total == 103 && top1 == 72 && topk == 94,
     $"Frozen public Issue metrics changed: top1 {top1}/{total}, topk {topk}/{total}");
 Check(total - top1 == 31, "Expected 31 unresolved diagnostic examples");
+Check(checkedBeamDrops > 0 && multiUnitBeamDrops > 0,
+    "103-case fixture must cover beam pruning on a multi-UTF-16-unit edge");
+
+// Deterministic equal-score regression: the diagnostic label must not
+// claim stable ordering (List.Sort has no stable-tie contract).
+Check(H11BoundaryPrototype.DiagnosticBeamDrop.ClassifyReason(7.25, 7.25) ==
+    "tie-at-width", "score-tie must be reported without implying stability");
+Check(H11BoundaryPrototype.DiagnosticBeamDrop.ClassifyReason(7.24, 7.25) ==
+    "beam-width-overflow", "non-tie drop classification changed");
+var tieFixture = engine.AnalyzeWithTrace(new string('a', 30));
+Check(tieFixture.Trace.BeamDrops.All(drop => drop.Reason ==
+    H11BoundaryPrototype.DiagnosticBeamDrop.ClassifyReason(
+        drop.DroppedScore, drop.LowestKeptScore)),
+    "synthetic repetitive input must classify every beam drop by its scores");
 
 var selected = new[] { "yaml", "new", "hotelltu", "Are you sushi?",
     "handanwodelegatesuru" };
@@ -154,6 +187,17 @@ Check(absentEnglish.Status == "missing_candidate" &&
     absentEnglish.BestGoldScore is null &&
     absentEnglish.BestGoldSteps.Count == 0,
     "gold comparison must not fabricate missing English candidates");
+Check(noEnglishEdge.Trace.Rejections.Any(r =>
+    r.Reason == "generation-skipped/english-single-letter-without-context" &&
+    r.Count > 0), "the missing single-letter English candidate must explain why");
+Check(noEnglishEdge.Trace.Rejections.All(r =>
+    r.Reason.StartsWith("generation-skipped/", StringComparison.Ordinal) ||
+    r.Reason.StartsWith("add-rejected/", StringComparison.Ordinal)),
+    "skipped generation and rejected Add calls need distinct reason categories");
+var dashedRomaji = engine.AnalyzeWithTrace("sha-nashi");
+Check(dashedRomaji.Trace.Rejections.Any(r =>
+    r.Reason == "generation-skipped/structural-japanese-hyphen"),
+    "skipped structural hypothesis must be visible");
 var validJapanese = noEnglishEdge.Trace.CompareToGold([]);
 Check(validJapanese.Status == "correct" && validJapanese.ExistsInCandidateGraph,
     "empty gold should accept a legal Japanese-only route");
@@ -195,6 +239,8 @@ var jsonReport = new
     MissingCandidate = missing,
     PathPruned = pruned,
     TopKOmitted = omitted,
+    CheckedBeamDrops = checkedBeamDrops,
+    MultiUnitBeamDrops = multiUnitBeamDrops,
     DictionarySha256 = H11Snapshot.EmbeddedDictionarySha(),
     CorpusFingerprints = files.ToDictionary(file => file, file =>
         H11Snapshot.CorpusSha(Path.Combine(root, "tests/Meltia.H10Evaluation", file))),
@@ -205,7 +251,8 @@ var jsonReport = new
 File.WriteAllText(destination, JsonSerializer.Serialize(jsonReport,
     new JsonSerializerOptions { WriteIndented = true }));
 Console.WriteLine($"H11_TRACE_PASS: {total} frozen cases, Top1 {top1}, TopK {topk}, " +
-    $"missing={missing}, pruned={pruned}, omitted={omitted}; output={destination}");
+    $"missing={missing}, pruned={pruned}, omitted={omitted}; " +
+    $"beamDrops={checkedBeamDrops}, multiUnitDrops={multiUnitBeamDrops}; output={destination}");
 return 0;
 
 static string Sha(string raw) =>
