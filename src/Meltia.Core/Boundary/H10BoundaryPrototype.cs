@@ -289,9 +289,7 @@ internal sealed class H10CharacterEvidence
     private static char VirtualChar(ReadOnlySpan<char> raw, int i)
     {
         if (i < 2) return '^';
-        if (i == raw.Length + 2) return '
-}
-;
+        if (i == raw.Length + 2) return (char)36; // terminal dollar sign
         char c = raw[i - 2];
         return c is >= 'A' and <= 'Z' ? (char)(c + ('a' - 'A')) : c;
     }
