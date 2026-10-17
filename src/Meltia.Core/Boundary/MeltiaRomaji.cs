@@ -4,7 +4,21 @@ namespace Meltia.Core.Boundary;
 /// <summary>Small, deterministic phonetic plausibility check. Not a replacement for Mozc.</summary>
 public static class MeltiaRomaji
 {
-    private static readonly HashSet<string> Syllables = Build();
+    // Each original 1-4-character syllable is encoded as nonzero ASCII
+    // bytes; no two syllable lengths can have the same packed uint key.
+    private static readonly HashSet<uint> SyllableKeys =
+        Build().Select(s => Pack(s.AsSpan())).ToHashSet();
+
+    private static char LowerAscii(char c) =>
+        c is >= 'A' and <= 'Z' ? (char)(c + ('a' - 'A')) : c;
+
+    private static uint Pack(ReadOnlySpan<char> token)
+    {
+        uint key = 0;
+        foreach (char c in token)
+            key = (key << 8) | (byte)LowerAscii(c);
+        return key;
+    }
 
     private static HashSet<string> Build()
     {
@@ -26,22 +40,43 @@ public static class MeltiaRomaji
     /// <summary>True only when the entire ASCII input has a plausible Japanese romaji path.</summary>
     public static bool CanRead(string value)
     {
+        // Read Length before AsSpan so a null argument retains the legacy
+        // NullReferenceException contract instead of becoming an empty span.
         if (value.Length == 0) return true;
-        if (value.Length > 1024 || !value.All(char.IsAsciiLetter)) return false;
-        var raw = value.ToLowerInvariant();
-        var reachable = new bool[raw.Length + 1];
+        return CanRead(value.AsSpan());
+    }
+
+    /// <summary>Allocation-free phonetic check of a bounded ASCII slice.</summary>
+    internal static bool CanRead(ReadOnlySpan<char> value)
+    {
+        if (value.Length == 0) return true;
+        if (value.Length > 1024) return false;
+        for (int i = 0; i < value.Length; i++)
+            if (!char.IsAsciiLetter(value[i])) return false;
+
+        // The input limit is checked first: at most 1025 reachable flags.
+        Span<bool> reachable = stackalloc bool[value.Length + 1];
+        reachable.Clear();
         reachable[0] = true;
-        for (int i = 0; i < raw.Length; ++i)
+        for (int i = 0; i < value.Length; ++i)
         {
             if (!reachable[i]) continue;
-            if (raw[i] == 'n' && (i + 1 == raw.Length || "aiueoy".IndexOf(raw[i + 1]) < 0))
+            char current = LowerAscii(value[i]);
+            if (current == 'n' &&
+                (i + 1 == value.Length ||
+                 "aiueoy".IndexOf(LowerAscii(value[i + 1])) < 0))
                 reachable[i + 1] = true;
-            if (i + 1 < raw.Length && raw[i] == raw[i + 1] &&
-                "aeioun".IndexOf(raw[i]) < 0) reachable[i + 1] = true;
-            for (int length = 1; length <= 4 && i + length <= raw.Length; ++length)
-                if (Syllables.Contains(raw.Substring(i, length))) reachable[i + length] = true;
+            if (i + 1 < value.Length && current == LowerAscii(value[i + 1]) &&
+                "aeioun".IndexOf(current) < 0)
+                reachable[i + 1] = true;
+            uint key = 0;
+            for (int length = 1; length <= 4 && i + length <= value.Length; ++length)
+            {
+                key = (key << 8) | (byte)LowerAscii(value[i + length - 1]);
+                if (SyllableKeys.Contains(key)) reachable[i + length] = true;
+            }
         }
-        return reachable[raw.Length];
+        return reachable[value.Length];
     }
 
     /// <summary>Find phonetic islands without losing the original uppercase characters.</summary>
@@ -64,7 +99,7 @@ public static class MeltiaRomaji
             for (int i = 1; i < cuts.Count; ++i)
             {
                 var part = new Utf16Span(cuts[i - 1], cuts[i]);
-                if (part.Length >= 4 && CanRead(text.Substring(part.Start, part.Length)))
+                if (part.Length >= 4 && CanRead(text.AsSpan(part.Start, part.Length)))
                     output.Add(part);
             }
         }

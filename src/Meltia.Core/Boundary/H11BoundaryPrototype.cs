@@ -30,17 +30,24 @@ public sealed partial class H11BoundaryPrototype
 
     // Alternate Latin-key layouts are evidence for Japanese, not converted
     // strings. Keep the original raw and offsets at every decoding stage.
-    private static bool RomajiReadable(string value)
+    private static bool RomajiReadable(string value) =>
+        RomajiReadable(value.AsSpan());
+
+    private static bool RomajiReadable(ReadOnlySpan<char> value)
     {
         if (MeltiaRomaji.CanRead(value)) return true;
-        if (!value.All(char.IsAsciiLetter)) return false;
-        var normalized = value.ToLowerInvariant()
+        foreach (char c in value)
+            if (!char.IsAsciiLetter(c)) return false;
+
+        // Keep the exact alternate-input rewrite order and case semantics.
+        // Only the slow fallback creates a normalized string.
+        var normalized = value.ToString().ToLowerInvariant()
             .Replace("cye", "che", StringComparison.Ordinal)
             .Replace("cyu", "chu", StringComparison.Ordinal)
             .Replace("cyo", "cho", StringComparison.Ordinal)
             .Replace("ci", "shi", StringComparison.Ordinal);
-        return !string.Equals(normalized, value, StringComparison.OrdinalIgnoreCase) &&
-            MeltiaRomaji.CanRead(normalized);
+        return !normalized.AsSpan().Equals(value, StringComparison.OrdinalIgnoreCase) &&
+            MeltiaRomaji.CanRead(normalized.AsSpan());
     }
     private static bool Consonant(char letter) =>
         char.IsAsciiLetter(letter) && "aeiou".IndexOf(char.ToLowerInvariant(letter)) < 0;
@@ -57,7 +64,7 @@ public sealed partial class H11BoundaryPrototype
             if (costs[i] == 99) continue;
             costs[i + 1] = Math.Min(costs[i + 1], costs[i] + 1);
             for (int n = 1; n <= 4 && i + n <= word.Length; n++)
-                if (RomajiReadable(word.Substring(i, n)))
+                if (RomajiReadable(word.AsSpan(i, n)))
                     costs[i + n] = Math.Min(costs[i + n], costs[i]);
         }
         return costs[^1];
@@ -193,11 +200,14 @@ public sealed partial class H11BoundaryPrototype
                     var entire = raw[i..endRun];
                     bool endsLikeJapanese = "aeioun".Contains(entire[^1]);
                     if (entire.All(char.IsLower) && endsLikeJapanese &&
-                        !Lexicon.Contains(entire) &&
-                        RomajiFallbackCost(entire) <= 1)
-                        Add(new Utf16Span(i, endRun), Lang.Ja,
-                            0.68 * size + 5.8 - 2.0 * RomajiFallbackCost(entire),
-                            "robust-full-romaji");
+                        !Lexicon.Contains(entire))
+                    {
+                        int fallbackCost = RomajiFallbackCost(entire);
+                        if (fallbackCost <= 1)
+                            Add(new Utf16Span(i, endRun), Lang.Ja,
+                                0.68 * size + 5.8 - 2.0 * fallbackCost,
+                                "robust-full-romaji");
+                    }
                 }
             }
             Add(new Utf16Span(i, i + 1), Lang.Ja, -2.65, "unfinished-romaji");
