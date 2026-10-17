@@ -24,4 +24,8 @@
 
 ## 4. 実装・結果
 
-- 検証後にコミットとCIを追記する。
+- PR [#50](https://github.com/Fugu0141/Meltia/pull/50) に `MeltiaBoundaryEngine.E5Adapters.cs`、比較用 `AnalyzeWithSharedBackward`、E5専用回帰テストを追加。旧Core `BuildRoutes` の本体は変更せず、`Analyze` は既定の旧経路を維持する。
+- [Core boundary diagnostics / Actions #39000836001](https://github.com/Fugu0141/Meltia/actions/runs/39000836001) **SUCCESS / ALL PASS 262**。E5追加6契約：研究オプション・URL/メール・強制ロック・曖昧性Review、固定103 raw、seed混在125、UTF-16長32/128/256/512/1024、重複/交差ロックと最大長の例外型・メッセージ、連続呼出の状態分離を確認。
+- 最新の**コードHEAD `f033c6bb9c00a6df6ff0851544344e1d64a6f8df` の8種類のActions（Core・H10比較・H11 Phase1 Trace・合成ベンチ・境界品質・Windows Preview無フック・strict-quality・PR checks）はすべてsuccess**。Windows CIは同HEADでPreviewのpublish、smoke、1,067件研究品質ゲートの成功を報告した。ただしWindows**実キー入力E2E**を意味しない。
+- 新後向き比較器の結果は既存の `BuildRoutes` に対する**契約一致**を示す。既定Core/H11/H10の新Decoder切替・速度保証・本番IME動作・独立holdout精度改善を主張しない。
+- E3 [PR #48](https://github.com/Fugu0141/Meltia/pull/48) → E4 [PR #49](https://github.com/Fugu0141/Meltia/pull/49) → E5 [PR #50](https://github.com/Fugu0141/Meltia/pull/50) は依存関係の順にレビューしてからMergeし、各Merge後に後続のbase更新・再CIを実施する。Phase4の既定経路への採用可否は [移行完了判定ゲート](MELTIA_H11_PHASE4_MIGRATION_EXIT_GATES_20261017.md) を別途満たして判断する。
