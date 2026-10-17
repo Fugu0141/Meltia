@@ -24,6 +24,11 @@
 - Core Release、H11固定103、Trace、H10、Windows Preview無フック・strict-qualityのGitHub Actionsを確認する。環境のないローカルで「テスト実行済み」とは扱わない。
 - 新経路の性能改善や精度向上は主張しない。採用判断前に同一runnerのフルベンチとWindows入力の独立評価が必要。レビュー完了までマージしない。
 
-## 4. 検証記録
+## 4. 実装と検証記録
 
-- 実装の結果とCIのURL・未解決点はPRレビュー時に追記する。現時点ではE2を製品に接続しない。
+- PR [#47](https://github.com/Fugu0141/Meltia/pull/47) に `H11CandidateGenerator`、`H11RouteProjector`、内部E2パイプラインと専用テストを実装。既定のH11検索・旧Top-K射影は保持した。
+- 抽出した `BuildCandidateEdges` の候補生成コード本体**190行をE1統合後mainの原文と直接比較し、完全一致**した。新射影の本文も、候補列挙を `graph.InStartPositionOrder()` とする箇所以外は旧射影と一致。候補列挙は引き続き始点位置ごとのバケット順。
+- 初回の実装で旧H11ループの候補列挙を `IReadOnlyList` 経由にしたが、反復時のEnumerator boxingによる割り当て増加リスクをレビュー中に発見した。採用前に従来の `List<Edge>[]` 直接列挙へ戻し、ロックコレクションの具体型も維持。**性能改善の証拠ではない**が、旧経路のホットパス変更を避けるための是正。
+- [Core boundary diagnostics / Actions #38999072574](https://github.com/Fugu0141/Meltia/actions/runs/38999072574) **SUCCESS: ALL PASS 244**。103凍結rawの旧/E1/E2全候補・全経路・完全Trace、固定seed混在125、Unicode/保護/重複ロック、32〜1024 UTF-16、再実行、例外種別のE2追加6契約がPASSした。これは**実装上の互換性**の確認であり、推論精度を新規に測った結果ではない。
+- 同一コードHEAD `314b0122a4a90aaa987f6239248776b59df15fce` のH11 DiagnosticTrace、H10比較、合成ベンチ、入力マトリクス、PR basic checksはSUCCESS。すべてのCI・レビューが完了したとはこの段階では主張しない。
+- **未完了**：本PRの独立コードレビュー、実機Windows E2E、自然文holdout、E2共通経路の同一runnerペア性能比較。通常H11採用への切替、H10/v0.8移植、正式IME/TSF接続は行っていない。
