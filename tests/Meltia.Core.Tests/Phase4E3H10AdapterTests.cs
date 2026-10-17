@@ -64,7 +64,6 @@ internal static class Phase4E3H10AdapterTests
                 ExplicitEnglish: [new Utf16Span(0, 3)])),
             ("https://example.com/a", null),
             ("hello@example.com", null),
-            ("https://a.co/x?m=a@b.co", null),
             ("😀a🌸GitHubwo", null),
             ("APIはGitHubde", null),
             ("kyouhaKingGnudeSPYAIRde", null),
@@ -105,6 +104,7 @@ internal static class Phase4E3H10AdapterTests
                 ExplicitJapanese: [new Utf16Span(2, 6)])),
             ("https://example.com", new BoundaryEvidence(ExplicitJapanese: [new Utf16Span(0, 5)])),
             (new string('a', H10BoundaryPrototype.MaxInputLength + 1), null),
+            ("https://a.co/x?m=a@b.co", null),
             ("a", new BoundaryEvidence(ExplicitEnglish: [new Utf16Span(0, 2)]))
         })
         {
