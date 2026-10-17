@@ -13,10 +13,20 @@ from uuid import UUID, RFC_4122
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "config/tsf/meltia-t2-identity.json"
+# The known original CLSID is explicitly checked in these two files.
 LEGACY_SOURCES = (
     ROOT / "native/tip/Globals.h",
     ROOT / "src/Meltype/Tip/TipServer.cs",
 )
+# Scan all current inherited TIP implementation, registration scripts and C#
+# TIP server files for literal GUIDs. This is NOT a repo-wide or OS registry scan.
+LEGACY_GUID_SCAN_FILES = tuple(sorted(
+    set((ROOT / "native/tip").glob("*.h"))
+    | set((ROOT / "native/tip").glob("*.cpp"))
+    | set((ROOT / "native/tip").glob("*.ps1"))
+    | set((ROOT / "src/Meltype/Tip").glob("*.cs"))
+))
+LEGACY_CATEGORY_REGISTRATION = ROOT / "native/tip/Dll.cpp"
 GUID_KEYS = (
     "clsid", "profileGuid", "inputAttributeGuid",
     "convertedAttributeGuid", "targetAttributeGuid",
@@ -32,11 +42,26 @@ def read_manifest():
 
 
 def legacy_guid_set():
-    """GUIDs visible in historical native and C# TIP source (incl. platform APIs)."""
+    """Literal GUIDs in native/tip C++/headers/scripts and C# Tip server files."""
+    if not LEGACY_GUID_SCAN_FILES:
+        raise ValueError("TIP GUID scan source set is empty")
     return {
-        UUID(value) for path in LEGACY_SOURCES
+        UUID(value) for path in LEGACY_GUID_SCAN_FILES
         for value in GUID_RE.findall(path.read_text(encoding="utf-8-sig"))
     }
+
+
+def inherited_category_associations():
+    """Category identifiers paired with the original CLSID by Dll.cpp."""
+    source = LEGACY_CATEGORY_REGISTRATION.read_text(encoding="utf-8-sig")
+    match = re.search(r"const GUID\* const kCategories\[\]\s*=\s*\{(.*?)\};",
+                      source, re.DOTALL)
+    if match is None:
+        raise ValueError("cannot identify inherited TSF category list")
+    categories = re.findall(r"&([A-Z][A-Z0-9_]*)\s*,", match.group(1))
+    if not categories or len(set(categories)) != len(categories):
+        raise ValueError("inherited TSF category list is empty or duplicated")
+    return categories
 
 
 def validate_identity(data, legacy_guids):
@@ -84,11 +109,37 @@ def validate_identity(data, legacy_guids):
         "installDirectory": r"%ProgramFiles%\Meltia\tip",
         "dataDirectory": r"%LOCALAPPDATA%\Meltia",
         "logDirectory": r"%LOCALAPPDATA%\Meltia\logs",
-        "uninstallScope": "Meltia CLSID and profile only",
+        "uninstallScope": (
+            "Meltia-owned COM CLSID, language profile, TSF category associations, "
+            "and installed files only"
+        ),
     }
     for key, value in expected_paths.items():
         if dst.get(key) != value:
             raise ValueError(f"Meltia-only distribution.{key} required")
+
+    ownership = dst.get("uninstallOwnership", {})
+    if not isinstance(ownership, dict):
+        raise ValueError("uninstallOwnership requires explicit limits")
+    expected_ownership = {
+        "comClsid": "identity.clsid",
+        "languageProfile": "identity.profileGuid",
+        "categoryRegistrationOwner": "identity.clsid",
+        "categoryAssociations": inherited_category_associations(),
+        "installedFileRoot": dst["installDirectory"],
+        "removeSharedCategoryGuids": False,
+        "removeForeignProductRegistrations": False,
+        "removeUserDataAutomatically": False,
+    }
+    if set(ownership) != set(expected_ownership):
+        raise ValueError("uninstallOwnership fields must enumerate exactly the owned resources")
+    for key, expected in expected_ownership.items():
+        actual = ownership.get(key)
+        # 'False' is mandatory; 0/None/"false" must not pass as a boolean.
+        valid = actual is False if expected is False else actual == expected
+        if not valid:
+            raise ValueError(f"uninstallOwnership.{key} must preserve Meltia-only ownership")
+
     deployment = data.get("deployment", {})
     for flag in ("performRegistration", "modifyMeltypeRegistration",
                  "enableTsfMode", "copyNativeArtifacts"):
@@ -116,6 +167,50 @@ class MeltiaT2IdentityContractTests(unittest.TestCase):
             self.assertIn("417d801b-a9bd-4c26-bd16-356a825a6998", source)
         native = LEGACY_SOURCES[0].read_text(encoding="utf-8-sig").lower()
         self.assertIn("21f643f4-72d5-4946-bf70-0a126ab52d05", native)
+
+    def test_guid_scan_includes_native_registration_and_server_sources(self):
+        # Register-Tip.ps1 contains additional literal GUID references that the
+        # previous two-file scan could miss. This is scoped, not a repo-wide scan.
+        paths = {p.relative_to(ROOT).as_posix() for p in LEGACY_GUID_SCAN_FILES}
+        for path in (
+            "native/tip/Globals.h",
+            "native/tip/Dll.cpp",
+            "native/tip/Register-Tip.ps1",
+            "src/Meltype/Tip/TipServer.cs",
+        ):
+            self.assertIn(path, paths)
+        self.assertGreaterEqual(len(paths), 4)
+
+    def test_uninstall_categories_match_inherited_registration_targets(self):
+        owning = self.data["distribution"]["uninstallOwnership"]
+        self.assertEqual(inherited_category_associations(), owning["categoryAssociations"])
+        self.assertEqual("identity.clsid", owning["categoryRegistrationOwner"])
+        self.assertFalse(owning["removeSharedCategoryGuids"])
+        self.assertFalse(owning["removeForeignProductRegistrations"])
+
+    def test_mutating_uninstall_targets_or_cleanup_scope_is_rejected(self):
+        import copy
+        mutations = (
+            ("categoryAssociations", []),
+            ("categoryRegistrationOwner", "Meltype CLSID"),
+            ("comClsid", "legacy CLSID"),
+            ("languageProfile", "legacy language profile"),
+            ("installedFileRoot", r"%ProgramFiles%\\Meltype\\tip"),
+            ("removeSharedCategoryGuids", True),
+            ("removeForeignProductRegistrations", True),
+            ("removeUserDataAutomatically", True),
+        )
+        for field, value in mutations:
+            bad = copy.deepcopy(self.data)
+            bad["distribution"]["uninstallOwnership"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(
+                ValueError, "uninstallOwnership"
+            ):
+                validate_identity(bad, self.legacy)
+        bad = copy.deepcopy(self.data)
+        bad["distribution"]["uninstallScope"] = "Meltia CLSID and profile only"
+        with self.assertRaisesRegex(ValueError, "Meltia-only distribution.uninstallScope"):
+            validate_identity(bad, self.legacy)
 
     def test_duplicate_or_upstream_guid_is_rejected(self):
         import copy
