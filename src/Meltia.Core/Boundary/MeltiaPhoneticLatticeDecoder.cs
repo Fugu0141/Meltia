@@ -57,7 +57,7 @@ internal static class MeltiaPhoneticLatticeDecoder
             {
                 if (!char.IsAsciiLetter(raw[i + length - 1])) break;
                 readable[i, length] = MeltiaRomaji.CanRead(
-                    raw.Substring(i, length));
+                    raw.AsSpan(i, length));
             }
         }
 
