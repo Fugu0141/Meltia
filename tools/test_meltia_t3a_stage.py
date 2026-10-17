@@ -6,7 +6,9 @@ import json
 import tempfile
 import unittest
 
-from prepare_meltia_tip_stage import ROOT, ORIGINAL_GUIDS, prepare, stage_text, replace_one
+from prepare_meltia_tip_stage import (
+    ROOT, ORIGINAL_GUIDS, GUID_IDENTITIES, prepare, stage_text, replace_one,
+)
 
 
 class MeltiaT3aStagingTests(unittest.TestCase):
@@ -21,7 +23,7 @@ class MeltiaT3aStagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "config/tsf/meltia-t2-identity.json").read_text(encoding="utf-8"))
         for guid in manifest["identity"].values():
             self.assertIn(guid.upper(), native.upper())
-        for guid in ORIGINAL_GUIDS:
+        for guid in ORIGINAL_GUIDS.values():
             self.assertNotIn(guid.upper(), native.upper())
         self.assertIn('kDisplayName[] = L"Meltia"', native)
         self.assertIn('Meltia.Tip.v1.', (output / "Pipe.cpp").read_text(encoding="utf-8"))
@@ -72,6 +74,58 @@ class MeltiaT3aStagingTests(unittest.TestCase):
             stage_text("Pipe.cpp", mutated, manifest)
         with self.assertRaisesRegex(ValueError, "exactly one"):
             replace_one("aa", "x", "y", "explicit change")
+
+    def test_extra_native_tail_or_modified_registration_is_rejected(self):
+        manifest = json.loads((ROOT / "config/tsf/meltia-t2-identity.json").read_text(encoding="utf-8"))
+        dll = (ROOT / "native/tip/Dll.cpp").read_text(encoding="utf-8-sig")
+        # A newly added export after unregister must not silently disappear.
+        with self.assertRaisesRegex(ValueError, "registration tail changed"):
+            stage_text("Dll.cpp", dll + "\nvoid UnexpectedExport() {}\n", manifest)
+        # Registration semantics changing upstream require renewed scrutiny.
+        with self.assertRaisesRegex(ValueError, "registration tail changed"):
+            stage_text("Dll.cpp", dll.replace("return S_OK;\n}\n", "return E_FAIL;\n}\n"), manifest)
+
+    def test_guid_comments_match_named_fields_with_shuffled_json_order(self):
+        manifest = json.loads((ROOT / "config/tsf/meltia-t2-identity.json").read_text(encoding="utf-8"))
+        shuffled = dict(manifest)
+        shuffled["identity"] = dict(reversed(list(manifest["identity"].items())))
+        origin = (ROOT / "native/tip/Globals.h").read_text(encoding="utf-8-sig")
+        native = stage_text("Globals.h", origin, shuffled)
+        for constant, field in GUID_IDENTITIES:
+            declaration = "inline constexpr " + ("CLSID" if constant == "CLSID_TextService" else "GUID") + " " + constant
+            preceding = native[:native.index(declaration)].splitlines()[-1]
+            self.assertEqual("// {" + manifest["identity"][field].upper() + "}", preceding,
+                             "GUID comment must match its named initializer field: " + constant)
+        for old in ORIGINAL_GUIDS.values():
+            self.assertNotIn(old.upper(), native.upper())
+
+    def test_staged_native_ui_identity_is_meltia_only(self):
+        output = prepare(self.dest)
+        expectations = {
+            "DisplayAttributes.cpp": (
+                ("Meltype: 入力中", "Meltia: 入力中"),
+                ("Meltype: 変換した文節", "Meltia: 変換した文節"),
+                ("Meltype: 選んでいる文節", "Meltia: 選んでいる文節"),
+            ),
+            "LangBar.cpp": (
+                ("Meltype の入力モード", "Meltia の入力モード"),
+                ("Meltype: 日本語 (クリックで英数)", "Meltia: 日本語 (クリックで英数)"),
+                ("Meltype: 英数 (クリックで日本語)", "Meltia: 英数 (クリックで日本語)"),
+            ),
+            "CandidateWindow.cpp": (
+                ("MeltypeCandidateWindow", "MeltiaCandidateWindow"),
+                ("MeltypeMeaningWindow", "MeltiaMeaningWindow"),
+            ),
+        }
+        for path, names in expectations.items():
+            content = (output / path).read_text(encoding="utf-8")
+            for old, new in names:
+                self.assertNotIn('L"' + old + '"', content, path)
+                self.assertIn('L"' + new + '"', content, path)
+        manifest = json.loads((ROOT / "config/tsf/meltia-t2-identity.json").read_text(encoding="utf-8"))
+        legacy = (ROOT / "native/tip/LangBar.cpp").read_text(encoding="utf-8-sig")
+        with self.assertRaisesRegex(ValueError, "LangBar.cpp display"):
+            stage_text("LangBar.cpp", legacy.replace("Meltype の入力モード", "Other の入力モード"), manifest)
 
     def test_manifest_does_not_unlock_registration(self):
         manifest = json.loads((ROOT / "config/tsf/meltia-t2-identity.json").read_text(encoding="utf-8"))
