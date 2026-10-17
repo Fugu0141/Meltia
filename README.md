@@ -39,6 +39,7 @@
 - [H11統合後の課題一覧・改修優先順位・次期開発の実装手順と受け入れ条件](docs/MELTIA_H11_NEXT_DEVELOPMENT_READINESS_20261016.md)
 - [H11 Phase 0-A1：103ケースの不変ベースライン・再現性ゲート](docs/MELTIA_H11_PHASE0_BASELINE_20261017.md)
 - [H11 Phase 0-A2：合成長文・編集操作の性能計測器と再現手順](docs/MELTIA_H11_PHASE0_A2_BENCHMARK_20261017.md)
+- [H11 Phase 1：スコア差分・探索脱落理由を可視化するDiagnosticTraceの要件・基本設計](docs/MELTIA_H11_PHASE1_DIAGNOSTIC_TRACE_20261017.md)
 - [開発バージョン管理（v0.5〜v1.0-dev）](docs/MELTIA_VERSIONING.md)
 - [v0.7 未知英語候補生成の実験・検証](docs/MELTIA_V07_UNKNOWN_LATIN_20261012.md)
 - [v0.8 音韻ラティス・経路探索の実装と実測](docs/MELTIA_V08_PHONETIC_LATTICE_20261012.md)

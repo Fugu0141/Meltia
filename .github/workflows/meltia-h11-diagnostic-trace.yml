@@ -1,0 +1,43 @@
+name: Meltia H11 Phase 1 diagnostic trace
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'src/Meltia.Core/**'
+      - 'dictionaries/english.txt'
+      - 'tests/Meltia.H10Evaluation/**'
+      - 'tests/Meltia.H11TraceEvaluation/**'
+      - 'docs/MELTIA_H11_PHASE1_*.md'
+      - '.github/workflows/meltia-h11-diagnostic-trace.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meltia-h11-trace-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trace:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+      - name: H11 phase 1 diagnostic trace + frozen 103-case comparisons
+        run: >
+          dotnet run --project tests/Meltia.H11TraceEvaluation/Meltia.H11TraceEvaluation.csproj
+          -c Release -- --output artifacts/h11-trace/public-issue-diagnostics.json
+      - name: Upload public issue-only diagnostic trace
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: h11-phase1-diagnostic-${{ github.run_id }}
+          path: artifacts/h11-trace/
+          if-no-files-found: warn
+          retention-days: 14
