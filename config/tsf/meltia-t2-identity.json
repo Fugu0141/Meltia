@@ -27,7 +27,23 @@
     "installDirectory": "%ProgramFiles%\\Meltia\\tip",
     "dataDirectory": "%LOCALAPPDATA%\\Meltia",
     "logDirectory": "%LOCALAPPDATA%\\Meltia\\logs",
-    "uninstallScope": "Meltia CLSID and profile only"
+    "uninstallScope": "Meltia-owned COM CLSID, language profile, TSF category associations, and installed files only",
+    "uninstallOwnership": {
+      "comClsid": "identity.clsid",
+      "languageProfile": "identity.profileGuid",
+      "categoryRegistrationOwner": "identity.clsid",
+      "categoryAssociations": [
+        "GUID_TFCAT_TIP_KEYBOARD",
+        "GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER",
+        "GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT",
+        "GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT",
+        "GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT"
+      ],
+      "installedFileRoot": "%ProgramFiles%\\Meltia\\tip",
+      "removeSharedCategoryGuids": false,
+      "removeForeignProductRegistrations": false,
+      "removeUserDataAutomatically": false
+    }
   },
   "deployment": {
     "performRegistration": false,
