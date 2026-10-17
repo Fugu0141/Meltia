@@ -27,12 +27,15 @@ foreach ($arch in $targets) {
     $obj = Join-Path $staging "obj\$arch"
     New-Item -ItemType Directory -Force -Path $out, $obj | Out-Null
     $vcarch = if ($arch -eq 'x64') { 'x64' } else { 'x64_x86' }
+    # cl.exe interprets a trailing backslash before a closing quote as an
+    # escape, merging /Fo and /Fd. A forward-slash folder suffix is safe.
+    $objForCl = $obj.Replace('\', '/') + '/'
     $cmd = @(
         ($q + $vcvars + $q + ' ' + $vcarch + ' >nul'),
         ('cd /d ' + $q + $staging + $q),
         ('rc /nologo /fo ' + $q + (Join-Path $obj 'MeltiaTip.res') + $q + ' MeltiaTip.rc'),
         ('cl /nologo /Brepro /std:c++17 /EHsc /W4 /wd4100 /utf-8 /DUNICODE /D_UNICODE ' +
-         $optimize + ' /Fo' + $q + $obj + '\' + $q + ' /Fd' + $q + $obj + '\' + $q +
+         $optimize + ' /Fo' + $q + $objForCl + $q + ' /Fd' + $q + $objForCl + $q +
          ' /LD ' + ($sources -join ' ') + ' ' + $q + (Join-Path $obj 'MeltiaTip.res') + $q +
          ' /link /Brepro /DEF:MeltiaTip.def /IMPLIB:' + $q + (Join-Path $obj 'MeltiaTip.lib') + $q +
          ' /OUT:' + $q + (Join-Path $out 'MeltiaTip.dll') + $q + ' ' + $libs)
