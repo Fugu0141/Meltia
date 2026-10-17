@@ -140,11 +140,17 @@ internal static class MeltiaR1bInputOrderingTests
         var keyDown = events.IndexOf("down:5A");
         Assert.True(committed >= 0 && ctrlDown > committed && shiftDown > ctrlDown
                     && keyDown > shiftDown, "commit => ctrl => shift => key: " + string.Join("|", events));
-        Assert.Equal(1, events.Count(e => e == "down:5A"), "shortcut should be replayed only once");
-        Assert.True(events.Any(e => e == "up:A0" || e == "passed-up:A0"),
-            "Shift key release reaches OS");
-        Assert.True(events.Any(e => e == "up:A2" || e == "passed-up:A2"),
-            "Control key release reaches OS");
+        Assert.Equal(1, events.Count(e => e == "down:5A"),
+            "shortcut down must be delivered exactly once");
+        var keyUp = events.FindIndex(e => e == "up:5A" || e == "passed-up:5A");
+        Assert.True(keyUp > keyDown,
+            "Z-up must follow its down: " + string.Join("|", events));
+        Assert.Equal(1, events.Count(e => e == "up:5A" || e == "passed-up:5A"),
+            "shortcut up must be delivered exactly once, whether replayed or passed");
+        Assert.Equal(1, events.Count(e => e == "up:A0" || e == "passed-up:A0"),
+            "Shift release must reach OS exactly once");
+        Assert.Equal(1, events.Count(e => e == "up:A2" || e == "passed-up:A2"),
+            "Control release must reach OS exactly once");
         Assert.True(!k.Gate.IsCaptured, "gate reopens after shortcut");
     }
 
