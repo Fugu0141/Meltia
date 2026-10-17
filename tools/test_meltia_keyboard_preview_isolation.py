@@ -141,14 +141,29 @@ def assert_preview_program_safe(raw):
     if re.search(r"\bAppPaths\s*\.", code[:initialize.start()]):
         raise AssertionError("AppPaths accessed before Meltia Preview safety init")
 
-    required = (
+    # The later "TIP is unregistered" fallback also assigns Keyboard, but
+    # cannot substitute for the unconditional Preview setting. Require the
+    # assignments in the initialization window after settings are loaded and
+    # before they can be persisted or used to start the engine.
+    load = re.search(
+        r"\bvar\s+settings\s*=\s*Settings\s*\.\s*Load\s*\(\s*"
+        r"AppPaths\s*\.\s*ConfigFile\s*\)\s*;", code
+    )
+    first_save = re.search(
+        r"\bif\s*\(\s*!\s*File\s*\.\s*Exists\s*\(\s*"
+        r"AppPaths\s*\.\s*ConfigFile\s*\)\s*\)", code
+    )
+    if load is None or first_save is None or first_save.start() <= load.end():
+        raise AssertionError("Preview settings initialization window changed")
+    initialization = code[load.end():first_save.start()]
+    for pattern in (
         r"\bsettings\s*\.\s*Mode\s*=\s*InputMode\s*\.\s*Keyboard\s*;",
         r"\bsettings\s*\.\s*AutoUpdate\s*=\s*false\s*;",
-        r"\bMeltiaPreviewSelfTest\s*\.\s*Run\s*\(",
-    )
-    for pattern in required:
-        if not re.search(pattern, code):
+    ):
+        if not re.search(pattern, initialization):
             raise AssertionError("Missing executable Preview guard: " + pattern)
+    if not re.search(r"\bMeltiaPreviewSelfTest\s*\.\s*Run\s*\(", code):
+        raise AssertionError("Missing executable Preview self-test entry")
     forbidden = (
         r"\bUpdater\s*\.\s*ApplyStagedAtStartup\s*\(",
         r"\bAppPaths\s*\.\s*MigrateFromOldName\s*\(",
