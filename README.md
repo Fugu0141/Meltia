@@ -48,6 +48,7 @@
 - [H11 Phase 3 / PR-D2：ビーム保持最適化の要件・同値テスト・測定](docs/MELTIA_H11_PHASE3_D2_BEAM_SELECTION_20261017.md)
 - [H11 Phase 4 / PR-E1：共通前向きDecoderの設計・オプトイン互換実装・比較ゲート](docs/MELTIA_H11_PHASE4_E1_FORWARD_DECODER_20261017.md)
 - [H11 Phase 4 / PR-E2：候補生成器・Top-K経路射影の分離と互換テスト](docs/MELTIA_H11_PHASE4_E2_GENERATOR_PROJECTION_20261017.md)
+- [H11 Phase 4 / PR-E3：H10前向き探索の共通Decoderアダプターと互換テスト](docs/MELTIA_H11_PHASE4_E3_H10_FORWARD_ADAPTER_20261017.md)
 - [開発バージョン管理（v0.5〜v1.0-dev）](docs/MELTIA_VERSIONING.md)
 - [v0.7 未知英語候補生成の実験・検証](docs/MELTIA_V07_UNKNOWN_LATIN_20261012.md)
 - [v0.8 音韻ラティス・経路探索の実装と実測](docs/MELTIA_V08_PHONETIC_LATTICE_20261012.md)
