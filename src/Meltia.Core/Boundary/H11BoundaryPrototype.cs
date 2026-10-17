@@ -90,8 +90,7 @@ public sealed partial class H11BoundaryPrototype
         return set;
     }
     private static bool PairSplit(string raw, int offset) =>
-        offset > 0 && offset < raw.Length &&
-        char.IsHighSurrogate(raw[offset - 1]) && char.IsLowSurrogate(raw[offset]);
+        BoundarySpanValidator.SplitsSurrogatePair(raw, offset);
 
     public Analysis Analyze(string raw, BoundaryEvidence? evidence = null) =>
         AnalyzeCore(raw, evidence, diagnostics: null);
@@ -105,21 +104,16 @@ public sealed partial class H11BoundaryPrototype
         var explicitJa = (evidence.ExplicitJapanese ?? []).Distinct().ToArray();
         var hard = (evidence.ExplicitEnglish ?? []).Concat(evidence.Protected ?? [])
             .Distinct().ToList();
-        foreach (var rex in new[] { Url, Email })
-            foreach (Match m in rex.Matches(raw))
-            {
-                var span = new Utf16Span(m.Index, m.Index + m.Length);
-                if (!hard.Any(x => x.Overlaps(span))) hard.Add(span);
-            }
+        // Preserve H11's URL-first policy: nested email matches must not
+        // replace a longer already-protected span.
+        ProtectedSpanDetector.AppendMatches(raw, hard,
+            ProtectionOverlapPolicy.SkipAnyOverlap, Url, Email);
         foreach (var x in hard.Concat(explicitJa))
-        {
-            if (x.Start < 0 || x.End > raw.Length || x.Start >= x.End ||
-                PairSplit(raw, x.Start) || PairSplit(raw, x.End))
+            if (!BoundarySpanValidator.IsValid(raw, x))
                 throw new ArgumentException("Invalid UTF-16 language lock");
-        }
-        if (hard.Any(x => hard.Any(y => x != y && x.Overlaps(y)) ||
-            explicitJa.Any(y => x.Overlaps(y))) ||
-            explicitJa.Any(x => explicitJa.Any(y => x != y && x.Overlaps(y))))
+        if (BoundarySpanValidator.HasDistinctOverlap(hard) ||
+            BoundarySpanValidator.HasCrossOverlap(hard, explicitJa) ||
+            BoundarySpanValidator.HasDistinctOverlap(explicitJa))
             throw new ArgumentException("Contradictory language locks");
 
         var edges = new List<Edge>[raw.Length + 1];
@@ -127,8 +121,7 @@ public sealed partial class H11BoundaryPrototype
         void Add(Utf16Span x, Lang lang, double score, string origin,
             int? englishRunEnd = null)
         {
-            if (x.Start < 0 || x.End > raw.Length || x.Start >= x.End ||
-                PairSplit(raw, x.Start) || PairSplit(raw, x.End))
+            if (!BoundarySpanValidator.IsValid(raw, x))
             {
                 diagnostics?.Reject("add-rejected/invalid-utf16-or-empty-span");
                 return;
