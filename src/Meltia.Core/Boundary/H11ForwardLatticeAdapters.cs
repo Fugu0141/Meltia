@@ -18,10 +18,38 @@ public sealed partial class H11BoundaryPrototype
         return new DiagnosticAnalysis(result, diagnostics.Build(raw, result));
     }
 
+    internal Analysis AnalyzeWithPipeline(string raw,
+        BoundaryEvidence? evidence = null) =>
+        AnalyzeCore(raw, evidence, diagnostics: null,
+            useForwardDecoder: true, useRouteProjector: true);
+
+    internal DiagnosticAnalysis AnalyzeWithPipelineTrace(string raw,
+        BoundaryEvidence? evidence = null)
+    {
+        var diagnostics = new TraceCollector();
+        var result = AnalyzeCore(raw, evidence, diagnostics,
+            useForwardDecoder: true, useRouteProjector: true);
+        return new DiagnosticAnalysis(result, diagnostics.Build(raw, result));
+    }
+
+    private sealed record H11GenerationRequest(string Raw,
+        IReadOnlyList<Utf16Span> Hard, IReadOnlyList<Utf16Span> ExplicitJa,
+        TraceCollector? Diagnostics);
+
+    private sealed class H11CandidateGenerator :
+        IForwardCandidateGenerator<H11GenerationRequest, Edge>
+    {
+        public IForwardCandidateGraph<Edge> Generate(H11GenerationRequest request) =>
+            new H11OrderedCandidates(BuildCandidateEdges(request));
+    }
+
     private sealed class H11OrderedCandidates(List<Edge>[] candidates)
-        : IForwardCandidateProvider<Edge>
+        : IForwardCandidateGraph<Edge>
     {
         public IReadOnlyList<Edge> At(int utf16Position) => candidates[utf16Position];
+
+        public IEnumerable<Edge> InStartPositionOrder() =>
+            candidates.SelectMany(bucket => bucket);
     }
 
     private sealed class H11ForwardTransition : IForwardTransition<Node, Edge>
