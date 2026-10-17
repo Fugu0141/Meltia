@@ -71,7 +71,7 @@ Windows TSFホストアプリ (本家ネイティブTIP、Meltia用ではない)
 ## 5. R1からIME独立化までの採用ゲート
 
 1. **R1の既存`SessionResult`とhost副作用契約**を先に固定し、`Consumed`・`CommitPending`・`ForgetLastCommit`・原文/UTF-16を検査。
-2. IPCスキーマの**自動チェック**：`tools/test_meltia_tip_ipc_contract.py`。C#受信とNative生成の5操作、応答必須フィールド、前文字削除時の期待値参照、通信サイズ上限・失敗時の安全経路を**ソース照合**。プロトコル名を故意に変更した負例もチェック。追加・削除された新フィールドに適合するわけではない。
+2. IPCスキーマの**自動チェック**：`tools/test_meltia_tip_ipc_contract.py`。C#受信とNative生成の5操作、応答必須フィールド、前文字削除時の期待値参照、通信サイズ上限・失敗時の安全経路を**ソース照合**。通信結果の検査は`SessionResult.ToJson`・`TipServer.Handle`・`TextService::Hello/HandleKey/Apply`の**該当メソッドを区切って実際の組立/読取文**まで確認する。Wire operation、主要フィールド、C#応答組立、ネイティブ読取の改変・Windows CI両トリガーからのNativeパス削除を**負例ミューテーション**で検知する。現行実装のliteral source contractであり、追加・削除された新フィールドや実際のパーサー挙動を網羅しない。
 3. **T2の独立識別子設計**：Meltia専用のCLSID/GUID/プロファイル/管轄レジストリ、Meltia専用Pipe名、配布先とログ先を定義。元のMeltype資産を削除・登録せず、別モジュール・別PRで契約の変更内容を示す。
 4. **T3の隔離TIP実装**：C#↔Nativeの双方で**同じ新しい名前とバージョン付きプロトコル**を使い、未知バージョン/未知操作/サイズ超過/接続失敗をfail-closed。開発中のKeyboard Previewは従来どおり非TSF。
 5. **T4以降のWindows実機E2E**：文字消失/重複・前文字削除・候補・低/高権限・パスワード・異なるアプリ/32bit・繰り返し登録/解除を確認。実機の成功が出るまで独立IME配布を行わない。
@@ -84,5 +84,11 @@ dotnet run --project src/Meltype.Core.Tests -c Release
 ```
 
 前者はOSを問わない**ソース契約・ミューテーションテスト**であり、C++ DLLとC# Pipe間の実通信を開始しない。後者は継承Coreの動作テスト。これらに加えて、別途Windowsで実通信とインストール/アンインストールを行うE2Eが必要。入力本文をログ／資料に無断保存しない。
+
+### レビュー指摘対応（2026-10-17）
+
+- [PR #55](https://github.com/Fugu0141/Meltia/pull/55) P1：`meltia-windows-preview-ci.yml`の`pull_request.paths`と`push.paths`**双方**に`native/tip/**`を追加。Nativeコード単独の変更でも本IPCソース契約ガードが起動する。負例テストで双方の欠落を検証する。
+- P2：以前の`field in server`／ファイル全体の`L"active"`存在だけの検査を撤廃。C#側では`SessionResult.ToJson`と`TipServer.Handle`の応答組立を、Native側では`TextService::HandleKey`の`active/consumed`、`TextService::Apply`の`commits/view/active`、`Hello`の`active`参照をメソッド限定で調べる。それぞれを改変したミューテーションで失敗を確認する。
+- ただし静的ソース検査はC#／C++の構文・実行経路を解析するものではなく、**本格的なネイティブコンパイル、named-pipe実通信、TSF E2Eの代わりにはならない**。構造変更がある場合はテスト契約もレビューする。
 
 **本PRはプロトコル内容の承認用。MeltiaとしてのTIPは一切登録しない。**
