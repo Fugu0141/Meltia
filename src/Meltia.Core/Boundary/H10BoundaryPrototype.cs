@@ -104,7 +104,7 @@ public sealed class H10BoundaryPrototype
                 // Both languages have their own likelihood, plus Japanese
                 // phonetic admissibility. English evidence never deletes JA.
                 var length = end - i;
-                double likelihood = Evidence.Difference(spelling);
+                double likelihood = Evidence.Difference(raw.AsSpan(i, length));
                 double score = 0.30 * length - 0.55 -
                     likelihood * 0.46 * Math.Min(length, 12);
                 Add(new Utf16Span(i, end), Language.Japanese, score, "romaji-fst");
@@ -113,7 +113,7 @@ public sealed class H10BoundaryPrototype
             {
                 var spelling = raw[i..end];
                 var length = spelling.Length;
-                double likelihood = Evidence.Difference(spelling);
+                double likelihood = Evidence.Difference(raw.AsSpan(i, length));
                 double caseEvidence = char.IsUpper(spelling[0]) ? 1.25 : 0.0;
                 // A complete capitalized or acronym island is weak orthographic
                 // evidence, not a mandatory English lock.
