@@ -109,20 +109,16 @@ public sealed class MeltiaBoundaryEngine
         // are still rejected below rather than silently resolved.
         var hard = (evidence.ExplicitEnglish ?? []).Concat(evidence.Protected ?? [])
             .Distinct().ToList();
-        foreach (var expression in new[] { ProtectedUrl, ProtectedEmail })
-            foreach (Match match in expression.Matches(raw))
-            {
-                var candidate = new Utf16Span(match.Index, match.Index + match.Length);
-                // A URL can contain an email. The longer protecting span wins.
-                if (!hard.Any(x => x.Overlaps(candidate))) hard.Add(candidate);
-            }
+        // Preserve the legacy policy: explicit hard locks are first, then
+        // URL ahead of email; any overlap suppresses the later match.
+        ProtectedSpanDetector.AppendMatches(raw, hard,
+            ProtectionOverlapPolicy.SkipAnyOverlap, ProtectedUrl, ProtectedEmail);
         foreach (var span in japanese.Concat(hard).Concat(evidence.MeltypeEnglish ?? []))
             CheckSpan(raw, span);
-        foreach (var span in hard)
-        {
-            if (japanese.Any(span.Overlaps) || hard.Any(x => x != span && span.Overlaps(x)))
-                throw new ArgumentException("Overlapping or contradictory mandatory ranges");
-        }
+        // Legacy intentionally does not reject overlapping Japanese-only locks.
+        if (BoundarySpanValidator.HasCrossOverlap(hard, japanese) ||
+            BoundarySpanValidator.HasDistinctOverlap(hard))
+            throw new ArgumentException("Overlapping or contradictory mandatory ranges");
 
         var bySpan = new Dictionary<Utf16Span, BoundaryCandidate>();
         void Add(Utf16Span span, string origin, double score, bool mandatory = false)
@@ -339,9 +335,8 @@ public sealed class MeltiaBoundaryEngine
     {
         if (span.Start < 0 || span.Start >= span.End || span.End > raw.Length)
             throw new ArgumentException("Invalid UTF-16 range");
-        static bool SplitsPair(string value, int i) =>
-            i > 0 && i < value.Length && char.IsHighSurrogate(value[i - 1]) && char.IsLowSurrogate(value[i]);
-        if (SplitsPair(raw, span.Start) || SplitsPair(raw, span.End))
+        if (BoundarySpanValidator.SplitsSurrogatePair(raw, span.Start) ||
+            BoundarySpanValidator.SplitsSurrogatePair(raw, span.End))
             throw new ArgumentException("Range splits a surrogate pair");
     }
 }
