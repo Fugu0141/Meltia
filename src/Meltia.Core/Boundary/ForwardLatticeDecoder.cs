@@ -44,9 +44,10 @@ internal interface IForwardCandidateGraph<TEdge> : IForwardCandidateProvider<TEd
 /// Model-specific input-to-graph generation. Validation and scoring semantics
 /// belong to the model, not to the generic forward decoder.
 /// </summary>
-internal interface IForwardCandidateGenerator<in TRequest, TEdge>
+internal interface IForwardCandidateGenerator<in TRequest, TEdge, out TGraph>
+    where TGraph : IForwardCandidateGraph<TEdge>
 {
-    IForwardCandidateGraph<TEdge> Generate(TRequest request);
+    TGraph Generate(TRequest request);
 }
 
 /// <summary>
