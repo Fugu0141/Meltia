@@ -1,0 +1,83 @@
+# H11 Phase 2 / PR-C1 — UTF-16・保護区間・明示ロックの契約と共通部品（2026-10-17）
+
+> **実装対象は研究用H11のみ。** H10、従来Core、Windows Preview/TSF、辞書、候補重み、確定経路、Releaseは変更しない。上位計画：[H11次期開発準備計画](MELTIA_H11_NEXT_DEVELOPMENT_READINESS_20261016.md) Phase 2。Phase 1 [PR #39](https://github.com/Fugu0141/Meltia/pull/39)の診断機能を保持する。
+
+## 要件と現行互換仕様（コード検査時点）
+
+**座標はUTF-16の半開区間 `[Start, End)`** とする。空区間、負の始点、入力末尾超過、サロゲートペアの内部を始点/終点とするロックは拒否する。組み合わせた高位/低位サロゲートをまたぐ完全な区間は許容する。孤立サロゲート自体をUnicodeスカラーとして矯正・置換する処理は今回行わない。
+
+| 入力・規則 | H11 | H10 | 旧v1.0 Core |
+| --- | --- | --- | --- |
+| URL/メール検出 | URL→メール、CultureInvariant付きRegex | URL→メール、CultureInvariant付きRegex | URL→メール、独自Regexオプション |
+| URL内のメールなど、自動保護同士が重複 | **最初に採用した範囲を残して後続を捨てる** | **完全同一のみ除外し、異なる重複はロック矛盾として拒否** | **先行範囲を残して後続を捨てる** |
+| 明示ENとProtectedの同じ区間 | 重複排除・1ロック | 重複排除・1ロック | 重複排除・1ロック |
+| 明示JA同士の同一区間 | 重複排除・許容 | 重複排除・許容 | 元コードで重複を保持、積極的に拒否しない |
+| 異なる明示EN同士、ENとJAの交差/包含 | 拒否 | 拒否 | 強制EN同士の交差・EN/JA交差は拒否 |
+| 明示JA同士の異なる交差/包含 | 拒否 | 拒否 | H11/H10と異なり明示的拒否なし |
+| MeltypeEnglish | H11では入力に使わない（検証対象外） | H10では入力に使わない（検証対象外） | UTF-16妥当性を確認、既定では弱い候補として扱う |
+| 手動ロックと自動検出の交差 | 自動候補は先行する手動ロックと重なれば追加しない | 自動候補は完全一致でない限り追加され、後で矛盾として拒否 | 自動候補は先行する手動ロックと重なれば追加しない |
+
+上記は**「全部を同じ挙動に変更すべき」という仕様ではない**。ロックの例外メッセージや、既存Edge集合の順序もH11に残す。H10の重複方針は重要な差異なので、共通検出関数では`SkipAnyOverlap`と`SkipExactDuplicate`を別の明示オプションとして保持する。
+
+## 基本設計と段階移行
+
+1. `BoundarySpanValidator`（internal, `src/Meltia.Core/Boundary/BoundarySafety.cs`）が`SplitsSurrogatePair`、`IsValid`、`HasDistinctOverlap`、`HasCrossOverlap`を公開する。エンジン個別の例外メッセージと入力上限は各実装に残す。
+2. `ProtectedSpanDetector.AppendMatches`は**受け取った正規表現を指定順に**評価し、`List<Utf16Span>`へ一致範囲を追加する。語彙、Regexのオプション、適用順、重複ポリシーは呼出し側の責務とし、重複時の優先順位を暗黙に変更しない。
+3. **C1はH11のみ**を両共通部品へ移し、`H11DiagnosticTrace`のサロゲート境界判定も同じメソッドを利用する。H10/旧Coreは現行コードを比較オラクルとして保持し、後続の独立PRで各ポリシーを指定して移行する。
+4. `tests/Meltia.Core.Tests/Phase2SafetyContractTests.cs`で、URL内のメール・同一ロック・交差/包含・サロゲート・異なる方式での既存挙動を確認する。**不正入力の比較は原則として例外型、互換性に必要なH11の2種類の例外メッセージは完全一致**で検査し、入力したロックの内容をログへ出さない。
+5. Phase 0の凍結103ケース（47+56）で、候補の列挙順・スコア・Top1/TopK・確認要否・辞書SHAが完全一致することを専用CIで検証。Phase 1トレースも別CIで確認する。未収集の独立holdoutを使わず、既知Issueの指標を一般化精度と見なさない。
+
+## 合格条件 / 留保
+
+- コア契約・Phase 0凍結103件・Phase 1診断のCIすべて成功、H11通常推論とトレースの出力完全一致。
+- URL内メール、重複EN、異なるEN交差、JA交差、EN/JA交差、UTF-16途中境界、絵文字全幅指定の正負例を新規契約テストで検証。
+- 精度・速度・メモリ割り当てが**改善したとは主張しない**。H11ビーム幅・辞書・演算・Windows Previewに変更なし。
+- 残作業：**PR-C2でH10、PR-C3で旧Core**を個別の互換テストを条件に移す。方式間の意味的な差異を消す改善はPhase 2では行わず、新要件・別レビューを必要とする。
+
+## PR #40 CI初回検証（2026-10-17）
+
+対象コードコミット：`6d2841a3cd32a1abc7e745c23cc64ec4c98d1fd6`（この節の追記前）。
+
+- [Meltia H10 prototype comparison #38985952001](https://github.com/Fugu0141/Meltia/actions/runs/38985952001) **SUCCESS**：Core契約（Phase 2正負テスト込み）、baseline validator負例、H11の47+56=103件の凍結指紋照合、既存H10の比較を含む両レポート生成が成功。
+- [H11 Phase 1 diagnostic trace #38985952016](https://github.com/Fugu0141/Meltia/actions/runs/38985952016) **SUCCESS**：元の103件、通常解析と診断の一致・Gold制約トレースの回帰を通過。
+- [Core boundary diagnostics #38985951986](https://github.com/Fugu0141/Meltia/actions/runs/38985951986)、[boundary quality #38985952022](https://github.com/Fugu0141/Meltia/actions/runs/38985952022)、[input matrix #38985951992](https://github.com/Fugu0141/Meltia/actions/runs/38985951992)、[H11 synthetic benchmarks #38985952063](https://github.com/Fugu0141/Meltia/actions/runs/38985952063)：いずれも **SUCCESS**。性能の有意差や改善はこの合否からは主張しない。
+- [Windows Preview CI #38985951988](https://github.com/Fugu0141/Meltia/actions/runs/38985951988)：**SUCCESS**。Windows実行ファイルのビルド・フックなしセルフテストと1,067例の合成評価を含む。ただし**Windowsでの実キー入力E2Eは未実施**。
+- [strict-quality #38985951989](https://github.com/Fugu0141/Meltia/actions/runs/38985951989)（Ubuntu/Windows）、[pr-checks #38985952032](https://github.com/Fugu0141/Meltia/actions/runs/38985952032)：**SUCCESS**。
+
+既知IssueのH11既存ベースライン（Top1 **72/103**、TopK **94/103**、誤英語 **1/21**）は凍結照合と整合した。これは**既知診断の出力互換性**であり、自然文holdoutでの精度向上・改善・本家より優秀という根拠ではない。Phase 2 C1はレビュー完了まで未マージとし、H10と旧Coreの移行は別PRへ分離する。
+
+## PR #40 レビュー対応：P2 テスト契約の補強（2026-10-17）
+
+レビュー：[PR #40 コメント](https://github.com/Fugu0141/Meltia/pull/40#pullrequestreview-5555065463)。既存H11の動作欠陥は指摘されず、**将来C2/C3へ展開するときの退行防止**を目的とした、非ブロッキングの2件に対応した。アルゴリズム本体と共通部品の実装・辞書は変更しない。
+
+1. **`ProtectedSpanDetector.AppendMatches` の分岐を直接テスト。** `https://user@example.com`にURL→メールRegexを適用し、`SkipAnyOverlap`ではURLの範囲1件のみ、`SkipExactDuplicate`ではURLと内包メールの2件が順序を保持して残ることを検査。Regexの再実行による完全一致スパンの重複排除を両ポリシーで検査する。
+2. **手動ロックとURLの部分重複を固定。** URL先頭から末尾2文字手前までの手動EN／Protectedロックは、後続のURL/メール自動保護をともに抑制し、H11の`mandatory`候補が手動区間のままであることを検証。一方、互いに部分重複する手動ENとProtectedは`Contradictory language locks`で拒否され、JAロックと自動URLが重なる場合も同文言で拒否される。`😀`の途中にかかるロックは`Invalid UTF-16 language lock`で拒否する。**いずれも`ArgumentException`の型とメッセージ完全一致**を要求する。
+3. **検証の範囲。** `tests/Meltia.Core.Tests/Phase2SafetyContractTests.cs`のみテストコード変更。ロック処理の仕様変更、例外文言の書換え、辞書学習や入力ログ収集は行わない。CIでCore契約→103件凍結fingerprint→Phase 1トレースおよびWindows Preview CIを再実行してから再レビューする。
+
+再現コマンド（.NET 10 / Release）：
+
+```sh
+dotnet run --project tests/Meltia.Core.Tests/Meltia.Core.Tests.csproj -c Release
+dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --output artifacts/h10/phase2-review.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
+dotnet run --project tests/Meltia.H10Evaluation/Meltia.H10Evaluation.csproj -c Release -- --input tests/Meltia.H10Evaluation/issue_intents_extra_20261014.jsonl --output artifacts/h10/phase2-review-extra.json --verify-baseline tests/Meltia.H10Evaluation/h11_issue_baseline_v1.jsonl
+```
+
+これらは既知Issueの出力固定テストであり、独立自然文の精度やWindows実キーE2Eの代替ではない。
+
+## PR #40 レビュー修正後のCI実測（2026-10-17）
+
+レビュー指摘を反映したコード・契約テスト・本ドキュメントのコミット `f5a2b27beed970053887f2d9f03fe97cc4fdad97` に対する**9ワークフローすべて成功**。実行・結果を以下に固定する。
+
+| 種類 | GitHub Actions run | 結果 |
+| --- | --- | --- |
+| H11 Phase 0-A1凍結103件＋Core/負例 | [#38986756822](https://github.com/Fugu0141/Meltia/actions/runs/38986756822) | SUCCESS |
+| Phase 1 DiagnosticTrace | [#38986756769](https://github.com/Fugu0141/Meltia/actions/runs/38986756769) | SUCCESS |
+| Core boundary contracts | [#38986756913](https://github.com/Fugu0141/Meltia/actions/runs/38986756913) | SUCCESS |
+| H11 synthetic benchmark smoke | [#38986756750](https://github.com/Fugu0141/Meltia/actions/runs/38986756750) | SUCCESS |
+| Boundary quality | [#38986756827](https://github.com/Fugu0141/Meltia/actions/runs/38986756827) | SUCCESS |
+| Input matrix quality | [#38986757074](https://github.com/Fugu0141/Meltia/actions/runs/38986757074) | SUCCESS |
+| Windows Preview CI（無フックセルフテスト＋Core/Bridge合成評価） | [#38986756789](https://github.com/Fugu0141/Meltia/actions/runs/38986756789) | SUCCESS |
+| strict-quality（Ubuntu/Windows） | [#38986756865](https://github.com/Fugu0141/Meltia/actions/runs/38986756865) | SUCCESS |
+| pr-checks | [#38986756787](https://github.com/Fugu0141/Meltia/actions/runs/38986756787) | SUCCESS |
+
+**結論：** 新規の内部ヘルパー分岐、部分重複の手動ロック、および例外メッセージの正負例を含むCoreテストは成功し、既知103ケースの凍結出力比較にも差分を生じなかった。**これは従来挙動と一致することの確認であり、精度・処理速度の改善やWindows実キー入力E2Eの合格を意味しない。** CIの成功後も、PR-C2/C3への展開は別PRで扱う。
