@@ -11,7 +11,6 @@ import argparse
 import json
 from pathlib import Path
 import re
-import shutil
 from uuid import UUID
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,13 +24,13 @@ SOURCES = (
     "TextService.cpp", "TextService.h", "MeltypeTip.rc",
     "MeltypeTip.def",
 )
-ORIGINAL_GUIDS = (
-    "417D801B-A9BD-4C26-BD16-356A825A6998",
-    "21F643F4-72D5-4946-BF70-0A126AB52D05",
-    "C8107D36-2806-4D8F-A183-FD0AEB8ED862",
-    "E17AA399-C5EB-42E6-BE45-C44F0651F2E2",
-    "CEF94813-C47F-48C1-B4EF-D4582D5D4054",
-)
+ORIGINAL_GUIDS = {
+    "clsid": "417D801B-A9BD-4C26-BD16-356A825A6998",
+    "profileGuid": "21F643F4-72D5-4946-BF70-0A126AB52D05",
+    "inputAttributeGuid": "C8107D36-2806-4D8F-A183-FD0AEB8ED862",
+    "convertedAttributeGuid": "E17AA399-C5EB-42E6-BE45-C44F0651F2E2",
+    "targetAttributeGuid": "CEF94813-C47F-48C1-B4EF-D4582D5D4054",
+}
 GUID_IDENTITIES = (
     ("CLSID_TextService", "clsid"),
     ("GUID_Profile", "profileGuid"),
@@ -63,8 +62,10 @@ def stage_text(name, source, manifest):
             if len(pattern.findall(source)) != 1:
                 raise ValueError(f"Globals.h: cannot find unique {key} declaration")
             source = pattern.sub(lambda m: m.group(1) + guid_initializer(ids[field]) + m.group(2), source)
-        for old, field in zip(ORIGINAL_GUIDS, ids.values()):
-            source = replace_one(source, old, field.upper(), "Globals.h GUID comment")
+        # Refer to named identity fields, never JSON object insertion order.
+        for _, field in GUID_IDENTITIES:
+            source = replace_one(source, ORIGINAL_GUIDS[field],
+                                 ids[field].upper(), "Globals.h GUID comment")
         source = replace_one(source, 'kDisplayName[] = L"Meltype"', 'kDisplayName[] = L"Meltia"', "Globals.h display")
     elif name == "Pipe.cpp":
         # Protect against connecting to the original Meltype server.
@@ -78,15 +79,50 @@ def stage_text(name, source, manifest):
         source = replace_one(source, 'L"MELTYPE_TIP_LOG"', 'L"MELTIA_TIP_LOG"', "Dll logging flag")
         source = replace_one(source, 'L"\\\\Meltype\\\\tip-log"', 'L"\\\\Meltia\\\\tip-log"', "Dll log sentinel")
         source = replace_one(source, 'L"\\\\Meltype\\\\tip.log"', 'L"\\\\Meltia\\\\tip.log"', "Dll log path")
-        # Staged DLL exports remain COM-compatible, but self-registration and
-        # self-unregistration explicitly refuse execution (no HKLM/TSF writes).
-        start = source.index("STDAPI DllRegisterServer() {")
-        tail = source[start:]
-        if tail.count("STDAPI DllRegisterServer() {") != 1 or tail.count("STDAPI DllUnregisterServer() {") != 1:
-            raise ValueError("Dll.cpp registration exports changed")
-        source = source[:start] + (
+        # Staged DLL cannot register OR unregister. Refuse any upstream change
+        # to either method or any appended code rather than silently truncating.
+        expected_tail = (
+            "STDAPI DllRegisterServer() {\n"
+            "    HRESULT hr = RegisterComServer();\n"
+            "    if (SUCCEEDED(hr)) hr = RegisterProfile();\n"
+            "    if (SUCCEEDED(hr)) hr = RegisterCategories(true);\n"
+            "    if (FAILED(hr)) {\n"
+            "        RegisterCategories(false);\n"
+            "        UnregisterProfile();\n"
+            "        UnregisterComServer();\n"
+            "    }\n"
+            "    return hr;\n"
+            "}\n"
+            "\n"
+            "STDAPI DllUnregisterServer() {\n"
+            "    RegisterCategories(false);\n"
+            "    UnregisterProfile();\n"
+            "    UnregisterComServer();\n"
+            "    return S_OK;\n"
+            "}\n"
+        )
+        if not source.endswith(expected_tail) or source.count(expected_tail) != 1:
+            raise ValueError("Dll.cpp registration tail changed or extra source appended")
+        source = source[:-len(expected_tail)] + (
             "STDAPI DllRegisterServer() { return SELFREG_E_CLASS; }\n"
             "STDAPI DllUnregisterServer() { return SELFREG_E_CLASS; }\n")
+    elif name == "DisplayAttributes.cpp":
+        for original in ("Meltype: 入力中", "Meltype: 変換した文節",
+                         "Meltype: 選んでいる文節"):
+            source = replace_one(source, 'L"' + original + '"',
+                                 'L"' + original.replace("Meltype", "Meltia") + '"',
+                                 "DisplayAttributes.cpp display")
+    elif name == "LangBar.cpp":
+        for original in ("Meltype の入力モード", "Meltype: 日本語 (クリックで英数)",
+                         "Meltype: 英数 (クリックで日本語)"):
+            source = replace_one(source, 'L"' + original + '"',
+                                 'L"' + original.replace("Meltype", "Meltia") + '"',
+                                 "LangBar.cpp display")
+    elif name == "CandidateWindow.cpp":
+        for original in ("MeltypeCandidateWindow", "MeltypeMeaningWindow"):
+            source = replace_one(source, 'L"' + original + '"',
+                                 'L"' + original.replace("Meltype", "Meltia") + '"',
+                                 "CandidateWindow.cpp class")
     elif name == "MeltypeTip.rc":
         source = replace_one(source, '101 ICON "meltype.ico"', '// T3a: no inherited Meltype icon or other brand asset', "RC icon")
         source = replace_one(source, '"Meltype IME (TSF)"', '"Meltia TIP (T3a non-registrable test only)"', "RC description")
