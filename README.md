@@ -50,6 +50,7 @@
 - [H11 Phase 4 / PR-E2：候補生成器・Top-K経路射影の分離と互換テスト](docs/MELTIA_H11_PHASE4_E2_GENERATOR_PROJECTION_20261017.md)
 - [H11 Phase 4 / PR-E3：H10前向き探索の共通Decoderアダプターと互換テスト](docs/MELTIA_H11_PHASE4_E3_H10_FORWARD_ADAPTER_20261017.md)
 - [H11 Phase 4 / PR-E4：v0.8系後向き探索と多様性保持を分離する設計・実験](docs/MELTIA_H11_PHASE4_E4_BACKWARD_DECODER_20261017.md)
+- [H11 Phase 4 / PR-E5：従来Core後ろ向きTop-Kの共通Decoder互換実験](docs/MELTIA_H11_PHASE4_E5_LEGACY_BACKWARD_20261017.md)
 - [開発バージョン管理（v0.5〜v1.0-dev）](docs/MELTIA_VERSIONING.md)
 - [v0.7 未知英語候補生成の実験・検証](docs/MELTIA_V07_UNKNOWN_LATIN_20261012.md)
 - [v0.8 音韻ラティス・経路探索の実装と実測](docs/MELTIA_V08_PHONETIC_LATTICE_20261012.md)
