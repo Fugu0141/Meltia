@@ -43,3 +43,42 @@ dotnet run --project tests/Meltia.H11Benchmark/Meltia.H11Benchmark.csproj -c Rel
 - 固定103件の指紋はH11専用。H10/従来Coreの全候補・局所Score・全Top-Kを固定したスナップショットは未整備。D1bはモデル尤度のみ最適化し、H10/H11の推論意図は変えない。
 - キャッシュをユーザー入力間で永続化せず、入力ログや辞書を変更しない。
 - Phase 0全長ベンチの1024 UTF-16で約233MB（H11）の観測値は同一環境の前後比較ではない。D1bのマイクロベンチの改善が、そのままH11全体で現れるとは限らない。
+
+## 5. 追加テストと初回CI結果（2026-10-17）
+
+### 実装・原因分析と修正
+
+初回HEAD `cd3337c549e7019312fac59a11856a4006c33c6e` のCIは **コンパイル失敗**。 `VirtualChar` の末尾パディング文字を返す行がソース更新時に壊れ、`CS1010 Newline in constant`等の文法エラーを起こした（例：[初回Core契約 #38992371466](https://github.com/Fugu0141/Meltia/actions/runs/38992371466)）。n-gram判定の不一致ではなく、不正なソース文字列が原因。
+
+修正コミット `3ef492122e20c6b1ba76b6ae0f36d335cb65d348` では末尾パディングを明示的に`(char)36`（ASCII dollar sign）で記述。元コードの`"^^" + lowercase + "$"`と同じ入力列を作る。**エラーを隠すためにテストを減らしたり品質ゲートを弱めたりしていない**。
+
+### 再現可能な同値確認
+
+修正HEAD：[Core boundary diagnostics #38992430847](https://github.com/Fugu0141/Meltia/actions/runs/38992430847) **ALL PASS 224**。
+
+- `Phase3D1bCharacterEvidenceTests`は旧 `LogLikelihood` の式・加算順を固定し、同じseed Build辞書を使って新 `Difference(string)` と新 `Difference(ReadOnlySpan<char>)` との **`DoubleToInt64Bits`完全一致**を確認。
+- ASCII 0～3文字の **18,279件全列挙**、固定seedの大小文字・数字・記号・NUL入り3,000件（1024/1025長も含む）と、非ASCII、日本語、U+0130などUnicode case folding、絵文字/孤立サロゲート、null時の例外を確認。代表的な混在入力も固定。
+- 0長rawでもバイグラム`^^`→`$`を一回処理し、事前文字列版と同じ長さ正規化と`Math.Clamp`。
+- [H10比較・H11凍結103件 #38992430756](https://github.com/Fugu0141/Meltia/actions/runs/38992430756)は成功、H10は元の47件`Top1 28/47`、追加56件`26/56`、H11は47件`32/47`、追加56件`40/56`。H11は47+56の **全103件の指紋一致**であり、集計値一致だけではない。
+
+### 同一ジョブ内の簡易マイクロベンチ
+
+GitHub Actions Linux runner、.NET10 Release、公開合成文字列12個×反復1,200回（計14,400回/方式）。1プロセス、各関数3回ウォームアップ、実行前GC、`Stopwatch`と現在スレッドにおける`GC.GetAllocatedBytesForCurrentThread`を使用。
+
+| 指標 | 変更前string尤度アルゴリズム | D1b Span / packed |
+| --- | ---: | ---: |
+| 割り当て量 | **19,468,840 bytes** | **40 bytes** |
+| 処理時間 | **25.594 ms** | **9.866 ms** |
+
+**解釈**：大幅に減っているのはこの**単体関数の**割り当てであり、ビーム・Candidate、辞書照合・長文の総コストとは分けて扱う。旧newの各スコアのbit一致と同一入力のchecksum一致を確認したが、1回のベンチで速度改善の有意性や実Windows打鍵の改善率は主張できない。40 bytesは計測/ランタイム等の微小オーバーヘッドが含まれる可能性があり「完全な0 allocation」を示す値ではない。
+
+### その他のCI
+
+- [H11 Phase1 DiagnosticTrace #38992430718](https://github.com/Fugu0141/Meltia/actions/runs/38992430718)：SUCCESS。
+- [H11 synthetic benchmark smoke #38992430864](https://github.com/Fugu0141/Meltia/actions/runs/38992430864)：SUCCESS。
+- [Input matrix #38992430854](https://github.com/Fugu0141/Meltia/actions/runs/38992430854)：SUCCESS。
+- [Boundary quality #38992430897](https://github.com/Fugu0141/Meltia/actions/runs/38992430897)：SUCCESS。
+- [pr-checks #38992430827](https://github.com/Fugu0141/Meltia/actions/runs/38992430827)：SUCCESS。
+- [strict-quality Windows/Ubuntu #38992430787](https://github.com/Fugu0141/Meltia/actions/runs/38992430787)、[Windows Preview CI #38992430874](https://github.com/Fugu0141/Meltia/actions/runs/38992430874)：最終確定時に両方成功したことを別途確認する。
+
+H11の全長1024文字に対する同一ハードウェアの前後測定、独立自然文holdout、IME実キー入力E2E、H10の全候補fingerprintは未実施または未整備。これらはCI成功の説明に混ぜない。
