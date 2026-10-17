@@ -33,4 +33,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-meltia-windows-preview.ps
 
 ## CI結果
 
-- PRの最新HEADでGitHub Actionsが完了した後に結果を追記する。Windows実機手動試験は未実施である。
+- コードとCI構成の確認HEAD: `b3d3e64debbcecd8e6e9d32e4d904842ab9dbc6b`。
+- [Meltia Windows Preview CI / run 39003324338](https://github.com/Fugu0141/Meltia/actions/runs/39003324338) は**success**。Windowsジョブで新しい**5項目の静的ガードが成功**し、後続の継承Core回帰・Meltia.exeの無フックスモーク/ZIP監査、Ubuntu側の1,067合成例・Bridge品質・ベンチマークの両ジョブがsuccess。
+- [build / run 39003324364](https://github.com/Fugu0141/Meltia/actions/runs/39003324364) は**success**（test / Ubuntu Core / macOS Core / installer-script がsuccess、依存条件の`mozc`/`package`はskipped）。[pr-checks / run 39003324332](https://github.com/Fugu0141/Meltia/actions/runs/39003324332) もsuccess。
+- **実機Windowsのキー入力・TSF DLLの登録は行っていない。** これは現行Keyboard Previewを守る構造と既存回帰の証拠であり、新規IME機能を承認する根拠ではない。
