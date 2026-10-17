@@ -33,3 +33,15 @@
 - URL内メール、重複EN、異なるEN交差、JA交差、EN/JA交差、UTF-16途中境界、絵文字全幅指定の正負例を新規契約テストで検証。
 - 精度・速度・メモリ割り当てが**改善したとは主張しない**。H11ビーム幅・辞書・演算・Windows Previewに変更なし。
 - 残作業：**PR-C2でH10、PR-C3で旧Core**を個別の互換テストを条件に移す。方式間の意味的な差異を消す改善はPhase 2では行わず、新要件・別レビューを必要とする。
+
+## PR #40 CI初回検証（2026-10-17）
+
+対象コードコミット：`6d2841a3cd32a1abc7e745c23cc64ec4c98d1fd6`（この節の追記前）。
+
+- [Meltia H10 prototype comparison #38985952001](https://github.com/Fugu0141/Meltia/actions/runs/38985952001) **SUCCESS**：Core契約（Phase 2正負テスト込み）、baseline validator負例、H11の47+56=103件の凍結指紋照合、既存H10の比較を含む両レポート生成が成功。
+- [H11 Phase 1 diagnostic trace #38985952016](https://github.com/Fugu0141/Meltia/actions/runs/38985952016) **SUCCESS**：元の103件、通常解析と診断の一致・Gold制約トレースの回帰を通過。
+- [Core boundary diagnostics #38985951986](https://github.com/Fugu0141/Meltia/actions/runs/38985951986)、[boundary quality #38985952022](https://github.com/Fugu0141/Meltia/actions/runs/38985952022)、[input matrix #38985951992](https://github.com/Fugu0141/Meltia/actions/runs/38985951992)、[H11 synthetic benchmarks #38985952063](https://github.com/Fugu0141/Meltia/actions/runs/38985952063)：いずれも **SUCCESS**。性能の有意差や改善はこの合否からは主張しない。
+- [Windows Preview CI #38985951988](https://github.com/Fugu0141/Meltia/actions/runs/38985951988)：**SUCCESS**。Windows実行ファイルのビルド・フックなしセルフテストと1,067例の合成評価を含む。ただし**Windowsでの実キー入力E2Eは未実施**。
+- [strict-quality #38985951989](https://github.com/Fugu0141/Meltia/actions/runs/38985951989)（Ubuntu/Windows）、[pr-checks #38985952032](https://github.com/Fugu0141/Meltia/actions/runs/38985952032)：**SUCCESS**。
+
+既知IssueのH11既存ベースライン（Top1 **72/103**、TopK **94/103**、誤英語 **1/21**）は凍結照合と整合した。これは**既知診断の出力互換性**であり、自然文holdoutでの精度向上・改善・本家より優秀という根拠ではない。Phase 2 C1はレビュー完了まで未マージとし、H10と旧Coreの移行は別PRへ分離する。
