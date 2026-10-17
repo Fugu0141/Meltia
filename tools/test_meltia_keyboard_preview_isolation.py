@@ -57,6 +57,107 @@ def preview_active(text):
     return "\n".join(kept)
 
 
+def csharp_effective_source(text, *, strip_literals=False):
+    """Blank C# comments while preserving offsets/newlines.
+
+    Literal masking is used for executable-code assertions so a quoted fake
+    assignment cannot satisfy a guard. This is a narrow source-level check,
+    not a substitute for a C# compiler/semantic analysis.
+    """
+    result = list(text)
+    length = len(text)
+
+    def blank(start, end):
+        for index in range(start, end):
+            if text[index] not in "\r\n":
+                result[index] = " "
+
+    i = 0
+    while i < length:
+        if text.startswith("//", i):
+            end = text.find("\n", i)
+            if end < 0:
+                end = length
+            blank(i, end)
+            i = end
+            continue
+        if text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            if end < 0:
+                raise AssertionError("unclosed C# block comment")
+            end += 2
+            blank(i, end)
+            i = end
+            continue
+        # Preserve raw quoted strings as single literals. Quoted text is not
+        # executable C# and must never be allowed to satisfy a guard.
+        if text.startswith('"""', i):
+            n = 3
+            while i + n < length and text[i + n] == '"':
+                n += 1
+            end = text.find('"' * n, i + n)
+            if end < 0:
+                raise AssertionError("unclosed raw C# string")
+            end += n
+            if strip_literals:
+                blank(i, end)
+            i = end
+            continue
+        if text[i] in ("'", '"'):
+            quote = text[i]
+            verbatim = quote == '"' and i > 0 and text[i - 1] == "@"
+            end = i + 1
+            while end < length:
+                if verbatim and text.startswith('""', end):
+                    end += 2
+                elif not verbatim and text[end] == "\\":
+                    end += 2
+                elif text[end] == quote:
+                    end += 1
+                    break
+                else:
+                    end += 1
+            else:
+                raise AssertionError("unclosed C# literal")
+            if strip_literals:
+                blank(i, min(end, length))
+            i = end
+            continue
+        i += 1
+    return "".join(result)
+
+
+def assert_preview_program_safe(raw):
+    """Fail if a critical Preview guard is missing or in a comment/string."""
+    code = csharp_effective_source(preview_active(raw), strip_literals=True)
+    initialize = re.search(
+        r"\bMeltiaPreviewSafety\s*\.\s*Initialize\s*\(\s*\)\s*;", code
+    )
+    if initialize is None:
+        raise AssertionError("Preview safety initialization is not executable")
+
+    # Any AppPaths member can trigger static DataDirectory initialization,
+    # not just AppPaths.DataDirectory. Check all executable references.
+    if re.search(r"\bAppPaths\s*\.", code[:initialize.start()]):
+        raise AssertionError("AppPaths accessed before Meltia Preview safety init")
+
+    required = (
+        r"\bsettings\s*\.\s*Mode\s*=\s*InputMode\s*\.\s*Keyboard\s*;",
+        r"\bsettings\s*\.\s*AutoUpdate\s*=\s*false\s*;",
+        r"\bMeltiaPreviewSelfTest\s*\.\s*Run\s*\(",
+    )
+    for pattern in required:
+        if not re.search(pattern, code):
+            raise AssertionError("Missing executable Preview guard: " + pattern)
+    forbidden = (
+        r"\bUpdater\s*\.\s*ApplyStagedAtStartup\s*\(",
+        r"\bAppPaths\s*\.\s*MigrateFromOldName\s*\(",
+    )
+    for pattern in forbidden:
+        if re.search(pattern, code):
+            raise AssertionError("Unsafe Preview operation: " + pattern)
+
+
 class KeyboardPreviewIsolationContractTests(unittest.TestCase):
     def test_preview_is_distinct_windows_artifact_without_native_tip(self):
         project = ET.fromstring(source("src/Meltia.Windows/Meltia.Windows.csproj"))
@@ -74,16 +175,60 @@ class KeyboardPreviewIsolationContractTests(unittest.TestCase):
         self.assertTrue(any("Meltia.Core" in p for p in refs))
 
     def test_program_forces_keyboard_and_disables_upstream_auto_update(self):
-        raw = source("src/Meltype/Program.cs")
-        program = preview_active(raw)
-        self.assertIn("MeltiaPreviewSafety.Initialize();", program)
-        self.assertLess(program.index("MeltiaPreviewSafety.Initialize();"),
-                        program.index("AppPaths.DataDirectory"))
-        self.assertIn("settings.Mode = InputMode.Keyboard;", program)
-        self.assertIn("settings.AutoUpdate = false;", program)
-        self.assertNotIn("Updater.ApplyStagedAtStartup(", program)
-        self.assertNotIn("AppPaths.MigrateFromOldName(", program)
-        self.assertIn("MeltiaPreviewSelfTest.Run(", program)
+        assert_preview_program_safe(source("src/Meltype/Program.cs"))
+
+    def test_mutation_commenting_out_keyboard_assignment_is_rejected(self):
+        original = source("src/Meltype/Program.cs")
+        assignment = "settings.Mode = InputMode.Keyboard;"
+        self.assertIn(assignment, original)
+        for commented in ("// " + assignment, "/* " + assignment + " */"):
+            with self.subTest(commented=commented):
+                mutant = original.replace(assignment, commented, 1)
+                with self.assertRaisesRegex(AssertionError, "Missing executable"):
+                    assert_preview_program_safe(mutant)
+
+    def test_mutation_commented_out_updater_guard_and_init_are_rejected(self):
+        original = source("src/Meltype/Program.cs")
+        for statement in ("settings.AutoUpdate = false;",
+                          "MeltiaPreviewSafety.Initialize();"):
+            self.assertIn(statement, original)
+            for commented in ("// " + statement, "/* " + statement + " */"):
+                with self.subTest(statement=statement, commented=commented):
+                    mutant = original.replace(statement, commented, 1)
+                    with self.assertRaises(AssertionError):
+                        assert_preview_program_safe(mutant)
+
+    def test_mutation_any_early_apppaths_member_is_rejected(self):
+        original = source("src/Meltype/Program.cs")
+        init = "MeltiaPreviewSafety.Initialize();"
+        self.assertIn(init, original)
+        for path in ("AppPaths.ConfigFile", "AppPaths.ModelFile",
+                     "AppPaths.DataDirectory"):
+            with self.subTest(path=path):
+                mutant = original.replace(init,
+                    "var earlyPath = " + path + ";\n        " + init, 1)
+                with self.assertRaisesRegex(AssertionError, "before Meltia"):
+                    assert_preview_program_safe(mutant)
+
+    def test_mutation_fake_guards_inside_literals_are_rejected(self):
+        original = source("src/Meltype/Program.cs")
+        assignment = "settings.Mode = InputMode.Keyboard;"
+        self.assertIn(assignment, original)
+        # String literals, including comments-looking text, are not code.
+        mutant = original.replace(assignment,
+            '// ' + assignment + '\n        '
+            'string fake = "settings.Mode = InputMode.Keyboard;";', 1)
+        with self.assertRaisesRegex(AssertionError, "Missing executable"):
+            assert_preview_program_safe(mutant)
+
+    def test_comments_and_strings_do_not_trigger_apppaths_false_positives(self):
+        original = source("src/Meltype/Program.cs")
+        init = "MeltiaPreviewSafety.Initialize();"
+        with_comments = original.replace(init,
+            "// AppPaths.ConfigFile\n        "
+            "/* AppPaths.ModelFile */\n        "
+            'var fake = "AppPaths.DataDirectory";\n        ' + init, 1)
+        assert_preview_program_safe(with_comments)
 
     def test_startup_entry_is_not_meltype(self):
         startup = preview_active(source("src/Meltype/Startup.cs"))
