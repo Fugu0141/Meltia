@@ -45,15 +45,15 @@ internal static class MeltiaR1bInputOrderingTests
         Assert.True(gate.IsCaptured, "release must not lose queued input");
 
         Assert.True(gate.TryDequeue(out var first), "down queued");
-        Assert.Equal('K', first.Key?.Vk);
+        Assert.Equal((int)'K', first.Key?.Vk ?? -1);
         Assert.True(first.Key?.IsDown == true, "down identity preserved");
         Assert.True(gate.TryDequeue(out var second), "up queued");
-        Assert.Equal('K', second.Key?.Vk);
+        Assert.Equal((int)'K', second.Key?.Vk ?? -1);
         Assert.True(second.Key?.IsUp == true, "up identity preserved");
         Assert.True(gate.TryDequeue(out var third), "mouse queued");
-        Assert.Equal(Click, third.Mouse);
+        Assert.Equal(Click, third.Mouse.GetValueOrDefault());
         Assert.True(gate.TryDequeue(out var fourth), "next down queued");
-        Assert.Equal('Y', fourth.Key?.Vk);
+        Assert.Equal((int)'Y', fourth.Key?.Vk ?? -1);
         Assert.True(!gate.TryDequeue(out _), "queue drained");
         Assert.True(gate.TryRelease(), "release after draining succeeds");
         Assert.True(!gate.IsCaptured, "capture flag cleared on release");
@@ -68,8 +68,8 @@ internal static class MeltiaR1bInputOrderingTests
         gate.OnKey(Up('A', 2), _ => false);
         var rest = gate.Abort();
         Assert.Equal(3, rest.Count);
-        Assert.Equal('A', rest[0].Key?.Vk);
-        Assert.Equal(Click, rest[1].Mouse);
+        Assert.Equal((int)'A', rest[0].Key?.Vk ?? -1);
+        Assert.Equal(Click, rest[1].Mouse.GetValueOrDefault());
         Assert.True(rest[2].Key?.IsUp == true, "key-up retained");
         Assert.True(!gate.TryDequeue(out _), "abort drained the queue");
         Assert.True(!gate.IsCaptured, "abort releases capture");
@@ -92,7 +92,7 @@ internal static class MeltiaR1bInputOrderingTests
         }
         var rest = gate.Abort();
         Assert.Equal(1, rest.Count, "input must remain recoverable via Abort");
-        Assert.Equal('K', rest[0].Key?.Vk);
+        Assert.Equal((int)'K', rest[0].Key?.Vk ?? -1);
         Assert.True(!gate.IsCaptured, "gate unlocked after explicit recovery");
     }
 
