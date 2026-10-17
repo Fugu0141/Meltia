@@ -103,7 +103,8 @@ public sealed partial class H11BoundaryPrototype
         AnalyzeCore(raw, evidence, diagnostics: null);
 
     private Analysis AnalyzeCore(string raw, BoundaryEvidence? evidence,
-        TraceCollector? diagnostics, bool useForwardDecoder = false)
+        TraceCollector? diagnostics, bool useForwardDecoder = false,
+        bool useRouteProjector = false)
     {
         ArgumentNullException.ThrowIfNull(raw);
         if (raw.Length > MaxInputLength) throw new ArgumentOutOfRangeException(nameof(raw));
@@ -123,6 +124,109 @@ public sealed partial class H11BoundaryPrototype
             BoundarySpanValidator.HasDistinctOverlap(explicitJa))
             throw new ArgumentException("Contradictory language locks");
 
+        // E2: one model-owned candidate builder for the legacy oracle and
+        // experimental forward paths; preserve the original buckets and order.
+        var graph = new H11CandidateGenerator().Generate(
+            new H11GenerationRequest(raw, hard, explicitJa, diagnostics));
+
+        List<Node>[,] dp;
+        if (useForwardDecoder)
+        {
+            // Phase 4/E1: explicit test-only challenger. The same candidates,
+            // scorer arithmetic, beam policy and output projection are used.
+            dp = ForwardLatticeDecoder.Decode(raw.Length, 3, (int)Lang.Neutral,
+                new Node(0, Lang.Neutral, null, null),
+                graph, new H11ForwardTransition(),
+                new H11OrderedBeam(diagnostics));
+        }
+        else
+        {
+            dp = new List<Node>[raw.Length + 1, 3];
+            for (int i = 0; i <= raw.Length; i++)
+                for (int lang = 0; lang < 3; lang++) dp[i, lang] = [];
+            dp[0, (int)Lang.Neutral].Add(new Node(0, Lang.Neutral, null, null));
+            for (int i = 0; i < raw.Length; i++)
+            {
+                foreach (Lang stateLang in Enum.GetValues<Lang>())
+                // Every legal edge moves forward (End > i), so no transition
+                // can append to the list currently being iterated. Avoid the
+                // per-state snapshot allocation without changing visit order.
+                foreach (var previous in dp[i, (int)stateLang])
+                foreach (var candidate in graph.At(i))
+                {
+                    bool swap = previous.Last != Lang.Neutral &&
+                        candidate.Lang != Lang.Neutral && previous.Last != candidate.Lang;
+                    var last = candidate.Lang == Lang.Neutral ? previous.Last : candidate.Lang;
+                    double transition = swap ? -1.6 : 0;
+                    // Close a lexical English island before a phonetic Japanese
+                    // suffix; do not give a generic reward to all English seams.
+                    if (candidate.Lang == Lang.Ja && swap && previous.Edge is { } prior &&
+                        prior.Lang == Lang.En && prior.Origin == "baseline-lexicon-word" &&
+                        candidate.Span.Length >= 2) transition += 0.9;
+                    var next = new Node(previous.Score + candidate.Score + transition,
+                        last, candidate, previous);
+                    var destination = dp[candidate.Span.End, (int)last];
+                    destination.Add(next);
+                    if (destination.Count > Width * 2)
+                    {
+                        // The D2 small-beam selector regressed full Analyze on long
+                        // workloads; keep the legacy ordering for every trace mode.
+                        destination.Sort((a, b) => b.Score.CompareTo(a.Score));
+                        diagnostics?.Drop(candidate.Span.End, last, destination.Skip(Width),
+                            destination[Width - 1].Score);
+                        destination.RemoveRange(Width, destination.Count - Width);
+                    }
+                }
+            }
+        }
+        // E2 is opt-in: the legacy projection remains an independent oracle.
+        if (useRouteProjector)
+            return new H11RouteProjector(diagnostics).Project(raw, dp, graph);
+
+        var finalists = Enum.GetValues<Lang>()
+            .SelectMany(lang => dp[raw.Length, (int)lang])
+            .OrderByDescending(x => x.Score).Take(Width * 3).ToArray();
+        if (finalists.Length == 0)
+            throw new ArgumentException("No legal H11 boundary path");
+        var results = new List<BoundaryRoute>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var finalist in finalists)
+        {
+            var stack = new Stack<Edge>();
+            for (var node = finalist; node.Edge is not null; node = node.Prev!)
+                stack.Push(node.Edge);
+            var en = new List<Utf16Span>();
+            foreach (var edge in stack)
+            {
+                if (edge.Lang != Lang.En) continue;
+                if (en.Count > 0 && en[^1].End == edge.Span.Start)
+                    en[^1] = new Utf16Span(en[^1].Start, edge.Span.End);
+                else en.Add(edge.Span);
+            }
+            string signature = string.Join(";", en.Select(x => $"{x.Start}:{x.End}"));
+            if (!seen.Add(signature)) continue;
+            results.Add(new BoundaryRoute(en, finalist.Score));
+            diagnostics?.Selected(finalist);
+            if (results.Count == 8) break;
+        }
+        diagnostics?.Finalists(Enum.GetValues<Lang>()
+            .SelectMany(lang => dp[raw.Length, (int)lang]));
+        bool uncertainty = results.Count > 1 &&
+            results[0].Score - results[1].Score < 1.5;
+        return new Analysis(raw, graph.InStartPositionOrder()
+            .Select(x => new H10BoundaryPrototype.Edge(x.Span,
+                x.Lang == Lang.En ? "English" :
+                x.Lang == Lang.Ja ? "Japanese" : "Neutral",
+                x.Origin, x.Score)).ToArray(), results, uncertainty);
+    }
+    // Candidate generation is model-specific. Its exact original loop body,
+    // insertion order, rejection trace and score operations are retained.
+    private static List<Edge>[] BuildCandidateEdges(H11GenerationRequest request)
+    {
+        var raw = request.Raw;
+        var hard = request.Hard;
+        var explicitJa = request.ExplicitJa;
+        var diagnostics = request.Diagnostics;
         var edges = new List<Edge>[raw.Length + 1];
         for (int i = 0; i <= raw.Length; i++) edges[i] = [];
         void Add(Utf16Span x, Lang lang, double score, string origin,
@@ -313,90 +417,7 @@ public sealed partial class H11BoundaryPrototype
             }
         }
 
-        List<Node>[,] dp;
-        if (useForwardDecoder)
-        {
-            // Phase 4/E1: explicit test-only challenger. The same candidates,
-            // scorer arithmetic, beam policy and output projection are used.
-            dp = ForwardLatticeDecoder.Decode(raw.Length, 3, (int)Lang.Neutral,
-                new Node(0, Lang.Neutral, null, null),
-                new H11OrderedCandidates(edges), new H11ForwardTransition(),
-                new H11OrderedBeam(diagnostics));
-        }
-        else
-        {
-            dp = new List<Node>[raw.Length + 1, 3];
-            for (int i = 0; i <= raw.Length; i++)
-                for (int lang = 0; lang < 3; lang++) dp[i, lang] = [];
-            dp[0, (int)Lang.Neutral].Add(new Node(0, Lang.Neutral, null, null));
-            for (int i = 0; i < raw.Length; i++)
-            {
-                foreach (Lang stateLang in Enum.GetValues<Lang>())
-                // Every legal edge moves forward (End > i), so no transition
-                // can append to the list currently being iterated. Avoid the
-                // per-state snapshot allocation without changing visit order.
-                foreach (var previous in dp[i, (int)stateLang])
-                foreach (var candidate in edges[i])
-                {
-                    bool swap = previous.Last != Lang.Neutral &&
-                        candidate.Lang != Lang.Neutral && previous.Last != candidate.Lang;
-                    var last = candidate.Lang == Lang.Neutral ? previous.Last : candidate.Lang;
-                    double transition = swap ? -1.6 : 0;
-                    // Close a lexical English island before a phonetic Japanese
-                    // suffix; do not give a generic reward to all English seams.
-                    if (candidate.Lang == Lang.Ja && swap && previous.Edge is { } prior &&
-                        prior.Lang == Lang.En && prior.Origin == "baseline-lexicon-word" &&
-                        candidate.Span.Length >= 2) transition += 0.9;
-                    var next = new Node(previous.Score + candidate.Score + transition,
-                        last, candidate, previous);
-                    var destination = dp[candidate.Span.End, (int)last];
-                    destination.Add(next);
-                    if (destination.Count > Width * 2)
-                    {
-                        // The D2 small-beam selector regressed full Analyze on long
-                        // workloads; keep the legacy ordering for every trace mode.
-                        destination.Sort((a, b) => b.Score.CompareTo(a.Score));
-                        diagnostics?.Drop(candidate.Span.End, last, destination.Skip(Width),
-                            destination[Width - 1].Score);
-                        destination.RemoveRange(Width, destination.Count - Width);
-                    }
-                }
-            }
-        }
-        var finalists = Enum.GetValues<Lang>()
-            .SelectMany(lang => dp[raw.Length, (int)lang])
-            .OrderByDescending(x => x.Score).Take(Width * 3).ToArray();
-        if (finalists.Length == 0)
-            throw new ArgumentException("No legal H11 boundary path");
-        var results = new List<BoundaryRoute>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var finalist in finalists)
-        {
-            var stack = new Stack<Edge>();
-            for (var node = finalist; node.Edge is not null; node = node.Prev!)
-                stack.Push(node.Edge);
-            var en = new List<Utf16Span>();
-            foreach (var edge in stack)
-            {
-                if (edge.Lang != Lang.En) continue;
-                if (en.Count > 0 && en[^1].End == edge.Span.Start)
-                    en[^1] = new Utf16Span(en[^1].Start, edge.Span.End);
-                else en.Add(edge.Span);
-            }
-            string signature = string.Join(";", en.Select(x => $"{x.Start}:{x.End}"));
-            if (!seen.Add(signature)) continue;
-            results.Add(new BoundaryRoute(en, finalist.Score));
-            diagnostics?.Selected(finalist);
-            if (results.Count == 8) break;
-        }
-        diagnostics?.Finalists(Enum.GetValues<Lang>()
-            .SelectMany(lang => dp[raw.Length, (int)lang]));
-        bool uncertainty = results.Count > 1 &&
-            results[0].Score - results[1].Score < 1.5;
-        return new Analysis(raw, edges.SelectMany(x => x)
-            .Select(x => new H10BoundaryPrototype.Edge(x.Span,
-                x.Lang == Lang.En ? "English" :
-                x.Lang == Lang.Ja ? "Japanese" : "Neutral",
-                x.Origin, x.Score)).ToArray(), results, uncertainty);
+        return edges;
     }
+
 }
