@@ -140,7 +140,8 @@ internal sealed class TipServer : IDisposable
         // Start は UI スレッドから呼ぶ。Meltype.exe 自身の画面から来た要求を見分けるのに、このスレッドを覚えておく
         _uiThread = GetCurrentThreadId();
         _ = Task.Run(AcceptLoop);
-        Log.Info($"TIP server started (\\\\.\\pipe\\{EndpointName}).");
+        if (_meltiaExperimental) Log.Info($"Meltia experimental TIP server started (\\\\.\\pipe\\{EndpointName}).");
+        else Log.Info($"Meltype IME のサーバーを開始しました (\\\\.\\pipe\\{PipeName})。");
     }
 
     private PipeSecurity CreateSecurity()
@@ -411,7 +412,8 @@ internal sealed class TipServer : IDisposable
                     var count = Interlocked.Increment(ref _requestErrors);
                     if (count == 1) Log.Error($"Meltype IME: 要求を処理できませんでした: {ex}");
                     else if (count <= 20) Log.Error($"Meltype IME: 要求を処理できませんでした: {ex.Message}");
-                    reply = wire is null ? Inactive : MeltiaTipWire.Inactive;
+                    if (wire is null) reply = Inactive;
+                    else reply = MeltiaTipWire.Inactive;
                 }
                 var bytes = Encoding.UTF8.GetBytes(reply);
                 await pipe.WriteAsync(bytes, _stop.Token).ConfigureAwait(false);
