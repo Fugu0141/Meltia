@@ -11,7 +11,7 @@ namespace Meltype.Tip;
 /// </summary>
 internal sealed class MeltiaTipWire
 {
-    internal const string Inactive = "{\"version\":1,\"active\":false,\"consumed\":false,\"commits\":[],\"view\":null}";
+    internal static readonly string Inactive = "{\"version\":" + MeltiaTipIdentity.ProtocolVersion + ",\"active\":false,\"consumed\":false,\"commits\":[],\"view\":null}";
     internal bool Handshaken { get; private set; }
 
     internal string Process(string request, Func<string, string> dispatch)
@@ -22,7 +22,7 @@ internal sealed class MeltiaTipWire
             var root = message.RootElement;
             if (root.ValueKind != JsonValueKind.Object ||
                 !root.TryGetProperty("version", out var version) ||
-                !version.TryGetInt32(out var number) || number != MeltiaTipIdentity.ProtocolVersion ||
+                version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var number) || number != MeltiaTipIdentity.ProtocolVersion ||
                 !root.TryGetProperty("op", out var operation) || operation.ValueKind != JsonValueKind.String)
             {
                 Handshaken = false;
