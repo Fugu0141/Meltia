@@ -4,7 +4,7 @@
 
 ## 要件と実装上の所有境界
 
-- T2のconfig/tsf/meltia-t2-identity.jsonを唯一の識別子ソースとし、C#定数はtools/generate_meltia_tip_identity.pyで生成・CIの--checkで検証する。NativeのPipe文字列・バージョンは一時ステージ生成時に同じマニフェストから導出する。
+- T2のconfig/tsf/meltia-t2-identity.jsonを唯一の識別子ソースとし、C#定数はtools/generate_meltia_tip_identity.pyで生成・CIの--checkで検証する。生成ファイルはsrc/Meltype/Tip/Meltia.Generated/以下に隔離し、T2が本家由来GUIDを検査するsrc/Meltype/Tip/*.csと混同しない（元の衝突検査を変更しない）。NativeのPipe文字列・バージョンは一時ステージ生成時に同じマニフェストから導出する。
 - native/tip/には**一切変更を加えない**。prepare_meltia_tip_stage.pyは既知箇所を厳密照合し、隔離出力で要求の全JSONオブジェクトにversion:1を付け、応答にも数値のversion:1が存在する場合だけTSFへ処理結果を返す。不一致や不正応答はfalse。
 - C#のTipServerに**明示的実験コンストラクター**を追加。既存3引数コンストラクターは本家Meltype専用Pipeと無バージョン契約を維持する。実験経路のPipeだけMeltia.Tip.v1.<SID>を使用。
 - 1接続に1個のMeltiaTipWireを割り当て、数値version:1のhelloに対する既存ハンドラーのactive:trueが得られるまでkey/commit/select/closeは処理しない。未知version/operation、JSON異常、空SIDはactive:false, consumed:false, commits:[], view:nullへ拒否する。無効versionやJSONではその接続のhandshake状態を破棄する。

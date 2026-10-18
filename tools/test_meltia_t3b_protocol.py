@@ -15,6 +15,8 @@ class T3bContracts(unittest.TestCase):
 
     def test_csharp_constants_are_generated_from_manifest(self):
         self.assertEqual(DEST.read_text(encoding="utf-8"), render(self.manifest))
+        self.assertNotEqual(DEST.parent, ROOT / "src/Meltype/Tip",
+                            "generated Meltia GUIDs must stay out of the inherited T2 source scan")
 
     def test_native_request_and_response_versions_are_checked(self):
         native = stage_text("TextService.cpp", self.cpp, self.manifest)

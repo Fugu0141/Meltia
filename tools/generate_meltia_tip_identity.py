@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "config/tsf/meltia-t2-identity.json"
-DEST = ROOT / "src/Meltype/Tip/MeltiaTipIdentity.g.cs"
+DEST = ROOT / "src/Meltype/Tip/Meltia.Generated/MeltiaTipIdentity.g.cs"
 
 
 def render(manifest):

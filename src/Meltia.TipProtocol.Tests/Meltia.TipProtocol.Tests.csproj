@@ -10,6 +10,6 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="../Meltype/Tip/MeltiaTipWire.cs" Link="MeltiaTipWire.cs" />
-    <Compile Include="../Meltype/Tip/MeltiaTipIdentity.g.cs" Link="MeltiaTipIdentity.g.cs" />
+    <Compile Include="../Meltype/Tip/Meltia.Generated/MeltiaTipIdentity.g.cs" Link="MeltiaTipIdentity.g.cs" />
   </ItemGroup>
 </Project>
