@@ -36,6 +36,9 @@ internal sealed class TipServer : IDisposable
     private readonly CompositionService _composition;
     private readonly Func<Settings> _settings;
     private readonly CancellationTokenSource _stop = new();
+    private readonly bool _meltiaExperimental;
+    private string EndpointName => _meltiaExperimental
+        ? MeltiaTipIdentity.PipePrefix + (WindowsIdentity.GetCurrent().User?.Value ?? "user") : PipeName;
 
     /// <summary>1 つの要求の大きさの上限 (キー 1 つ分なら 1KB もない)。</summary>
     private const int MaxRequestBytes = 64 * 1024;
@@ -44,10 +47,17 @@ internal sealed class TipServer : IDisposable
     private const int MaxSessionsPerConnection = 16;
 
     public TipServer(Control invoker, CompositionService composition, Func<Settings> settings)
+        : this(invoker, composition, settings, meltiaExperimental: false) { }
+
+    // Explicit test-only path. Preview never constructs this server; no TSF
+    // registration, hook or activation is performed by this constructor.
+    internal TipServer(Control invoker, CompositionService composition, Func<Settings> settings,
+        bool meltiaExperimental)
     {
         _invoker = invoker;
         _composition = composition;
         _settings = settings;
+        _meltiaExperimental = meltiaExperimental;
     }
 
     /// <summary>Meltype IME が登録されていないと確かに分かるか (レジストリを読めないときは false)。</summary>
@@ -130,7 +140,7 @@ internal sealed class TipServer : IDisposable
         // Start は UI スレッドから呼ぶ。Meltype.exe 自身の画面から来た要求を見分けるのに、このスレッドを覚えておく
         _uiThread = GetCurrentThreadId();
         _ = Task.Run(AcceptLoop);
-        Log.Info($"Meltype IME のサーバーを開始しました (\\\\.\\pipe\\{PipeName})。");
+        Log.Info($"TIP server started (\\\\.\\pipe\\{EndpointName}).");
     }
 
     private PipeSecurity CreateSecurity()
@@ -217,7 +227,7 @@ internal sealed class TipServer : IDisposable
             {
                 var options = PipeOptions.Asynchronous | (first ? PipeOptions.FirstPipeInstance : PipeOptions.None);
                 // 整合性レベルの印は、パイプ全体に 1 回だけ付ける (付けるのに WRITE_OWNER が要る。2 つ目からは WRITE_OWNER を求めると拒否される)
-                pipe = NamedPipeServerStreamAcl.Create(PipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
+                pipe = NamedPipeServerStreamAcl.Create(EndpointName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
                     PipeTransmissionMode.Message, options, 0, 0, security, HandleInheritability.None, first ? PipeAccessRights.TakeOwnership : 0);
                 if (first && security is not null) SetLowIntegrity(pipe);
                 first = false;
@@ -370,6 +380,7 @@ internal sealed class TipServer : IDisposable
     {
         // このつながりの入力の本体 (UI スレッドからだけ触る。Meltype.exe 自身の UI スレッドのつながりは、UI スレッドが止まっている間に触る)
         var sessions = new Dictionary<string, MeltypeSession>();
+        var wire = _meltiaExperimental ? new MeltiaTipWire() : null;
         var ownClient = GetNamedPipeClientProcessId(pipe.SafePipeHandle, out var clientProcess) && clientProcess == (uint)Environment.ProcessId;
         var buffer = new byte[64 * 1024];
         using var message = new MemoryStream();
@@ -391,14 +402,16 @@ internal sealed class TipServer : IDisposable
                 try
                 {
                     var request = Encoding.UTF8.GetString(message.GetBuffer(), 0, (int)message.Length);
-                    reply = FromOwnUiThread(ownClient, request) ? Handle(request, sessions) : Invoke(() => Handle(request, sessions));
+                    string Dispatch() => wire is null ? Handle(request, sessions)
+                        : wire.Process(request, payload => Handle(payload, sessions));
+                    reply = FromOwnUiThread(ownClient, request) ? Dispatch() : Invoke(Dispatch);
                 }
                 catch (Exception ex)
                 {
                     var count = Interlocked.Increment(ref _requestErrors);
                     if (count == 1) Log.Error($"Meltype IME: 要求を処理できませんでした: {ex}");
                     else if (count <= 20) Log.Error($"Meltype IME: 要求を処理できませんでした: {ex.Message}");
-                    reply = Inactive;
+                    reply = wire is null ? Inactive : MeltiaTipWire.Inactive;
                 }
                 var bytes = Encoding.UTF8.GetBytes(reply);
                 await pipe.WriteAsync(bytes, _stop.Token).ConfigureAwait(false);

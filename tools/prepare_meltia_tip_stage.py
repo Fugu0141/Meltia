@@ -68,13 +68,39 @@ def stage_text(name, source, manifest):
                                  ids[field].upper(), "Globals.h GUID comment")
         source = replace_one(source, 'kDisplayName[] = L"Meltype"', 'kDisplayName[] = L"Meltia"', "Globals.h display")
     elif name == "Pipe.cpp":
-        # Protect against connecting to the original Meltype server.
-        source = replace_one(source, 'L"\\\\\\\\.\\\\pipe\\\\Meltype.Tip."', 'L"\\\\\\\\.\\\\pipe\\\\Meltia.Tip.v1."', "Pipe.cpp endpoint")
+        # Derive the endpoint from the T2 manifest, not a second literal.
+        pipe_prefix = manifest["ipc"]["pipePrefix"]
+        source = replace_one(source, 'L"\\\\\\\\.\\\\pipe\\\\Meltype.Tip."',
+                             'L"\\\\\\\\.\\\\pipe\\\\' + pipe_prefix + '"', "Pipe.cpp endpoint")
     elif name == "TextService.cpp":
         source = replace_one(source, 'return _wcsicmp(name, L"Meltype.exe") == 0;',
                              'return _wcsicmp(name, L"Meltia.exe") == 0;', "TextService own process")
         source = replace_one(source, "kReinjectMarker = 0x4D4C5450", "kReinjectMarker = 0x4D544941",
                              "TextService replay marker")
+        # Every Native request carries the version. Only a versioned response
+        # can drive TSF edits, even when a peer spoofs active=true.
+        request_marker = "    std::string request = json;\n"
+        request_guard = (
+            request_marker
+            + "    if (request.empty() || request.back() != '}') return false;\n"
+            + '    request.insert(request.size() - 1, R"(,"version":'
+            + str(manifest["protocolVersion"]) + ')");\n'
+        )
+        source = replace_one(source, request_marker, request_guard, "TextService request version")
+        parse_end = (
+            '    if (!ParseJson(response, reply)) {\n'
+            '        TipLog(L"応答を読めません");\n'
+            '        return false;\n'
+            '    }\n'
+            '    return true;\n'
+        )
+        checked = (
+            parse_end.replace('    return true;\n',
+                '    return reply[L"version"].type == JsonValue::Type::Number && '
+                'reply[L"version"].number == ' + str(manifest["protocolVersion"]) + ';\n')
+        )
+        source = replace_one(source, parse_end, checked, "TextService response version")
+
     elif name == "Dll.cpp":
         source = replace_one(source, 'L"MELTYPE_TIP_LOG"', 'L"MELTIA_TIP_LOG"', "Dll logging flag")
         source = replace_one(source, 'L"\\\\Meltype\\\\tip-log"', 'L"\\\\Meltia\\\\tip-log"', "Dll log sentinel")
@@ -157,7 +183,7 @@ def prepare(output):
     (output / "STAGING_NOTICE.txt").write_text(
         "Meltia T3a experimental build staging; NOT INSTALLABLE. "
         "DllRegisterServer and DllUnregisterServer always return SELFREG_E_CLASS. "
-        "C# version handshake NOT implemented. Never distribute as an IME.\n",
+        "T3b versioned IPC is experimental; NOT INSTALLABLE. Never distribute as an IME.\n",
         encoding="utf-8",
     )
     return output
