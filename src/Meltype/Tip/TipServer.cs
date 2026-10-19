@@ -413,7 +413,11 @@ internal sealed class TipServer : IDisposable
                     if (count == 1) Log.Error($"Meltype IME: 要求を処理できませんでした: {ex}");
                     else if (count <= 20) Log.Error($"Meltype IME: 要求を処理できませんでした: {ex.Message}");
                     if (wire is null) reply = Inactive;
-                    else reply = MeltiaTipWire.Inactive;
+                    else
+                    {
+                        wire.Reset();
+                        reply = MeltiaTipWire.Inactive;
+                    }
                 }
                 var bytes = Encoding.UTF8.GetBytes(reply);
                 await pipe.WriteAsync(bytes, _stop.Token).ConfigureAwait(false);

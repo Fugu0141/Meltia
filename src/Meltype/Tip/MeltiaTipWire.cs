@@ -14,6 +14,8 @@ internal sealed class MeltiaTipWire
     internal static readonly string Inactive = "{\"version\":" + MeltiaTipIdentity.ProtocolVersion + ",\"active\":false,\"consumed\":false,\"commits\":[],\"view\":null}";
     internal bool Handshaken { get; private set; }
 
+    internal void Reset() => Handshaken = false;
+
     internal string Process(string request, Func<string, string> dispatch)
     {
         try
@@ -49,8 +51,15 @@ internal sealed class MeltiaTipWire
         }
         catch (JsonException)
         {
-            Handshaken = false;
+            Reset();
             return Inactive;
+        }
+        catch
+        {
+            // The transport maps dispatcher errors to an inactive response.
+            // Invalidate this connection before propagating that failure.
+            Reset();
+            throw;
         }
     }
 
