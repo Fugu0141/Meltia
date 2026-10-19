@@ -98,5 +98,36 @@ Check("separate connections cannot reuse handshake state", () =>
     Expect(!IsActive(second.Process("{\"op\":\"key\",\"sid\":\"s\",\"version\":1}", _ => { count++; return Active; })));
     Expect(count == 1 && first.Handshaken && !second.Handshaken);
 });
+Check("dispatch exception revokes hello until another successful hello", () =>
+{
+    var wire = new MeltiaTipWire(); var calls = 0;
+    Expect(IsActive(wire.Process("{\"op\":\"hello\",\"version\":1}", _ => { calls++; return Active; })));
+    try
+    {
+        wire.Process("{\"op\":\"key\",\"sid\":\"s\",\"vk\":\"invalid\",\"version\":1}",
+            _ => { calls++; throw new InvalidOperationException("bad vk"); });
+        throw new InvalidOperationException("dispatcher did not throw");
+    }
+    catch (InvalidOperationException ex) when (ex.Message == "bad vk") { }
+    Expect(!wire.Handshaken);
+    var blocked = wire.Process("{\"op\":\"key\",\"sid\":\"s\",\"version\":1}",
+        _ => { calls++; return Active; });
+    Expect(!IsActive(blocked) && calls == 2);
+    Expect(IsActive(wire.Process("{\"op\":\"hello\",\"version\":1}",
+        _ => { calls++; return Active; })));
+    Expect(IsActive(wire.Process("{\"op\":\"key\",\"sid\":\"s\",\"version\":1}",
+        _ => { calls++; return Active; })));
+    Expect(calls == 4);
+});
+Check("explicit transport reset revokes previously accepted hello", () =>
+{
+    var wire = new MeltiaTipWire(); var calls = 0;
+    wire.Process("{\"op\":\"hello\",\"version\":1}", _ => { calls++; return Active; });
+    wire.Reset();
+    Expect(!wire.Handshaken);
+    Expect(!IsActive(wire.Process("{\"op\":\"commit\",\"version\":1,\"sid\":\"s\"}",
+        _ => { calls++; return Active; })));
+    Expect(calls == 1);
+});
 Console.WriteLine($"T3b offline tests: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

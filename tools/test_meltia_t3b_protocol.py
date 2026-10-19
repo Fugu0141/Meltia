@@ -42,6 +42,46 @@ class T3bContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "TextService response version"):
             stage_text("TextService.cpp", modified, self.manifest)
 
+    def test_native_epoch_guarantees_hello_before_reconnected_key_or_commit(self):
+        header = (ROOT / "native/tip/Pipe.h").read_text(encoding="utf-8-sig")
+        pipe = (ROOT / "native/tip/Pipe.cpp").read_text(encoding="utf-8-sig")
+        text_header = (ROOT / "native/tip/TextService.h").read_text(encoding="utf-8-sig")
+        staged_header = stage_text("Pipe.h", header, self.manifest)
+        staged_pipe = stage_text("Pipe.cpp", pipe, self.manifest)
+        staged_text_header = stage_text("TextService.h", text_header, self.manifest)
+        staged_text = stage_text("TextService.cpp", self.cpp, self.manifest)
+        self.assertIn("std::uint64_t ConnectionGeneration() const", staged_header)
+        self.assertIn("++generation_;", staged_pipe)
+        self.assertIn("MeltiaReconnectPolicy handshake_", staged_text_header)
+        self.assertIn("handshake_.NeedsHello(epoch)", staged_text)
+        self.assertIn("handshake_.AcceptHello(pipe_.ConnectionGeneration())", staged_text)
+        self.assertIn("serverActive_ = false", staged_text)
+        # Request must check the new connection, and complete hello, before
+        # any normal request can reach the transport.
+        start = staged_text.index("bool TextService::Request(")
+        stop = staged_text.index("void TextService::SurroundingText(", start)
+        method = staged_text[start:stop]
+        self.assertLess(method.index("pipe_.EnsureConnected()"),
+                        method.index("handshake_.NeedsHello(epoch)"))
+        self.assertLess(method.index("handshake_.NeedsHello(epoch)"),
+                        method.index("pipe_.Transact(request, response, 800)"))
+        self.assertIn('if (!isHello && handshake_.NeedsHello(epoch))', method)
+        self.assertIn('if (!Request(R"({"op":"hello","process":)"', method)
+        self.assertIn("return false;  // Never send a normal request", method)
+
+    def test_native_epoch_mutations_fail_stage_instead_of_silently_bypassing(self):
+        src_pipe = (ROOT / "native/tip/Pipe.cpp").read_text(encoding="utf-8-sig")
+        changed = src_pipe.replace("    return true;\n}\n\nvoid PipeClient::Close()",
+                                   "    return false;\n}\n\nvoid PipeClient::Close()")
+        self.assertNotEqual(src_pipe, changed)
+        with self.assertRaisesRegex(ValueError, "Pipe.cpp epoch increment"):
+            stage_text("Pipe.cpp", changed, self.manifest)
+        changed_text = self.cpp.replace("    if (!pipe_.Transact(request, response, 800)) return false;",
+                                       "    if (!pipe_.Transact(request, response, 801)) return false;")
+        self.assertNotEqual(self.cpp, changed_text)
+        with self.assertRaisesRegex(ValueError, "TextService automatic hello"):
+            stage_text("TextService.cpp", changed_text, self.manifest)
+
     def test_legacy_native_endpoint_remains_unmodified(self):
         self.assertIn("Meltype.Tip.", (ROOT / "native/tip/Pipe.cpp").read_text(encoding="utf-8-sig"))
         self.assertIn('L"Meltype.exe"', self.cpp)

@@ -31,3 +31,10 @@ C#単体テストでは、未知/欠損/非整数version、hello前key、inactiv
 4. 本家コードを一時ステージ生成で機械書換する構成は暫定的。R2の責務分離後、Meltia固有のビルド可能ソースへ置き換える。
 
 レビュー前にmainへマージしない。CIを確認してレビュー指摘を受けてから次段階へ進む。
+
+## PR #81レビュー指摘への対応（2026-10-19）
+
+- **P1（Native Pipe再接続）**：隔離ステージのPipeClientで成功した新規接続ごとに世代番号を更新し、TextService::Requestが世代未認証なら通常要求の前にversion:1 helloを送信する。helloがinactive・失敗・タイムアウト・再切断の場合は通常のkey/commit/select/closeを送信せず失敗側へ戻す。これにより前接続のserverActive_がtrueでも新しいPipeへの入力を許可しない。
+- **P2（dispatcher例外）**：MeltiaTipWire.ProcessがJsonException以外の例外を送出した場合もResetして再送出し、TipServer.Serveの例外ハンドラーでも接続のReset後にversion付きinactiveを返す。通常Meltypeの3引数構築・エラー応答は変えない。
+- **回帰ゲート**：C#のdispatcher例外・明示Reset/再helloテスト、Pythonの世代追跡実装順序・上流ソース変異検査、無登録のネイティブx64/x86ビルドに付随するC++世代ポリシー実行テストを追加。
+- **検証の限界**：C++世代ポリシーの実行は無OSテストであり、本物のNamed Pipe切断・再接続とTSF入力を確認したものではない。Windows VM上のC#↔Native実通信・キー損失/重複・フォーカス・デッドロック・タイムアウトはT4/T5の後続ゲートとする。
