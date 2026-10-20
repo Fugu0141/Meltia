@@ -21,6 +21,8 @@ try {
         New-Item -ItemType Directory -Path $sandbox -Force | Out-Null
         $stdout = Join-Path $sandbox 'stdout'
         $stderr = Join-Path $sandbox 'stderr'
+        # Child inherits this sandbox, never the real Meltype data directory.
+        $env:MELTYPE_DATA_DIR = Join-Path $sandbox 'data'
         $proc = Start-Process -FilePath 'dotnet' -ArgumentList @(
             ($q + $dll + $q), '--supervise', ($q + $sandbox + $q)
         ) -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
