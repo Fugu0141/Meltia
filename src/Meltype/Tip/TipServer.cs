@@ -33,7 +33,7 @@ namespace Meltype.Tip;
 internal sealed class TipServer : IDisposable
 {
     private readonly Control _invoker;
-    private readonly CompositionService _composition;
+    private readonly Func<MeltypeSession> _createSession;
     private readonly Func<Settings> _settings;
     private readonly CancellationTokenSource _stop = new();
     private readonly bool _meltiaExperimental;
@@ -47,16 +47,22 @@ internal sealed class TipServer : IDisposable
     private const int MaxSessionsPerConnection = 16;
 
     public TipServer(Control invoker, CompositionService composition, Func<Settings> settings)
-        : this(invoker, composition, settings, meltiaExperimental: false) { }
+        : this(invoker, settings, () => composition.CreateSession(settings), meltiaExperimental: false) { }
 
-    // Explicit test-only path. Preview never constructs this server; no TSF
-    // registration, hook or activation is performed by this constructor.
+    // Explicit experimental transport; no registration, hook or activation.
     internal TipServer(Control invoker, CompositionService composition, Func<Settings> settings,
         bool meltiaExperimental)
+        : this(invoker, settings, () => composition.CreateSession(settings), meltiaExperimental) { }
+
+    // Test-only session factory permits the ACTUAL TipServer.Serve/Handle path
+    // to run without constructing the global keyboard hook / UI CompositionService.
+    // This constructor is internal and never used by normal Meltia Preview startup.
+    internal TipServer(Control invoker, Func<Settings> settings,
+        Func<MeltypeSession> createSession, bool meltiaExperimental)
     {
-        _invoker = invoker;
-        _composition = composition;
-        _settings = settings;
+        _invoker = invoker ?? throw new ArgumentNullException(nameof(invoker));
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _createSession = createSession ?? throw new ArgumentNullException(nameof(createSession));
         _meltiaExperimental = meltiaExperimental;
     }
 
@@ -503,7 +509,7 @@ internal sealed class TipServer : IDisposable
             // DLL の側は変換中なのに、入力の続きが無い (つなぎ直した): 新しく始めると、変換中の文字を消したり置き換えたりするので、
             // 受け持たない (DLL は変換中の文字をそのまま確定し、キーはアプリに通す)
             if (!active || op != "key" || IsTrue(root, "composing") || sessions.Count >= MaxSessionsPerConnection) return Inactive;
-            session = _composition.CreateSession(_settings);
+            session = _createSession();
             sessions[sid] = session;
         }
         SessionResult result;
