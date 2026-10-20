@@ -41,3 +41,16 @@ CI: `.github/workflows/meltia-windows-preview-ci.yml` に T3d を追加。**実�
 1. Native `Request` の実際の IPC ゲートであり、**TSF が OS 上でキーを受け取り、アプリに文字を反映できることは証明しない**。テストが通っても製品の登録/有効化/配布を解禁しない。
 2. 製品 Meltia 専用の常駐ホスト、モード切替/Mutex/起動競合/終了復旧のライフサイクルは未実装。次に**専用ホストの設計と無登録起動ゲート**へ進む。
 3. T4/T5 の隔離 Windows VM で行う本当の登録・実打鍵・アプリ横断・権限別の確認は、独立レビュー後に別の PR として実施する。失敗時の文字の欠落/重複の品質ゲートは残る。
+
+## Windows CI実測（2026-10-20）
+
+修正後のソース HEAD: `7b3d3ba7aa8eeba081ecf1a24d728ef29743dfd4`（この実測追記より前の実装HEAD）。
+
+- [Meltia Windows Preview CI #](https://github.com/Fugu0141/Meltia/actions/runs/39427589182): **Windows実通信・研究品質とも success**。
+- [meltia-strict-quality](https://github.com/Fugu0141/Meltia/actions/runs/39427589194): **success**。
+- Windows x64 と x86 の両方で、本物の `TextService::Request` → `TipServer` の接続、暗黙の `hello`、`k/a` から `か` 表示と確定、`close`、失効 `composing:true` の拒否が成功。
+- ログで**同一 `TextService` の接続世代 `1 → 2`**、**実セッション生成2件・2接続**を各アーキテクチャで確認。
+- 既存 T3a/T3b/T3c-A/T3c-B と Previewビルド・無フック監査・継承Coreテストを同時に完走。
+- 初回HEAD `225dda2b7ec7` ではテスト専用C++コードに Windows `max` マクロと `std::numeric_limits::max` の衝突があり失敗。テストファイルに `NOMINMAX` と安全な関数表記を適用して修正し、修正後HEADで成功した。**製品コードの修正は不要**だった。
+
+これは無登録テスト専用の Native IPC 実行結果であって、正式TSFキーイベント・実打鍵・入力アプリへの編集反映の成功を示さない。レビューを完了するまでは PR は Draft のままとする。
