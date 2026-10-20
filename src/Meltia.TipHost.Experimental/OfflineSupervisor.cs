@@ -71,9 +71,21 @@ internal static class OfflineSupervisor
             var ready = Path.Combine(attemptDir, "ready");
             var stop = Path.Combine(attemptDir, "stop");
             var drop = Path.Combine(attemptDir, "health.drop");
-            using var child = Launch(ready, stop, drop);
+            var startGate = Path.Combine(attemptDir, "start.allowed");
+            if (File.Exists(startGate))
+            {
+                Console.Error.WriteLine("T3g refuses a pre-existing worker start gate.");
+                return 2;
+            }
+            // Create the kill-on-close job BEFORE starting the worker. Until
+            // job assignment succeeds, the worker is blocked by start.allowed.
+            // Assignment failure is fatal (never fall back to an orphanable host).
+            using var job = OfflineWorkerJob.Create();
+            using var child = Launch(ready, stop, drop, startGate);
             try
             {
+                job.Assign(child);
+                File.WriteAllText(startGate, "assigned", Encoding.ASCII);
                 var deadline = Stopwatch.StartNew();
                 bool bound = false;
                 while (deadline.Elapsed < StartupTimeout && !File.Exists(requestedStop))
@@ -142,7 +154,7 @@ internal static class OfflineSupervisor
         return 6;
     }
 
-    private static Process Launch(string ready, string stop, string drop)
+    private static Process Launch(string ready, string stop, string drop, string startGate)
     {
         var runtime = Environment.ProcessPath ??
             throw new InvalidOperationException("Missing .NET runtime executable.");
@@ -158,6 +170,7 @@ internal static class OfflineSupervisor
         start.ArgumentList.Add(ready);
         start.ArgumentList.Add(stop);
         start.ArgumentList.Add(drop);
+        start.ArgumentList.Add(startGate);
         return Process.Start(start) ?? throw new InvalidOperationException("Could not start T3f worker.");
     }
 
