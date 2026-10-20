@@ -111,6 +111,9 @@ try {
         if (Test-Path $b.Stderr) { Get-Content $b.Stderr }
         throw 'T3f must terminate with code 6 after the third failed launch.'
     }
+    # The earlier negative probe is *expected* to return nonzero. Do not leak
+    # its LASTEXITCODE as the outcome of this successfully completed test script.
+    $global:LASTEXITCODE = 0
     Write-Host 'PASS T3f: real hello health, listener loss, process crash, duplicate refusal, deliberate stop, bounded recovery.'
 }
 finally {
