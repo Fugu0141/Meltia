@@ -25,6 +25,9 @@ internal static class Program
         if (args.Length == 3 && args[0] == "--offline-host")
             return OfflineHost.Run(args[1], args[2]);
 
+        if (args.Length == 4 && args[0] == "--offline-host")
+            return OfflineHost.Run(args[1], args[2], args[3]);
+
         // Refuse ordinary launches: this is not the shipping Meltia.exe or a TSF IME.
         Console.Error.WriteLine("T3e requires explicit --offline-host <ready-marker> <stop-marker> or --probe.");
         return 2;
