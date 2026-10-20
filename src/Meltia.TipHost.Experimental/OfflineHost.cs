@@ -15,13 +15,14 @@ namespace Meltia.TipHost.Experimental;
 /// </summary>
 internal static class OfflineHost
 {
-    internal static int Run(string readyMarker, string stopMarker)
+    internal static int Run(string readyMarker, string stopMarker, string? dropListenerMarker = null)
     {
         var dataDirectory = Environment.GetEnvironmentVariable("MELTYPE_DATA_DIR");
         // This binary is an explicit CI-only experiment. Never fall back to the
         // actual Meltype data directory when the test harness forgot its sandbox.
         if (string.IsNullOrWhiteSpace(dataDirectory) ||
-            !UnderTemp(dataDirectory) || !UnderTemp(readyMarker) || !UnderTemp(stopMarker))
+            !UnderTemp(dataDirectory) || !UnderTemp(readyMarker) || !UnderTemp(stopMarker) ||
+            (dropListenerMarker is not null && !UnderTemp(dropListenerMarker)))
         {
             Console.Error.WriteLine("T3e requires sandbox paths below the OS temporary directory.");
             return 2;
@@ -80,10 +81,18 @@ internal static class OfflineHost
 
             using var ticker = new System.Windows.Forms.Timer { Interval = 100 };
             var timedOut = false;
+            var listenerDropped = false;
             var elapsed = System.Diagnostics.Stopwatch.StartNew();
             ticker.Tick += (_, _) =>
             {
                 if (File.Exists(stopMarker)) Application.ExitThread();
+                else if (!listenerDropped && dropListenerMarker is not null && File.Exists(dropListenerMarker))
+                {
+                    // T3f fault injection only: leave the process alive but stop IPC.
+                    // No actual OS IME or keyboard input is ever involved.
+                    listenerDropped = true;
+                    server.Dispose();
+                }
                 else if (elapsed.Elapsed >= TimeSpan.FromSeconds(60))
                 {
                     timedOut = true;
