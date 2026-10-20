@@ -136,7 +136,8 @@ internal static class OfflineSupervisor
                 return 6;
             }
             if (File.Exists(requestedStop)) return 0;
-            Thread.Sleep(TimeSpan.FromMilliseconds(200 * launch));
+            // Allow terminated Windows pipe handles to drain before rebinding.
+            Thread.Sleep(TimeSpan.FromMilliseconds(750 * launch));
         }
         return 6;
     }
