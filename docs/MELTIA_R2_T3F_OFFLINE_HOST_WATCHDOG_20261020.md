@@ -33,7 +33,7 @@ T3eはテストハーネスからホストをkillしたあと手動で再起動�
 1. **Start**: 一時パスとSID確認 → exclusive supervisor mutex → 自身の子`dotnet ... --offline-host`を起動。
 2. **Ready**: childの`ready`ファイルを受信し、実IPC helloが通ることを検証 → 新しい`launch=N;pid=P`を`supervisor.status`に原子的なrenameで発行。
 3. **Healthy**: 300ms周期で生存確認とhello-only health check。新しいIPC接続は既存の作業セッションを操作しない。
-4. **Unhealthy**: 子の異常終了、または連続2回health不成立 → 所有する子だけを停止 → 200ms×試行番号の待機 → 新規起動。前世代の入力状態は引き継がない。
+4. **Unhealthy**: 子の異常終了、または連続2回health不成立 → 所有する子だけを停止 → 750ms×試行番号の待機 → 新規起動。前世代の入力状態は引き継がない。
 5. **Exhausted**: 3回の起動を使い切った場合はcode6で停止。無制限の再実行や全システム再起動はしない。
 6. **Intentional stop**: supervisorに`supervisor.stop`が作られた場合はcode0で正常終了、childも停止する。終了要求による停止をクラッシュと誤検知しない。
 
