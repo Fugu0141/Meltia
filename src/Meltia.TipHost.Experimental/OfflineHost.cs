@@ -15,17 +15,36 @@ namespace Meltia.TipHost.Experimental;
 /// </summary>
 internal static class OfflineHost
 {
-    internal static int Run(string readyMarker, string stopMarker, string? dropListenerMarker = null)
+    internal static int Run(string readyMarker, string stopMarker, string? dropListenerMarker = null,
+        string? startGateMarker = null)
     {
         var dataDirectory = Environment.GetEnvironmentVariable("MELTYPE_DATA_DIR");
         // This binary is an explicit CI-only experiment. Never fall back to the
         // actual Meltype data directory when the test harness forgot its sandbox.
         if (string.IsNullOrWhiteSpace(dataDirectory) ||
             !UnderTemp(dataDirectory) || !UnderTemp(readyMarker) || !UnderTemp(stopMarker) ||
-            (dropListenerMarker is not null && !UnderTemp(dropListenerMarker)))
+            (dropListenerMarker is not null && !UnderTemp(dropListenerMarker)) ||
+            (startGateMarker is not null && !UnderTemp(startGateMarker)))
         {
             Console.Error.WriteLine("T3e requires sandbox paths below the OS temporary directory.");
             return 2;
+        }
+
+        if (startGateMarker is not null)
+        {
+            // The supervisor creates this marker ONLY after AssignProcessToJobObject
+            // succeeds. A crashed supervisor before assignment cannot leave a
+            // listening orphan: the unassigned child times out without binding.
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (!File.Exists(startGateMarker))
+            {
+                if (deadline.Elapsed >= TimeSpan.FromSeconds(10))
+                {
+                    Console.Error.WriteLine("T3g worker did not receive parent containment gate.");
+                    return 7;
+                }
+                Thread.Sleep(50);
+            }
         }
 
         var user = WindowsIdentity.GetCurrent().User?.Value;
