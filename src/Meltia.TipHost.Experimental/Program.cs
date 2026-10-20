@@ -19,6 +19,9 @@ internal static class Program
         if (args.Length == 1 && args[0] == "--probe")
             return OfflineProbe.Run();
 
+        if (args.Length == 2 && args[0] == "--supervise")
+            return OfflineSupervisor.Run(args[1]);
+
         if (args.Length == 3 && args[0] == "--offline-host")
             return OfflineHost.Run(args[1], args[2]);
 
