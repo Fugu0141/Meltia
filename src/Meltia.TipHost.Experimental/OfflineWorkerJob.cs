@@ -9,9 +9,10 @@ using Microsoft.Win32.SafeHandles;
 namespace Meltia.TipHost.Experimental;
 
 /// <summary>
-/// Owns a private, unnamed, non-inheritable Job Object. Closing its last handle
-/// terminates the assigned worker, even if the experimental supervisor crashes.
-/// This is never used for arbitrary processes or the shipping Preview.
+/// Owns a per-launch uniquely named, non-inherited Job Object. The name is
+/// needed only for the worker's short-lived membership query, not for discovery
+/// or adoption of unrelated processes. Closing the last Job handle terminates
+/// its assigned worker. Never used by the shipping Keyboard Preview.
 /// </summary>
 internal sealed class OfflineWorkerJob : IDisposable
 {
