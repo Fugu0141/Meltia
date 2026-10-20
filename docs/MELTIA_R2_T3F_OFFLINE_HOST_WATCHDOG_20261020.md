@@ -52,10 +52,10 @@ powershell -ExecutionPolicy Bypass -File .\tools\test-meltia-t3f-supervisor.ps1
 - `health.drop`で生きたhostのlistenerだけを止め、2回の失敗後に子がkillされ、新プロセスに交代して`--probe`で「か」の生成・確定・closeが成功する。
 - workerを直接killしても新世代のプロセスで実IPCが再開する（古いセッションは非継承）。
 - supervisorの停止要求でcode0、子も終了、Pipeを通したprobeが失敗する。
-- 別のsupervisorでworkerを連続3回終了させ、4回目は起動せずcode6となる。
+- 別のsupervisorでworkerを順次停止させ、起動・接続が失敗した場合も含めて合計3回の起動試行までに制限され、4回目は起動せずcode6となる。
 - T3e、T3d、Preview、Core研究品質、Strict Qualityが回帰しない。
 
-**CI実測欄:** 実装レビュー前のWindows CIとStrict Quality結果を後で記録する。静的Python検査とWindows実通信・実プロセス試験を混同しない。
+**CI実測:** 次の `5. 最終Windows検証記録` を参照。静的Python検査とWindows実通信・実プロセス試験を混同しない。
 
 ## 4. 非対象・制限事項
 
@@ -65,3 +65,28 @@ powershell -ExecutionPolicy Bypass -File .\tools\test-meltia-t3f-supervisor.ps1
 - supervisorが予期せず強制killされた場合に孤児childをカーネルレベルで確実に終了させる仕組み（Job Object等）は**未実装**。製品プロセス管理に移行する際の別ゲートにする。
 - 手動開始された既存experimental workerは取得・破壊しない（worker mutex競合なら新規作成分だけ失敗→上限停止）。
 - 本家Meltypeのコード・Native TIPの登録系と通常Meltia Keyboard Previewの起動/Mutexは一切変更しない。正式T4/T5は隔離Windows VMおよび独立レビュー必須。
+
+
+## 5. 最終Windows検証記録（2026-10-20）
+
+実装・テスト含む検証対象HEAD: `02659d7bc9ce015abef5040885958b84231bd6db`。
+
+- [Windows Preview CI / run 39437865262](https://github.com/Fugu0141/Meltia/actions/runs/39437865262)：Windowsビルド・テスト/監査およびCore/Bridgeの研究品質ジョブが**成功**。
+- [Strict Quality / run 39437865523](https://github.com/Fugu0141/Meltia/actions/runs/39437865523)：Windows、Ubuntuの両品質ジョブが**成功**。
+- `T3f: bounded offline host watchdog, listener loss and crash recovery (no registration)`：Python静的契約**3件成功**、実験用.NET hostビルド**警告0/エラー0**、Windows実プロセス間で実v1 IPCのhello→かな入力→commit→close、重複supervisor拒否、`health.drop`による**生存中のlistener断**からの自動復旧、worker killによる再起動、正常停止、上限到達時のコード6を検証して**成功**。
+- T2/T3a〜T3e（Windows x64/x86ネイティブの従来ゲート含む）、TIP IPCクロスレイヤーの回帰、継承Meltype Core、Windows PreviewのKeyboard固定・無フックセルフテストおよびZIP/ライセンス監査も**成功**。
+- 正常停止後に実行する負の接続試験でログに表示される `FAIL T3e probe: TimeoutException` は**意図的**。supervisorとworkerが停止しておりIPCが接続不能なことを確かめるテストであり、その結果を検査してT3fのステップは成功している。
+
+### 途中の失敗・修正と再発防止
+
+1. [初回run 39435707391](https://github.com/Fugu0141/Meltia/actions/runs/39435707391)：全監視シナリオの成功表示後、負のIPC接続試験の非ゼロ終了コードがPowerShellの `LASTEXITCODE` に残りCIが失敗。想定どおりの負の試験成功後、スクリプトの最終終了コードを正常にした。
+2. [run 39436247443](https://github.com/Fugu0141/Meltia/actions/runs/39436247443)：連続クラッシュ時に第2世代への到達が不安定。WindowsのNamed Pipe解放・再生成の非同期性を考慮し、待機時間を拡張。上限試験は「起動に失敗した試行も予算を消費する」として、**3試行以内でコード6・第4世代不在**を検証するよう修正した。
+3. [run 39437149819](https://github.com/Fugu0141/Meltia/actions/runs/39437149819)：PowerShell正規表現を含むスクリプトの編集時に文字列置換で後半が壊れ、`ParserError`。スクリプトを完全復元。**最終runでPowerShell構文・実操作が通る**ことを再確認した。
+
+### この成功でまだ証明していないこと
+
+- 製品IMEとしてのWindows TSF登録、実キー入力やOSアプリへの編集反映、本家MeltypeとMeltiaの同時有効化/モード切替。
+- supervisor自身が強制終了した際のworkerの確実な子孫プロセス回収（Job Object等）、長期連続稼働におけるプロセス資源量、レース条件の網羅。
+- 日英混在境界判定や辞書変換の最終精度と、異常復旧後の入力中テキストの継続性。再起動時の旧sessionは引き継がない仕様。
+
+以上はT4/T5を含む別工程・隔離Windows VMでの検証が必要。T3fの本PRは**レビュー完了までDraftで維持**する。
