@@ -75,6 +75,7 @@
 - [R2/T3b：Meltia専用C#↔Native v1 IPCゲート（無登録・レビュー用）](docs/MELTIA_R2_T3B_ISOLATED_IPC_20261018.md)
 - [R2/T3c-A：無登録のNative↔C# Named Pipe実通信テスト（専用fixture）](docs/MELTIA_R2_T3C_A_REAL_PIPE_FIXTURE_20261020.md)
 - [R2/T3c-B：実TipServer・MeltypeSessionの無登録Native↔C#実通信試験](docs/MELTIA_R2_T3C_B_REAL_TIPSERVER_SESSION_20261020.md)
+- [R2/T3d：Native TextService::Request の無登録IPC実通信ゲート（Windows CI検証待ち）](docs/MELTIA_R2_T3D_REQUEST_E2E_20261020.md)
 - [2026-10-13 Windows実機入力フィードバック・改修の検証計画](docs/MELTIA_WINDOWS_FIELD_TEST_20261013.md)
 - [Issue #32: `changesuru` の英日境界修正・再現テストと実機確認手順](docs/MELTIA_ISSUE_32_CHANGE_SURU_20261014.md)
 - [2026-10-13 Issue / ブランチ整理（完了Issue・削除候補・安全な削除手順）](docs/MELTIA_ISSUE_BRANCH_CLEANUP_20261013.md)
