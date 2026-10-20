@@ -56,6 +56,13 @@ class T3fSupervisorContract(unittest.TestCase):
                      "ExitCode -ne 3", "MELTYPE_DATA_DIR"):
             self.assertIn(part, self.script)
         self.assertIn("tools/test-meltia-t3f-supervisor.ps1", self.ci)
+        self.assertIn("--test-health-replies", self.script)
+        reply_tests = (HOST / "OfflineHealthReplyTests.cs").read_text(encoding="utf-8")
+        for scenario in ("missing version", "missing active", "missing consumed",
+                         "missing commits", "missing view", "version string",
+                         "commits object", "nonobject reply", "invalid JSON"):
+            self.assertIn(scenario, reply_tests)
+        self.assertIn("NamedPipeServerStream", reply_tests)
         self.assertIn("test_meltia_t3f_supervisor_contract.py", self.ci)
 
 
