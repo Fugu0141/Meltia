@@ -19,6 +19,10 @@ internal static class Program
         if (args.Length == 1 && args[0] == "--probe")
             return OfflineProbe.Run();
 
+        // Test-only, malformed hello replies served over a real private pipe.
+        if (args.Length == 1 && args[0] == "--test-health-replies")
+            return OfflineHealthReplyTests.Run();
+
         if (args.Length == 2 && args[0] == "--supervise")
             return OfflineSupervisor.Run(args[1]);
 
