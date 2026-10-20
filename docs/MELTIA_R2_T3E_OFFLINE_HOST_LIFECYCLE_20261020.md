@@ -66,3 +66,16 @@ powershell -ExecutionPolicy Bypass -File .\tools\test-meltia-t3e-host.ps1
 - 今回のCLIとready/stopファイルはCIの可視化用であり、製品の制御API/認可設計ではない。プロセス間の終了要求、競合プロセス所有者の確認、本家との共存等は別に検証する。
 - TSF登録/解除、`TextService::OnKeyDown`・`Apply`を含むWindows OS実入力と権限差の試験は、**レビュー後のT4/T5専用Windows VM**を必須とする。
 - Windows PreviewはKeyboard固定で維持する。実験ホストからPreview本体への配線は作らない。レビュー未完了時はDraft PRを維持する。
+
+
+## 5. Windows CI実測（2026-10-20）
+
+修正後の実装HEAD: `8e6875efb2b26655cc0935e4e3e5af05fd3d69e4`（以下は実装・スクリプトを含むこのcommitの結果）。
+
+- [Meltia Windows Preview CI](https://github.com/Fugu0141/Meltia/actions/runs/39432207499): **Windows Preview / Core研究品質とも success**。
+- [Strict Quality](https://github.com/Fugu0141/Meltia/actions/runs/39432207433): **Windows と Linux の両方で success**。
+- Windowsジョブの `T3e: experimental host startup, exclusive mutex, stop, crash-restart (no registration)` が成功。試験用ホストの実起動→別プロセスから `TipServer` →実 `MeltypeSession` の hello・かな入力・確定・close、同一SIDの二重起動拒否、正常終了後のPipe解放、強制終了→同じEndpointでの再起動を通過した。
+- 既存の T2、T3a、T3b、T3c-A、T3c-B、T3d、継承 Core 回帰、Keyboard Preview の本家隔離と無フック自己試験も通過。
+- 初回HEAD `93de7747` では、新規Probeだけが `NamedPipeClientStream.ReadTimeout` 未対応で失敗（[Windows run](https://github.com/Fugu0141/Meltia/actions/runs/39431190220)）。次のHEAD `8c8245ea` は非同期版 `ValueTask` に対し完了待ちなしで `GetResult` を呼んで失敗（[Windows run](https://github.com/Fugu0141/Meltia/actions/runs/39431719847)）。最終的にキャンセル期限付き I/O の `ValueTask.AsTask().GetAwaiter().GetResult()` へ修正し成功。どちらも**新規テスト用のPipeクライアント側**の問題で、Native TIP本体や変換アルゴリズムの変更は不要だった。
+
+**検証対象の境界:** 本実測はOS/TSF登録・実打鍵・文書アプリへの文字反映を確認したものではない。Windows PreviewはKeyboard固定のまま、T4/T5実機VMゲートを必須に維持する。
