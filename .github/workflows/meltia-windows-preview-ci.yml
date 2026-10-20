@@ -35,6 +35,9 @@ on:
       - 'tools/test_meltia_t3f_supervisor_contract.py'
       - 'tools/test-meltia-t3g-job.ps1'
       - 'tools/test_meltia_t3g_job_contract.py'
+      - 'tools/meltia_t4a_preflight.py'
+      - 'tools/test_meltia_t4a_preflight.py'
+      - 'docs/MELTIA_T4A_READONLY_REGISTRATION_PREFLIGHT_20261021.md'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -86,6 +89,9 @@ on:
       - 'tools/test_meltia_t3f_supervisor_contract.py'
       - 'tools/test-meltia-t3g-job.ps1'
       - 'tools/test_meltia_t3g_job_contract.py'
+      - 'tools/meltia_t4a_preflight.py'
+      - 'tools/test_meltia_t4a_preflight.py'
+      - 'docs/MELTIA_T4A_READONLY_REGISTRATION_PREFLIGHT_20261021.md'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -133,6 +139,11 @@ jobs:
         run: |
           python tools/test_meltia_t2_identity_contract.py
           if ($LASTEXITCODE -ne 0) { throw 'Meltia T2 identity contract failed.' }
+      - name: "T4-A: read-only TSF registration preflight contract (NO registry access)"
+        shell: pwsh
+        run: |
+          python tools/test_meltia_t4a_preflight.py
+          if ($LASTEXITCODE -ne 0) { throw 'T4-A offline preflight contract failed.' }
       - name: "T3a: validate isolated native TIP staging (never install)"
         shell: pwsh
         run: |
