@@ -17,16 +17,26 @@ internal sealed class OfflineWorkerJob : IDisposable
 {
     private const uint JobObjectLimitKillOnJobClose = 0x00002000;
     private const int JobObjectExtendedLimitInformationClass = 9;
+    private const uint JobObjectQuery = 0x0004;
     private readonly SafeFileHandle _handle;
 
-    private OfflineWorkerJob(SafeFileHandle handle) => _handle = handle;
+    internal string Name { get; }
+
+    private OfflineWorkerJob(SafeFileHandle handle, string name)
+    {
+        _handle = handle;
+        Name = name;
+    }
 
     internal static OfflineWorkerJob Create()
     {
         if (!OperatingSystem.IsWindows())
             throw new PlatformNotSupportedException("T3g Job Objects require Windows.");
 
-        var handle = CreateJobObject(IntPtr.Zero, null);
+        // A per-launch name allows the child to verify membership in THIS job,
+        // rather than trusting a writable start.allowed marker alone.
+        var name = @"Local\Meltia.TipHost.Experimental.Worker." + Guid.NewGuid().ToString("N");
+        var handle = CreateJobObject(IntPtr.Zero, name);
         if (handle.IsInvalid)
         {
             var error = Marshal.GetLastWin32Error();
@@ -47,7 +57,7 @@ internal sealed class OfflineWorkerJob : IDisposable
                     ref limits, (uint)Marshal.SizeOf<JobObjectExtendedLimitInformation>()))
                 throw new Win32Exception(Marshal.GetLastWin32Error(),
                     "T3g could not enable kill-on-job-close.");
-            return new OfflineWorkerJob(handle);
+            return new OfflineWorkerJob(handle, name);
         }
         catch
         {
@@ -65,7 +75,34 @@ internal sealed class OfflineWorkerJob : IDisposable
                 "T3g worker job assignment failed; refusing an uncontained worker.");
     }
 
+    /// <summary>
+    /// A worker independently checks membership in the exact job named by its
+    /// supervisor. A pre-created start marker is not sufficient for activation.
+    /// The query handle is closed immediately; it must not keep the job alive
+    /// when its supervisor terminates.
+    /// </summary>
+    internal static bool IsCurrentProcessInJob(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) ||
+            !name.StartsWith(@"Local\Meltia.TipHost.Experimental.Worker.", StringComparison.Ordinal))
+            return false;
+
+        using var job = OpenJobObject(JobObjectQuery, false, name);
+        if (job.IsInvalid) return false;
+        using var current = Process.GetCurrentProcess();
+        return IsProcessInJob(current.Handle, job, out var assigned) && assigned;
+    }
+
     public void Dispose() => _handle.Dispose();
+
+    [DllImport("kernel32.dll", EntryPoint = "OpenJobObjectW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern SafeFileHandle OpenJobObject(
+        uint desiredAccess, [MarshalAs(UnmanagedType.Bool)] bool inheritHandle, string name);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsProcessInJob(
+        IntPtr process, SafeFileHandle job, [MarshalAs(UnmanagedType.Bool)] out bool result);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct JobObjectBasicLimitInformation
