@@ -49,6 +49,29 @@ internal static class OfflineProbe
         }
     }
 
+    /// <summary>A non-editing, connection-scoped v1 hello; no session is created.</summary>
+    internal static bool IsHealthy()
+    {
+        try
+        {
+            var sid = WindowsIdentity.GetCurrent().User?.Value;
+            if (string.IsNullOrWhiteSpace(sid)) return false;
+            using var pipe = new NamedPipeClientStream(".", MeltiaTipIdentity.PipePrefix + sid,
+                PipeDirection.InOut, PipeOptions.Asynchronous);
+            pipe.Connect(500);
+            pipe.ReadMode = PipeTransmissionMode.Message;
+            using var hello = Exchange(pipe, """{"version":1,"op":"hello","process":"notepad"}""");
+            Require(hello, true, false);
+            return hello.RootElement.GetProperty("view").ValueKind == JsonValueKind.Null &&
+                hello.RootElement.GetProperty("commits").GetArrayLength() == 0;
+        }
+        catch (Exception ex) when (ex is IOException or TimeoutException or OperationCanceledException or
+            InvalidOperationException or JsonException or InvalidDataException)
+        {
+            return false;
+        }
+    }
+
     private static JsonDocument Exchange(NamedPipeClientStream pipe, string request)
     {
         var payload = Encoding.UTF8.GetBytes(request);
