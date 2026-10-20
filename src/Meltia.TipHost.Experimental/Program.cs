@@ -26,15 +26,20 @@ internal static class Program
         if (args.Length == 2 && args[0] == "--supervise")
             return OfflineSupervisor.Run(args[1]);
 
+        // Explicit integration-only fault injection: never wire into Preview.
+        if (args.Length == 2 && args[0] == "--supervise-test-assign-failure")
+            return OfflineSupervisor.Run(args[1], testAssignFailure: true);
+
         if (args.Length == 3 && args[0] == "--offline-host")
             return OfflineHost.Run(args[1], args[2]);
 
         if (args.Length == 4 && args[0] == "--offline-host")
             return OfflineHost.Run(args[1], args[2], args[3]);
 
-        // T3g supervisor-only worker: listener starts after Job Object assignment.
-        if (args.Length == 5 && args[0] == "--offline-host")
-            return OfflineHost.Run(args[1], args[2], args[3], args[4]);
+        // T3g supervisor worker: marker AND verified membership in this exact
+        // per-launch Job Object must succeed before it can open a Pipe.
+        if (args.Length == 6 && args[0] == "--offline-host")
+            return OfflineHost.Run(args[1], args[2], args[3], args[4], args[5]);
 
         // Refuse ordinary launches: this is not the shipping Meltia.exe or a TSF IME.
         Console.Error.WriteLine("T3e requires explicit --offline-host <ready-marker> <stop-marker> or --probe.");
