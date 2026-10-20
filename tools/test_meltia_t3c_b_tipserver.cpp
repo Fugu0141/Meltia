@@ -21,7 +21,7 @@ constexpr const char* kClose = R"({"op":"close","version":1,"sid":"t3cb"})";
 constexpr const char* kStaleComposing = R"({"op":"key","version":1,"sid":"t3cb","vk":75,"ch":107,"composing":true})";
 
 bool Exchange(meltype::PipeClient& client, const char* request, bool expectedActive,
-              bool expectComposition = false, bool retry = false) {
+              bool expectComposition = false, bool retry = false, bool expectCommit = false) {
     std::string response;
     const int attempts = retry ? 20 : 1;
     for (int i = 0; i < attempts; ++i) {
@@ -33,8 +33,9 @@ bool Exchange(meltype::PipeClient& client, const char* request, bool expectedAct
                           response.find(R"("commits":)") != std::string::npos &&
                           response.find(R"("view":)") != std::string::npos;
             bool hasView = response.find(R"("view":{)") != std::string::npos;
+            bool hasCommittedText = response.find(R"("commits":[{)") != std::string::npos;
             if (versioned && schema && active == expectedActive && inactive != expectedActive &&
-                (!expectComposition || hasView)) return true;
+                (!expectComposition || hasView) && (!expectCommit || hasCommittedText)) return true;
             std::cerr << "Unexpected response: " << response << std::endl;
             return false;
         }
@@ -53,7 +54,7 @@ int main() {
         !Exchange(client, kHello, true) ||
         !Exchange(client, kKeyK, true, true) ||
         !Exchange(client, kKeyA, true, true) ||
-        !Exchange(client, kCommit, true) ||
+        !Exchange(client, kCommit, true, false, false, true) ||
         !Exchange(client, kClose, false) ||
         !Exchange(client, kStaleComposing, false) ||
         !Exchange(client, kKeyK, true, true) ||
