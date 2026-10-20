@@ -70,7 +70,8 @@ internal static class OfflineSupervisor
             Directory.CreateDirectory(attemptDir);
             var ready = Path.Combine(attemptDir, "ready");
             var stop = Path.Combine(attemptDir, "stop");
-            using var child = Launch(ready, stop);
+            var drop = Path.Combine(attemptDir, "health.drop");
+            using var child = Launch(ready, stop, drop);
             try
             {
                 var deadline = Stopwatch.StartNew();
@@ -140,7 +141,7 @@ internal static class OfflineSupervisor
         return 6;
     }
 
-    private static Process Launch(string ready, string stop)
+    private static Process Launch(string ready, string stop, string drop)
     {
         var runtime = Environment.ProcessPath ??
             throw new InvalidOperationException("Missing .NET runtime executable.");
@@ -155,6 +156,7 @@ internal static class OfflineSupervisor
         start.ArgumentList.Add("--offline-host");
         start.ArgumentList.Add(ready);
         start.ArgumentList.Add(stop);
+        start.ArgumentList.Add(drop);
         return Process.Start(start) ?? throw new InvalidOperationException("Could not start T3f worker.");
     }
 
