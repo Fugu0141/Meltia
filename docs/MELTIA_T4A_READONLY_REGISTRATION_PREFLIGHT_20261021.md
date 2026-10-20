@@ -24,8 +24,8 @@ T2で生成した5つのGUIDがソース上で本家と重複しなくても、*
 - 既存`native/tip/Dll.cpp`は本家用`RegisterComServer`/`RegisterProfile`/`RegisterCategories`と解除処理を持つ。**移植・呼出しはしない**。
 - `tools/prepare_meltia_tip_stage.py`はT3aで生成した`DllRegisterServer`/`DllUnregisterServer`を拒否スタブ化する。T4-Aで解除しない。
 - T2マニフェストの`uninstallOwnership`にある5カテゴリはMeltia CLSIDに従属する登録対であり、OSが共有するカテゴリGUID自体の削除権限を意味しない。
-- preflightが照会するのは**40個の固定された候補パスが存在するかどうか**だけ（5 GUID × HKLM/HKCU × 32/64bit view × 2種の親キーパターン）。パターンは `Software\\Classes\\CLSID\\{GUID}` と `Software\\Microsoft\\CTF\\TIP\\{GUID}`。この40件は「5つのGUIDそれぞれが本来登録される場所」を表すものでは**ない**。属性GUIDやProfile GUIDでも上記の**CLSID/TIP親キー位置を機械的に探索するだけ**であり、登録先の完全な検証ではない。
-- **特にTSF language profile:** 通常はText ServiceのCLSID・言語IDに紐づくprofile GUIDとして登録される。別のTIPの配下で同じprofile GUIDが使われていても、単純な `TIP\\{profileGuid}` の照会は見つけられない。Input/Converted/Target属性GUIDも、COM CLSIDやTIPの親キーに存在するとは限らず、**属性の登録状況や共有衝突を証明できない**。現状の40件はCLSID候補についての簡易的な占有兆候と、それ以外の候補についての限定的な異常検知である。
+- preflightが照会するのは**40個の固定された候補パスが存在するかどうか**だけ（5 GUID × HKLM/HKCU × 32/64bit view × 2種の親キーパターン）。パターンは `Software\Classes\CLSID\{GUID}` と `Software\Microsoft\CTF\TIP\{GUID}`。この40件は「5つのGUIDそれぞれが本来登録される場所」を表すものでは**ない**。属性GUIDやProfile GUIDでも上記の**CLSID/TIP親キー位置を機械的に探索するだけ**であり、登録先の完全な検証ではない。
+- **特にTSF language profile:** 通常はText ServiceのCLSID・言語IDに紐づくprofile GUIDとして登録される。別のTIPの配下で同じprofile GUIDが使われていても、単純な `TIP\{profileGuid}` の照会は見つけられない。Input/Converted/Target属性GUIDも、COM CLSIDやTIPの親キーに存在するとは限らず、**属性の登録状況や共有衝突を証明できない**。現状の40件はCLSID候補についての簡易的な占有兆候と、それ以外の候補についての限定的な異常検知である。
 - 正式な**Profile GUID／属性GUIDの衝突調査**はT4-Bの独立ゲートで、TSFの公開APIを用いたプロファイル列挙・属性GUIDの登録／所有関係・インストール対象の対称性を検証し、別レビューする。T4-Aの `precheck-clear` は「40パスが観測範囲で見当たらなかった」の意味に限り、GUIDの未使用、共存安全、TSF登録許可とは扱わない。参照：[Microsoft TSF Text Service Registration](https://learn.microsoft.com/en-us/windows/win32/tsf/text-service-registration)、[ITfInputProcessorProfileMgr::RegisterProfile](https://learn.microsoft.com/en-us/windows/win32/api/msctf/nf-msctf-itfinputprocessorprofilemgr-registerprofile)。
 - **非対象:** COM API上の全TSF profile列挙、属性の登録所有者調査、すべてのOS共有GUID、プロセス内キャッシュ、別マシン、実レジストリACL、インストール先のファイル競合、ユーザー別の入力方式一覧。preflightの`precheck-clear`は**未登録/安全/導入許可の証明ではない**。
 
