@@ -24,8 +24,10 @@ T2で生成した5つのGUIDがソース上で本家と重複しなくても、*
 - 既存`native/tip/Dll.cpp`は本家用`RegisterComServer`/`RegisterProfile`/`RegisterCategories`と解除処理を持つ。**移植・呼出しはしない**。
 - `tools/prepare_meltia_tip_stage.py`はT3aで生成した`DllRegisterServer`/`DllUnregisterServer`を拒否スタブ化する。T4-Aで解除しない。
 - T2マニフェストの`uninstallOwnership`にある5カテゴリはMeltia CLSIDに従属する登録対であり、OSが共有するカテゴリGUID自体の削除権限を意味しない。
-- preflightが検査するWindowsキーは次の**限定的な観測対象**のみ（各HKLM/HKCU、registry view x86/x64）。`Software\\Classes\\CLSID\\{Meltia CLSID}`と`Software\\Microsoft\\CTF\\TIP\\{Meltia CLSID}`。後者の配下にprofile等があっても親キーの存在で検知する。5 GUIDすべてについてCOM/CTF両方を探索し、実際の登録オーナー推定はしない。
-- **非対象:** COM API上の全TSF profile列挙、すべてのOS共有GUID、プロセス内キャッシュ、別マシン、実レジストリACL、インストール先のファイル競合、ユーザー別の入力方式一覧。したがってpreflightの`precheck-clear`は**未登録/安全/導入許可の証明ではない**。
+- preflightが照会するのは**40個の固定された候補パスが存在するかどうか**だけ（5 GUID × HKLM/HKCU × 32/64bit view × 2種の親キーパターン）。パターンは `Software\\Classes\\CLSID\\{GUID}` と `Software\\Microsoft\\CTF\\TIP\\{GUID}`。この40件は「5つのGUIDそれぞれが本来登録される場所」を表すものでは**ない**。属性GUIDやProfile GUIDでも上記の**CLSID/TIP親キー位置を機械的に探索するだけ**であり、登録先の完全な検証ではない。
+- **特にTSF language profile:** 通常はText ServiceのCLSID・言語IDに紐づくprofile GUIDとして登録される。別のTIPの配下で同じprofile GUIDが使われていても、単純な `TIP\\{profileGuid}` の照会は見つけられない。Input/Converted/Target属性GUIDも、COM CLSIDやTIPの親キーに存在するとは限らず、**属性の登録状況や共有衝突を証明できない**。現状の40件はCLSID候補についての簡易的な占有兆候と、それ以外の候補についての限定的な異常検知である。
+- 正式な**Profile GUID／属性GUIDの衝突調査**はT4-Bの独立ゲートで、TSFの公開APIを用いたプロファイル列挙・属性GUIDの登録／所有関係・インストール対象の対称性を検証し、別レビューする。T4-Aの `precheck-clear` は「40パスが観測範囲で見当たらなかった」の意味に限り、GUIDの未使用、共存安全、TSF登録許可とは扱わない。参照：[Microsoft TSF Text Service Registration](https://learn.microsoft.com/en-us/windows/win32/tsf/text-service-registration)、[ITfInputProcessorProfileMgr::RegisterProfile](https://learn.microsoft.com/en-us/windows/win32/api/msctf/nf-msctf-itfinputprocessorprofilemgr-registerprofile)。
+- **非対象:** COM API上の全TSF profile列挙、属性の登録所有者調査、すべてのOS共有GUID、プロセス内キャッシュ、別マシン、実レジストリACL、インストール先のファイル競合、ユーザー別の入力方式一覧。preflightの`precheck-clear`は**未登録/安全/導入許可の証明ではない**。
 
 ## 4. 実行方法と判定
 
@@ -34,7 +36,7 @@ python tools/test_meltia_t4a_preflight.py
 python tools/meltia_t4a_preflight.py
 ```
 
-後者は **隔離したWindows VM上で、登録より前に人が実行**する。結果はstdoutのJSONだけ。exit 0は「限定対象のキーが全て不在、照会成功」、exit 1は「既存キーあり」、exit 2は「環境/照会/T2契約が未確認」であり、**どの場合も登録の自動開始はしない**。外部ファイルへの保存は作業者が明示的に行い、個人情報を含むログを公開しない。
+後者は **隔離したWindows VM上で、登録より前に人が実行**する。結果はstdoutのJSONだけ。exit 0は「上記40パスのキーが全て不在、照会成功」、exit 1は「既存キーあり」、exit 2は「環境/照会/T2契約が未確認」であり、**どの場合も登録の自動開始はしない**。外部ファイルへの保存は作業者が明示的に行い、個人情報を含むログを公開しない。
 
 | 判定 | 次の操作 |
 | --- | --- |
@@ -55,3 +57,4 @@ python tools/meltia_t4a_preflight.py
 
 - T3g [PR #87](https://github.com/Fugu0141/Meltia/pull/87)はmainへマージ済み。T3g Windows Preview CI run [39448576638](https://github.com/Fugu0141/Meltia/actions/runs/39448576638) とStrict Quality run [39448576677](https://github.com/Fugu0141/Meltia/actions/runs/39448576677)はsuccess。
 - T4-AのVM registry照会・Windows 10/11実機TSF登録/解除・実打鍵は**未実施**。PRのユニットテスト結果と人手VM確認を混同しない。
+- PR #88レビューP3対応：40パスの存在確認と「5 GUIDの実登録位置での衝突確認」を区別。実`winreg`にアクセスしない`winreg`モジュール差し替え試験で`KEY_READ`+WOW64のビュー指定、キー不在、アクセス拒否/OSエラーの扱いを検証する。**合格したCI run / Windows VM実測はここには未記録**（修正HEADのActions結果確認後に追記）。
