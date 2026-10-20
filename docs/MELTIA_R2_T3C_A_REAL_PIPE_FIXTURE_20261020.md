@@ -48,6 +48,15 @@ powershell -ExecutionPolicy Bypass -File .\tools\test-meltia-t3c-pipe.ps1 -Archi
 3. パイプ通信fixtureにはWin32 API実通信が必要で、Linux上で再現できる契約テストではない。CI失敗または未実行時はT3c-A完了扱いにしない。
 4. Nativeの元コードに存在する追加の信頼・アクセス制御条件は本PRで変更せず、この接続テストのみをもって認可設計全体が安全と判定しない。
 
+## 初回GitHub Actions実測（2026-10-20）
+
+検証対象HEAD: `5d09d5230eb8ff9d60622f3cc2f30f7847f4837a`（下記記録を追記する直前のコード変更HEAD）。
+
+- [Meltia Windows Preview CI #198](https://github.com/Fugu0141/Meltia/actions/runs/39397680505): **success**。WindowsジョブのT3c-A実Native↔C# Named Pipeテスト（x64・x86）、T3b、T3a、継承IPC契約、Previewビルド/無フック検証/監査の全工程が成功。
+- 同CIのLinux研究品質ジョブ: **success**（1,067合成ケースと回帰品質ゲート）。
+- [meltia-strict-quality #181](https://github.com/Fugu0141/Meltia/actions/runs/39397680540): **success**（Windows/Linux双方）。
+- C++↔C#実通信がCIで確認できたのは、**テスト専用ホストと既存PipeClient間**であり、実 `TipServer` / `TextService` / TSF上での成功を意味しない。
+
 ## レビュー上の停止条件
 
 - 自動登録、`regsvr32`、レジストリ変更、既存 `src/Meltia.Windows` の既定モード変更が混入したら差し戻す。
