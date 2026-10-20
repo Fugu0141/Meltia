@@ -108,24 +108,7 @@ try {
     while (-not $b.Process.HasExited -and $clock.Elapsed.TotalSeconds -lt 35) {
         if (Test-Path -LiteralPath $b.Status) {
             $state = Get-Content -LiteralPath $b.Status -Raw -ErrorAction SilentlyContinue
-            if ($state -match '^launch=(\d+);pid=(\d+)
-    # The earlier negative probe is *expected* to return nonzero. Do not leak
-    # its LASTEXITCODE as the outcome of this successfully completed test script.
-    $global:LASTEXITCODE = 0
-    Write-Host 'PASS T3f: real hello health, listener loss, process crash, duplicate refusal, deliberate stop, bounded recovery.'
-}
-finally {
-    foreach ($proc in $processes) {
-        if (-not $proc.HasExited) {
-            $proc.Kill()
-            $proc.WaitForExit()
-        }
-        $proc.Dispose()
-    }
-    [Environment]::SetEnvironmentVariable('MELTYPE_DATA_DIR', $previousDataDir, 'Process')
-    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
-}
-) {
+            if ($state -match '^launch=(\d+);pid=(\d+)$') {
                 $generation = [int]$Matches[1]
                 $workerId = [int]$Matches[2]
                 if (-not $killed.ContainsKey($generation)) {
@@ -139,18 +122,17 @@ finally {
         }
         Start-Sleep -Milliseconds 100
     }
-    # A launch that failed before readiness also consumes the finite budget;
-    # do not require all three generations to publish a healthy PID.
+    # A failed startup also consumes the finite budget; do not require every
+    # generation to publish a healthy PID.
     if (-not $b.Process.WaitForExit(12000) -or $b.Process.ExitCode -ne 6 -or
         $killed.Count -lt 1 -or (Test-Path (Join-Path $b.Sandbox 'attempt-4'))) {
         if (Test-Path $b.Stdout) { Get-Content $b.Stdout }
         if (Test-Path $b.Stderr) { Get-Content $b.Stderr }
-        throw "T3f bounded launch recovery failed: exit=$($b.Process.ExitCode); killed=$($killed.Count)."
+        throw "T3f bounded recovery failed: exit=$($b.Process.ExitCode); killed=$($killed.Count)."
     }
-    # The earlier negative probe is *expected* to return nonzero. Do not leak
-    # its LASTEXITCODE as the outcome of this successfully completed test script.
+    # A negative connectivity probe above intentionally returned 1.
     $global:LASTEXITCODE = 0
-    Write-Host 'PASS T3f: real hello health, listener loss, process crash, duplicate refusal, deliberate stop, bounded recovery.'
+    Write-Host 'PASS T3f: real hello health, listener loss, crash, duplicate refusal, stop, and bounded recovery.'
 }
 finally {
     foreach ($proc in $processes) {
