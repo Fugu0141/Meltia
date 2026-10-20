@@ -38,12 +38,13 @@ try {
         $vcarch = if ($arch -eq 'x64') { 'x64' } else { 'x64_x86' }
         $fixture = Join-Path $repo 'tools/test_meltia_t3c_b_tipserver.cpp'
         $pipeCpp = Join-Path $stage 'Pipe.cpp'
+        $jsonCpp = Join-Path $stage 'Json.cpp'
         $compile = @(
             ($q + $vcvars + $q + ' ' + $vcarch + ' >nul'),
             ('cd /d ' + $q + $stage + $q),
             ('cl /nologo /std:c++17 /EHsc /W4 /utf-8 /DUNICODE /D_UNICODE /I' + $q + $stage + $q +
              ' /Fe:' + $q + $exe + $q + ' ' + $q + $fixture + $q + ' ' +
-             $q + $pipeCpp + $q + ' /link advapi32.lib')
+             $q + $pipeCpp + $q + ' ' + $q + $jsonCpp + $q + ' /link advapi32.lib')
         ) -join ' && '
         cmd /c $compile
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path $exe)) {
