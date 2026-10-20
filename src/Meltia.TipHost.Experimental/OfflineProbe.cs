@@ -53,13 +53,13 @@ internal static class OfflineProbe
     {
         var payload = Encoding.UTF8.GetBytes(request);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        pipe.WriteAsync(payload.AsMemory(), timeout.Token).GetAwaiter().GetResult();
+        pipe.WriteAsync(payload.AsMemory(), timeout.Token).AsTask().GetAwaiter().GetResult();
         pipe.FlushAsync(timeout.Token).GetAwaiter().GetResult();
         var buffer = new byte[8192];
         using var stream = new MemoryStream();
         do
         {
-            var size = pipe.ReadAsync(buffer.AsMemory(), timeout.Token).GetAwaiter().GetResult();
+            var size = pipe.ReadAsync(buffer.AsMemory(), timeout.Token).AsTask().GetAwaiter().GetResult();
             if (size <= 0) throw new IOException("Pipe closed mid-response.");
             stream.Write(buffer, 0, size);
             if (stream.Length > 64 * 1024) throw new IOException("Reply too large.");
