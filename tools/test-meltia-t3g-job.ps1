@@ -16,14 +16,15 @@ try {
     $dll = Join-Path $repo 'src/Meltia.TipHost.Experimental/bin/Release/net10.0-windows/Meltia.TipHost.Experimental.dll'
     if (-not (Test-Path -LiteralPath $dll)) { throw 'T3g test host assembly missing.' }
 
-    function Start-Supervisor([string]$name) {
+    function Start-Supervisor([string]$name, [switch]$InjectAssignFailure) {
         $sandbox = Join-Path $root $name
         New-Item -ItemType Directory -Path $sandbox -Force | Out-Null
         $env:MELTYPE_DATA_DIR = Join-Path $sandbox 'data'
         $stdout = Join-Path $sandbox 'stdout'
         $stderr = Join-Path $sandbox 'stderr'
+        $mode = if ($InjectAssignFailure) { '--supervise-test-assign-failure' } else { '--supervise' }
         $proc = Start-Process -FilePath 'dotnet' -ArgumentList @(
-            ($q + $dll + $q), '--supervise', ($q + $sandbox + $q)
+            ($q + $dll + $q), $mode, ($q + $sandbox + $q)
         ) -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
         [void]$processes.Add($proc)
         return [pscustomobject]@{ Process=$proc; Sandbox=$sandbox; Status=(Join-Path $sandbox 'supervisor.status'); Stop=(Join-Path $sandbox 'supervisor.stop'); Stdout=$stdout; Stderr=$stderr }
@@ -60,7 +61,7 @@ try {
     Verify-RealIPC
 
     # Kill only the supervisor; DO NOT kill the worker from the harness.
-    # Windows must close the parent's unnamed Job handle and reap its worker.
+    # Windows must close the parent's per-launch named Job handle and reap its worker.
     $first.Process.Kill()
     if (-not $first.Process.WaitForExit(10000)) {
         throw 'T3g killed supervisor did not exit.'
@@ -85,8 +86,8 @@ try {
         throw 'T3g normal stop left the worker alive.'
     }
 
-    # A 5-argument worker started without a parent Job assignment must never
-    # bind a listener or announce ready. Its gate expires in 10s (exit code 7).
+    # A supervisor-only worker with no post-assignment marker must time out
+    # before opening its listener (exit code 7).
     $ungatedRoot = Join-Path $root 'ungated'
     New-Item -ItemType Directory -Path $ungatedRoot -Force | Out-Null
     $env:MELTYPE_DATA_DIR = Join-Path $ungatedRoot 'data'
@@ -96,7 +97,8 @@ try {
     $gate = Join-Path $ungatedRoot 'start.allowed'
     $ungated = Start-Process -FilePath 'dotnet' -ArgumentList @(
         ($q + $dll + $q), '--offline-host', ($q + $ready + $q),
-        ($q + $stop + $q), ($q + $drop + $q), ($q + $gate + $q)
+        ($q + $stop + $q), ($q + $drop + $q), ($q + $gate + $q),
+        ($q + 'Local\Meltia.TipHost.Experimental.Worker.fakejob' + $q)
     ) -PassThru -RedirectStandardOutput (Join-Path $ungatedRoot 'stdout') -RedirectStandardError (Join-Path $ungatedRoot 'stderr')
     [void]$processes.Add($ungated)
     Start-Sleep -Milliseconds 500
@@ -107,8 +109,55 @@ try {
         (Test-Path -LiteralPath $ready)) {
         throw "T3g ungated worker did not time out without binding: exit=$($ungated.ExitCode)."
     }
+    # P2 regression: a pre-created start gate is not proof of containment.
+    # The requested Job Object does not exist, and the worker must reject it.
+    $spoofRoot = Join-Path $root 'spoofed-gate'
+    New-Item -ItemType Directory -Path $spoofRoot -Force | Out-Null
+    $env:MELTYPE_DATA_DIR = Join-Path $spoofRoot 'data'
+    $spoofReady = Join-Path $spoofRoot 'ready'
+    $spoofStop = Join-Path $spoofRoot 'stop'
+    $spoofDrop = Join-Path $spoofRoot 'drop'
+    $spoofGate = Join-Path $spoofRoot 'start.allowed'
+    Set-Content -LiteralPath $spoofGate -Value 'assigned'
+    $spoofJob = 'Local\Meltia.TipHost.Experimental.Worker.' + [Guid]::NewGuid().ToString('N')
+    $spoof = Start-Process -FilePath 'dotnet' -ArgumentList @(
+        ($q + $dll + $q), '--offline-host', ($q + $spoofReady + $q),
+        ($q + $spoofStop + $q), ($q + $spoofDrop + $q), ($q + $spoofGate + $q),
+        ($q + $spoofJob + $q)
+    ) -PassThru -RedirectStandardOutput (Join-Path $spoofRoot 'stdout') -RedirectStandardError (Join-Path $spoofRoot 'stderr')
+    [void]$processes.Add($spoof)
+    if (-not $spoof.WaitForExit(8000) -or $spoof.ExitCode -ne 7 -or
+        (Test-Path -LiteralPath $spoofReady)) {
+        throw 'T3g accepted a spoofed gate without the expected Job Object membership.'
+    }
+    & dotnet $dll --probe 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { throw 'T3g ungated worker unexpectedly opened the real pipe.' }
+
+    # P2 regression: inject failure after Process.Start but before Assign.
+    # Supervisor must fail closed, reap that *specific* worker and never bind IPC.
+    $failed = Start-Supervisor 'assign-failed' -InjectAssignFailure
+    if (-not $failed.Process.WaitForExit(12000) -or $failed.Process.ExitCode -eq 0) {
+        throw 'T3g supervisor did not report injected assignment failure.'
+    }
+    $pidMarker = Join-Path $failed.Sandbox 'attempt-1/worker.started'
+    if (-not (Test-Path -LiteralPath $pidMarker)) {
+        throw 'T3g failure injection did not launch and record its worker.'
+    }
+    $failedWorkerId = [int](Get-Content -LiteralPath $pidMarker -Raw)
+    $failedWorker = Get-Process -Id $failedWorkerId -ErrorAction SilentlyContinue
+    if ($null -ne $failedWorker -and -not $failedWorker.HasExited) {
+        throw "T3g failed assignment left a worker alive: PID $failedWorkerId."
+    }
+    if (Test-Path -LiteralPath (Join-Path $failed.Sandbox 'attempt-1/ready')) {
+        throw 'T3g unassigned worker advertised its listener as ready.'
+    }
+    if (Test-Path -LiteralPath $failed.Status) {
+        throw 'T3g failed assignment incorrectly published healthy status.'
+    }
+    & dotnet $dll --probe 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { throw 'T3g assignment failure left the Pipe reachable.' }
     $global:LASTEXITCODE = 0
-    Write-Host 'PASS T3g: real supervisor kill reaped owned worker, new host recovered, ungated worker fail-closed.'
+    Write-Host 'PASS T3g: supervisor kill reaps worker; spoofed gate and assignment failure fail closed.'
 }
 finally {
     foreach ($proc in $processes) {
