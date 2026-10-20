@@ -104,4 +104,11 @@ powershell -ExecutionPolicy Bypass -File .\tools\test-meltia-t3f-supervisor.ps1
 
 ### 検証結果
 
-Windows CIでの19ケース結果およびT3f・既存Preview/Strict Quality回帰は本修正後のHEADについて確認・追記する。ここまでの [初期成功 run 39438895718](https://github.com/Fugu0141/Meltia/actions/runs/39438895718) は**レビュー指摘修正前**のため、このP2の解消を示す証拠には使わない。
+修正後の実装HEAD `370926955a4c54d75764b121c09226b45fd59eb2` に対するWindows Actions実測:
+
+- [Windows Preview CI run 39441410282](https://github.com/Fugu0141/Meltia/actions/runs/39441410282)：**success**。T3fステップのログに `PASS T3f: 19 real-pipe hello reply cases (missing/wrong types fail closed).` が出力され、正例1件と必須項目欠落・型不正・構文不正など計18件の負例が成功した。元の `T3f: real hello health, listener loss, crash, duplicate refusal, stop, and bounded recovery` も再成功。
+- 同CIで既存T3a〜T3e、Meltia.exe Preview、Keyboard隔離、継承Meltype Core、Core/Bridge品質、Preview成果物監査がすべて**success**。
+- [Strict Quality run 39441410563](https://github.com/Fugu0141/Meltia/actions/runs/39441410563)：Windows / Ubuntu とも**success**。
+- 停止後の疎通確認 `FAIL T3e probe: TimeoutException` は**接続拒否を期待する負の試験**。プローブの終了コードが非0であることを検査したうえでT3fステップ全体は成功している。
+
+レビュー前の [run 39438895718](https://github.com/Fugu0141/Meltia/actions/runs/39438895718) と異なり、本実測は**不完全hello応答に対するP2修正そのもの**を含む。同様の欠落キーが監視プロセスに `KeyNotFoundException` として伝播しないことを、実IPC境界で確認した。
