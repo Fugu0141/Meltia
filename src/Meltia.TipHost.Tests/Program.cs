@@ -15,15 +15,18 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
-        if (!OperatingSystem.IsWindows() || args.Length != 2 ||
+        if (!OperatingSystem.IsWindows() || (args.Length != 2 && args.Length != 3) ||
             Environment.GetEnvironmentVariable("MELTYPE_DATA_DIR") is not { Length: > 0 } isolatedDir)
         {
-            Console.Error.WriteLine("T3c-B must be run with <ready> <done> and isolated MELTYPE_DATA_DIR.");
+            Console.Error.WriteLine("T3c-B/T3d requires <ready> <done> [expected-sessions] and isolated MELTYPE_DATA_DIR.");
             return 2;
         }
 
         try
         {
+            // Keep T3c-B's 3-session expectation; T3d uses 2 across reconnect.
+            var expectedSessions = args.Length == 3 ? int.Parse(args[2]) : 3;
+            if (expectedSessions is not (2 or 3)) throw new ArgumentOutOfRangeException(nameof(args));
             // Deliberately memory-only. Tsf is required to exercise TipServer.Active,
             // but the fixture does not register/activate TSF, install hooks, or persist settings.
             var settings = new Settings { Enabled = true, Mode = InputMode.Tsf, AutoUpdate = false };
@@ -64,12 +67,12 @@ internal static class Program
             Application.Run(new ApplicationContext());
             ticker.Stop();
 
-            if (timedOut || sessionCount != 3)
+            if (timedOut || sessionCount != expectedSessions)
             {
-                Console.Error.WriteLine($"FAIL T3c-B: timedOut={timedOut}; real session count={sessionCount}; expected 3.");
+                Console.Error.WriteLine($"FAIL native TIP fixture: timedOut={timedOut}; real session count={sessionCount}; expected {expectedSessions}.");
                 return 1;
             }
-            Console.WriteLine("PASS T3c-B: real TipServer/Session, 3 sessions across 2 connections.");
+            Console.WriteLine($"PASS native TIP fixture: real TipServer/Session, {sessionCount} sessions across 2 connections.");
             return 0;
         }
         catch (Exception ex)
