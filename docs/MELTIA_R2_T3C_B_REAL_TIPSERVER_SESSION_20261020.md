@@ -46,6 +46,15 @@ powershell -ExecutionPolicy Bypass -File .\tools\test-meltia-t3c-b-host.ps1 -Arc
 
 `.github/workflows/meltia-windows-preview-ci.yml` のWindowsジョブに本実通信ゲートを追加した。**PR作成時点ではコードの動作実測は未確定。CI実行結果を確認したうえでレビュー・Merge判断すること。**
 
+## 初回CI実測（2026-10-20）
+
+ソース実装HEAD: `a55fc24c6add53f68dc052e2ccc26c6c71ee2ee5`（この追記より前のコードHEAD）。
+
+- [Meltia Windows Preview CI](https://github.com/Fugu0141/Meltia/actions/runs/39400294710): **Windows・研究品質ともsuccess**。T3a/T3b/T3c-A・T3c-B・Preview・継承Coreを含めたWindowsジョブが完了。
+- WindowsログでT3c-Bは **x64/x86の両方で14往復・同一Nativeインスタンスの接続世代`1 → 2`・3件の実`MeltypeSession`** を確認（プロセス間Named Pipe）。
+- [meltia-strict-quality](https://github.com/Fugu0141/Meltia/actions/runs/39400294689): **Windows/Linux双方success**。
+- 試験は実際の`TipServer.Serve/Handle`を対象とするが、Windowsの登録・実打鍵・IME有効化には進んでいない。研究品質の成功とIME実機品質の合格を混同しない。
+
 ## 検証できないこと・続く工程
 
 - 新規ホストはあくまで**試験実行のためのホスト**である。通常起動時の製品ホスト独立、フォーカス同期、起動競合、常駐ライフサイクル、正規の登録先などは実装・証明しない。
