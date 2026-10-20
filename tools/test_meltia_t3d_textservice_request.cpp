@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Meltia contributors
 // T3d: invoke the ACTUAL staged TextService::Request with real TipServer IPC.
 // No COM activation, TSF registration, OS keystroke injection, or shipping binary.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include "TextService.h"
 #include <cstdint>
 #include <iostream>
@@ -16,7 +19,7 @@ LONG g_locks = 0;
 void TipLog(const wchar_t*, ...) {}
 
 std::wstring FromUtf8(const std::string& text) {
-    if (text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max())) return {};
+    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)())) return {};
     int length = static_cast<int>(text.size());
     int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), length, nullptr, 0);
     if (count <= 0) return {};
@@ -25,7 +28,7 @@ std::wstring FromUtf8(const std::string& text) {
 }
 
 std::string ToUtf8(const std::wstring& text) {
-    if (text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max())) return {};
+    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)())) return {};
     int length = static_cast<int>(text.size());
     int count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), length, nullptr, 0, nullptr, nullptr);
     if (count <= 0) return {};
