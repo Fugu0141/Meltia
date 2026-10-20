@@ -36,6 +36,9 @@ internal sealed class TipServer : IDisposable
     private readonly Func<MeltypeSession> _createSession;
     private readonly Func<Settings> _settings;
     private readonly CancellationTokenSource _stop = new();
+    // Host-only readiness: never report startup success before the actual pipe exists.
+    private readonly TaskCompletionSource<bool> _firstListener = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    internal Task<bool> FirstListenerReady => _firstListener.Task;
     private readonly bool _meltiaExperimental;
     private string EndpointName => _meltiaExperimental
         ? MeltiaTipIdentity.PipePrefix + (WindowsIdentity.GetCurrent().User?.Value ?? "user") : PipeName;
@@ -145,7 +148,11 @@ internal sealed class TipServer : IDisposable
     {
         // Start は UI スレッドから呼ぶ。Meltype.exe 自身の画面から来た要求を見分けるのに、このスレッドを覚えておく
         _uiThread = GetCurrentThreadId();
-        _ = Task.Run(AcceptLoop);
+        _ = Task.Run(async () =>
+        {
+            try { await AcceptLoop().ConfigureAwait(false); }
+            finally { _firstListener.TrySetResult(false); }
+        });
         if (_meltiaExperimental) Log.Info($"Meltia experimental TIP server started (\\\\.\\pipe\\{EndpointName}).");
         else Log.Info($"Meltype IME のサーバーを開始しました (\\\\.\\pipe\\{PipeName})。");
     }
@@ -292,6 +299,9 @@ internal sealed class TipServer : IDisposable
                 first = true;
                 continue;
             }
+            // The first listener was successfully bound; an exclusive-name collision
+            // or ACL failure cannot be mistaken for a healthy offline host.
+            _firstListener.TrySetResult(true);
             // つなぎかけて切れた (ERROR_NO_DATA など) ときは、同じパイプを DisconnectNamedPipe で戻して待ち直す。
             // (.NET の Disconnect は、つながる前の状態では例外になって何もしない。閉じて作り直すと、ほかにつながりが無いときに
             // パイプが消え、Low の印と独占 (FirstPipeInstance) が外れる)。戻せなければ作り直す

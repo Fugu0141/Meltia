@@ -16,6 +16,7 @@ on:
       - 'src/Meltia.TipProtocol.Tests/**'
       - 'src/Meltia.TipIpcFixture/**'
       - 'src/Meltia.TipHost.Tests/**'
+      - 'src/Meltia.TipHost.Experimental/**'
       - 'native/tip/**'
       - 'config/tsf/**'
       - 'tools/test_meltia_t2_identity_contract.py'
@@ -28,6 +29,8 @@ on:
       - 'tools/test-meltia-t3c-b-host.ps1'
       - 'tools/test_meltia_t3d_textservice_request.cpp'
       - 'tools/test-meltia-t3d-request.ps1'
+      - 'tools/test-meltia-t3e-host.ps1'
+      - 'tools/test_meltia_t3e_host_contract.py'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -60,6 +63,7 @@ on:
       - 'src/Meltia.TipProtocol.Tests/**'
       - 'src/Meltia.TipIpcFixture/**'
       - 'src/Meltia.TipHost.Tests/**'
+      - 'src/Meltia.TipHost.Experimental/**'
       - 'native/tip/**'
       - 'config/tsf/**'
       - 'tools/test_meltia_t2_identity_contract.py'
@@ -72,6 +76,8 @@ on:
       - 'tools/test-meltia-t3c-b-host.ps1'
       - 'tools/test_meltia_t3d_textservice_request.cpp'
       - 'tools/test-meltia-t3d-request.ps1'
+      - 'tools/test-meltia-t3e-host.ps1'
+      - 'tools/test_meltia_t3e_host_contract.py'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -153,6 +159,13 @@ jobs:
         run: |
           ./tools/test-meltia-t3d-request.ps1 -Architecture Both
           if ($LASTEXITCODE -ne 0) { throw 'T3d native Request integration failed.' }
+      - name: "T3e: experimental host startup, exclusive mutex, stop, crash-restart (no registration)"
+        shell: pwsh
+        run: |
+          python tools/test_meltia_t3e_host_contract.py
+          if ($LASTEXITCODE -ne 0) { throw 'T3e host safety contract failed.' }
+          ./tools/test-meltia-t3e-host.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'T3e Windows host lifecycle failed.' }
       - name: Verify inherited TIP IPC cross-layer source contract (no TSF registration)
         shell: pwsh
         run: |
