@@ -16,7 +16,7 @@ namespace Meltia.TipHost.Experimental;
 internal static class OfflineHost
 {
     internal static int Run(string readyMarker, string stopMarker, string? dropListenerMarker = null,
-        string? startGateMarker = null)
+        string? startGateMarker = null, string? expectedJobName = null)
     {
         var dataDirectory = Environment.GetEnvironmentVariable("MELTYPE_DATA_DIR");
         // This binary is an explicit CI-only experiment. Never fall back to the
@@ -32,18 +32,26 @@ internal static class OfflineHost
 
         if (startGateMarker is not null)
         {
-            // The supervisor creates this marker ONLY after AssignProcessToJobObject
-            // succeeds. A crashed supervisor before assignment cannot leave a
-            // listening orphan: the unassigned child times out without binding.
+            // An already present start marker can be fabricated. Require BOTH
+            // the parent's post-assignment marker and kernel-confirmed membership
+            // in the exact per-launch Job Object before any mutex or Pipe setup.
+            // The transient query handle is closed immediately so a parent kill
+            // still closes the last Job handle and reaps the worker.
+            if (string.IsNullOrWhiteSpace(expectedJobName)) return 7;
             var deadline = System.Diagnostics.Stopwatch.StartNew();
             while (!File.Exists(startGateMarker))
             {
-                if (deadline.Elapsed >= TimeSpan.FromSeconds(10))
+                if (File.Exists(stopMarker) || deadline.Elapsed >= TimeSpan.FromSeconds(10))
                 {
                     Console.Error.WriteLine("T3g worker did not receive parent containment gate.");
                     return 7;
                 }
                 Thread.Sleep(50);
+            }
+            if (!OfflineWorkerJob.IsCurrentProcessInJob(expectedJobName))
+            {
+                Console.Error.WriteLine("T3g worker is not assigned to its expected Job Object.");
+                return 7;
             }
         }
 
