@@ -19,6 +19,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Meltype.Tests" />
     <InternalsVisibleTo Include="Meltia.TipHost.Tests" />
+    <InternalsVisibleTo Include="Meltia.TipHost.Experimental" />
     <ProjectReference Include="..\Meltype.Core\Meltype.Core.csproj" />
   </ItemGroup>
 </Project>
