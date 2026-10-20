@@ -15,6 +15,7 @@ on:
       - 'src/Meltype/**'
       - 'src/Meltia.TipProtocol.Tests/**'
       - 'src/Meltia.TipIpcFixture/**'
+      - 'src/Meltia.TipHost.Tests/**'
       - 'native/tip/**'
       - 'config/tsf/**'
       - 'tools/test_meltia_t2_identity_contract.py'
@@ -23,6 +24,8 @@ on:
       - 'tools/test_meltia_t3b_protocol.py'
       - 'tools/test_meltia_t3c_native_pipe.cpp'
       - 'tools/test-meltia-t3c-pipe.ps1'
+      - 'tools/test_meltia_t3c_b_tipserver.cpp'
+      - 'tools/test-meltia-t3c-b-host.ps1'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -54,6 +57,7 @@ on:
       - 'src/Meltype/**'
       - 'src/Meltia.TipProtocol.Tests/**'
       - 'src/Meltia.TipIpcFixture/**'
+      - 'src/Meltia.TipHost.Tests/**'
       - 'native/tip/**'
       - 'config/tsf/**'
       - 'tools/test_meltia_t2_identity_contract.py'
@@ -62,6 +66,8 @@ on:
       - 'tools/test_meltia_t3b_protocol.py'
       - 'tools/test_meltia_t3c_native_pipe.cpp'
       - 'tools/test-meltia-t3c-pipe.ps1'
+      - 'tools/test_meltia_t3c_b_tipserver.cpp'
+      - 'tools/test-meltia-t3c-b-host.ps1'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -133,6 +139,11 @@ jobs:
         run: |
           ./tools/test-meltia-t3c-pipe.ps1 -Architecture Both
           if ($LASTEXITCODE -ne 0) { throw 'T3c native/C# pipe fixture failed.' }
+      - name: "T3c-B: real TipServer/Session x64 and x86, same-client reconnect (no registration)"
+        shell: pwsh
+        run: |
+          ./tools/test-meltia-t3c-b-host.ps1 -Architecture Both
+          if ($LASTEXITCODE -ne 0) { throw 'T3c-B real TipServer test failed.' }
       - name: Verify inherited TIP IPC cross-layer source contract (no TSF registration)
         shell: pwsh
         run: |
