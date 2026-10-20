@@ -90,3 +90,18 @@ powershell -ExecutionPolicy Bypass -File .\tools\test-meltia-t3f-supervisor.ps1
 - 日英混在境界判定や辞書変換の最終精度と、異常復旧後の入力中テキストの継続性。再起動時の旧sessionは引き継がない仕様。
 
 以上はT4/T5を含む別工程・隔離Windows VMでの検証が必要。T3fの本PRは**レビュー完了までDraftで維持**する。
+
+## 6. PR #86 レビュー指摘 P2：不完全なhello応答による監視停止（2026-10-20）
+
+[レビュー指摘](https://github.com/Fugu0141/Meltia/pull/86#discussion_r4326231378): `OfflineProbe.IsHealthy` が `Require()` と `JsonElement.GetProperty` を使っているため、**構文上有効でも必須フィールドが欠落したJSON**に対して `KeyNotFoundException` が発生していた。例外フィルタに含まれないため、`OfflineSupervisor` の外側のcatchへ到達して **code1で終了**し、連続失敗の監視・上限付き復旧処理に進めなかった。
+
+### 変更した契約
+
+- `IsHealthyHello(JsonElement)` に必要条件を集約し、`TryGetProperty` と厳密な `ValueKind` / `TryGetInt32` で `version`、`active`、`consumed`、`commits`、`view` を調べる。
+- 欠落キー・型不正・異なるversion・非object・非空commitsは**例外を出さず false**。構文不正は既存 `JsonException` フィルタでfalseに変換。正しいv1 helloはtrue。
+- **本物の Windows Named Pipe** に別の試験serverを立ち上げ、`OfflineProbe.IsHealthy()` に正例1・不正な返信18件を返す `--test-health-replies` を追加（登録/キー操作なし）。単なるソース文字列テストと異なり、実際の `Exchange` → `JsonDocument` → ヘルス判定を通過させる。
+- `tools/test-meltia-t3f-supervisor.ps1` からこの回帰を実行してから従来の「listener消失→2回連続不健康→再起動」「worker kill→再起動」「回数上限」を検証。**通常の T3e `--probe` の入力契約は変更しない**。
+
+### 検証結果
+
+Windows CIでの19ケース結果およびT3f・既存Preview/Strict Quality回帰は本修正後のHEADについて確認・追記する。ここまでの [初期成功 run 39438895718](https://github.com/Fugu0141/Meltia/actions/runs/39438895718) は**レビュー指摘修正前**のため、このP2の解消を示す証拠には使わない。
