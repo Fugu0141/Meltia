@@ -5,7 +5,10 @@
 import copy
 import json
 from pathlib import Path
+import sys
+import types
 import unittest
+from unittest import mock
 
 import meltia_t4a_preflight as preflight
 
@@ -107,6 +110,75 @@ class T4aReadOnlyPreflightTests(unittest.TestCase):
         ):
             # The source does not invoke these APIs.
             self.assertNotIn(forbidden, source)
+
+    def _fake_winreg(self, *, side_effect=None):
+        # Use a standalone module, not the host's actual Windows registry.
+        fake = types.ModuleType("winreg")
+        fake.HKEY_LOCAL_MACHINE = object()
+        fake.HKEY_CURRENT_USER = object()
+        fake.KEY_READ = 0x20019
+        fake.KEY_WOW64_64KEY = 0x0100
+        fake.KEY_WOW64_32KEY = 0x0200
+        context = mock.MagicMock(name="read_only_registry_key")
+        fake.OpenKey = mock.Mock(
+            name="OpenKey", side_effect=side_effect, return_value=context
+        )
+        return fake, context
+
+    def test_read_key_uses_read_only_flags_in_both_registry_views(self):
+        # Mock the imported winreg module itself, not merely inspect's probe.
+        path = r"Software\\Classes\\CLSID\\{TEST-GUID}"
+        for hive in preflight.HIVES:
+            for view in preflight.VIEWS:
+                with self.subTest(hive=hive, view=view):
+                    fake, handle = self._fake_winreg()
+                    with mock.patch.dict(sys.modules, {"winreg": fake}):
+                        self.assertIs(preflight.read_key(hive, view, path), True)
+                    expected_hive = (
+                        fake.HKEY_LOCAL_MACHINE if hive == "HKLM"
+                        else fake.HKEY_CURRENT_USER
+                    )
+                    expected_view = (
+                        fake.KEY_WOW64_64KEY if view == "64"
+                        else fake.KEY_WOW64_32KEY
+                    )
+                    fake.OpenKey.assert_called_once_with(
+                        expected_hive, path, 0, fake.KEY_READ | expected_view
+                    )
+                    handle.__enter__.assert_called_once_with()
+                    handle.__exit__.assert_called_once()
+
+    def test_read_key_maps_missing_key_only_to_absent(self):
+        fake, _ = self._fake_winreg(side_effect=FileNotFoundError("missing"))
+        with mock.patch.dict(sys.modules, {"winreg": fake}):
+            self.assertIs(
+                preflight.read_key("HKLM", "64", r"Software\\Classes\\CLSID\\{missing}"),
+                False,
+            )
+        fake.OpenKey.assert_called_once()
+
+    def test_read_key_maps_access_denied_and_os_errors_to_unknown(self):
+        for error in (PermissionError("denied"), OSError("view unavailable")):
+            with self.subTest(error=type(error).__name__):
+                fake, _ = self._fake_winreg(side_effect=error)
+                with mock.patch.dict(sys.modules, {"winreg": fake}):
+                    self.assertIs(
+                        preflight.read_key(
+                            "HKCU", "32", r"Software\\Microsoft\\CTF\\TIP\\{candidate}"
+                        ),
+                        None,
+                    )
+                fake.OpenKey.assert_called_once()
+
+    def test_winreg_mock_never_calls_real_registry(self):
+        # A successful mock-only result cannot imply an actual VM probe.
+        fake, _ = self._fake_winreg()
+        with mock.patch.dict(sys.modules, {"winreg": fake}):
+            results = preflight.inspect(self.identities, preflight.read_key)
+        self.assertEqual(results["status"], "occupied")
+        self.assertEqual(fake.OpenKey.call_count, 40)
+        self.assertIs(results["registration_authorized"], False)
+        self.assertIs(results["registry_writes"], False)
 
     def test_rejects_invalid_probe_return_type(self):
         with self.assertRaises(ValueError):
