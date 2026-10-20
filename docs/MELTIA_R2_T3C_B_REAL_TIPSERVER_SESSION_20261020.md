@@ -55,6 +55,22 @@ powershell -ExecutionPolicy Bypass -File .\tools\test-meltia-t3c-b-host.ps1 -Arc
 - [meltia-strict-quality](https://github.com/Fugu0141/Meltia/actions/runs/39400294689): **Windows/Linux双方success**。
 - 試験は実際の`TipServer.Serve/Handle`を対象とするが、Windowsの登録・実打鍵・IME有効化には進んでいない。研究品質の成功とIME実機品質の合格を混同しない。
 
+## PR #83 レビュー指摘に対する検証強化（2026-10-20）
+
+レビュー指摘: [実セッションE2Eの成功条件がJSONの断片一致のみ](https://github.com/Fugu0141/Meltia/pull/83#discussion_r4323563449)。従来は `consumed:false`、空の`commits[0].text`、誤った`deleteBefore`、または`ka`が変換されていない状態でも成功してしまう可能性があった。
+
+**解決策:** 新規パーサーを独自実装せず、隔離ステージの既存Native `Json.cpp/Json.h` をNativeテスト実行ファイルにリンク。v1返信JSONを構造でパースし、次の契約を型付きで照合する。
+
+- 全返信: `version` は数値1、`active/consumed` は真偽値、`commits` は配列、`view` はobject/null。検証対象外の偽装フィールドは受け付けない。
+- handshake前、`close`、失効セッション: `active:false`、`consumed:false`、空`commits`、`view:null`。
+- hello: `active:true`、`consumed:false`、空`commits`、`view:null`。
+- 最初の `k`: `active:true`、`consumed:true`、`view.text` が非空、確定編集なし。
+- 次の `a`: `active:true`、`consumed:true`、`view.text == "か"`、確定編集なし。
+- commit: `active:true`、`consumed:true`、`commits` 1件の`text == "か"`、`deleteBefore == 0`、`view:null`。
+- 偽の返信を使う**失敗確認テスト**を追加: `consumed:false`、空確定、`deleteBefore:2`、`view.text:"ka"`、文字列型の`version` はいずれも成功条件を満たさない。
+
+`Json.cpp`の使用に必要なUTF-8変換はコンソールテスト側のみで提供する。新しい本番依存・配布ファイルは増やさない。**この修正のCI結果は最新コミットのActionsを別途確認すること。**
+
 ## 検証できないこと・続く工程
 
 - 新規ホストはあくまで**試験実行のためのホスト**である。通常起動時の製品ホスト独立、フォーカス同期、起動競合、常駐ライフサイクル、正規の登録先などは実装・証明しない。
