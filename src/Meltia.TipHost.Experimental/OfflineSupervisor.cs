@@ -17,7 +17,7 @@ internal static class OfflineSupervisor
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan MonitorInterval = TimeSpan.FromMilliseconds(300);
 
-    internal static int Run(string sandbox)
+    internal static int Run(string sandbox, bool testAssignFailure = false)
     {
         var data = Environment.GetEnvironmentVariable("MELTYPE_DATA_DIR");
         if (!Directory.Exists(sandbox) || !OfflineHost.UnderTemp(sandbox) ||
@@ -42,7 +42,7 @@ internal static class OfflineSupervisor
             return 3;
         }
 
-        try { return RunOwned(sandbox); }
+        try { return RunOwned(sandbox, testAssignFailure); }
         catch (Exception ex)
         {
             Console.Error.WriteLine("FAIL T3f supervisor: " + ex);
@@ -51,7 +51,7 @@ internal static class OfflineSupervisor
         finally { exclusive.ReleaseMutex(); }
     }
 
-    private static int RunOwned(string sandbox)
+    private static int RunOwned(string sandbox, bool testAssignFailure)
     {
         var requestedStop = Path.Combine(sandbox, "supervisor.stop");
         var status = Path.Combine(sandbox, "supervisor.status");
@@ -71,9 +71,27 @@ internal static class OfflineSupervisor
             var ready = Path.Combine(attemptDir, "ready");
             var stop = Path.Combine(attemptDir, "stop");
             var drop = Path.Combine(attemptDir, "health.drop");
-            using var child = Launch(ready, stop, drop);
+            var startGate = Path.Combine(attemptDir, "start.allowed");
+            if (File.Exists(startGate))
+            {
+                Console.Error.WriteLine("T3g refuses a pre-existing worker start gate.");
+                return 2;
+            }
+            // Create the kill-on-close job BEFORE starting the worker. Until
+            // job assignment succeeds, the worker is blocked by start.allowed.
+            // Assignment failure is fatal (never fall back to an orphanable host).
+            using var job = OfflineWorkerJob.Create();
+            using var child = Launch(ready, stop, drop, startGate, job.Name);
             try
             {
+                // Test-only evidence is written before the assign attempt so an
+                // injected failure can verify that this exact worker exited.
+                File.WriteAllText(Path.Combine(attemptDir, "worker.started"),
+                    child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), Encoding.ASCII);
+                if (testAssignFailure)
+                    throw new InvalidOperationException("T3g injected worker-job assignment failure.");
+                job.Assign(child);
+                File.WriteAllText(startGate, "assigned", Encoding.ASCII);
                 var deadline = Stopwatch.StartNew();
                 bool bound = false;
                 while (deadline.Elapsed < StartupTimeout && !File.Exists(requestedStop))
@@ -142,7 +160,7 @@ internal static class OfflineSupervisor
         return 6;
     }
 
-    private static Process Launch(string ready, string stop, string drop)
+    private static Process Launch(string ready, string stop, string drop, string startGate, string jobName)
     {
         var runtime = Environment.ProcessPath ??
             throw new InvalidOperationException("Missing .NET runtime executable.");
@@ -158,6 +176,8 @@ internal static class OfflineSupervisor
         start.ArgumentList.Add(ready);
         start.ArgumentList.Add(stop);
         start.ArgumentList.Add(drop);
+        start.ArgumentList.Add(startGate);
+        start.ArgumentList.Add(jobName);
         return Process.Start(start) ?? throw new InvalidOperationException("Could not start T3f worker.");
     }
 

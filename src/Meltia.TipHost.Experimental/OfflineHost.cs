@@ -15,17 +15,44 @@ namespace Meltia.TipHost.Experimental;
 /// </summary>
 internal static class OfflineHost
 {
-    internal static int Run(string readyMarker, string stopMarker, string? dropListenerMarker = null)
+    internal static int Run(string readyMarker, string stopMarker, string? dropListenerMarker = null,
+        string? startGateMarker = null, string? expectedJobName = null)
     {
         var dataDirectory = Environment.GetEnvironmentVariable("MELTYPE_DATA_DIR");
         // This binary is an explicit CI-only experiment. Never fall back to the
         // actual Meltype data directory when the test harness forgot its sandbox.
         if (string.IsNullOrWhiteSpace(dataDirectory) ||
             !UnderTemp(dataDirectory) || !UnderTemp(readyMarker) || !UnderTemp(stopMarker) ||
-            (dropListenerMarker is not null && !UnderTemp(dropListenerMarker)))
+            (dropListenerMarker is not null && !UnderTemp(dropListenerMarker)) ||
+            (startGateMarker is not null && !UnderTemp(startGateMarker)))
         {
             Console.Error.WriteLine("T3e requires sandbox paths below the OS temporary directory.");
             return 2;
+        }
+
+        if (startGateMarker is not null)
+        {
+            // An already present start marker can be fabricated. Require BOTH
+            // the parent's post-assignment marker and kernel-confirmed membership
+            // in the exact per-launch Job Object before any mutex or Pipe setup.
+            // The transient query handle is closed immediately so a parent kill
+            // still closes the last Job handle and reaps the worker.
+            if (string.IsNullOrWhiteSpace(expectedJobName)) return 7;
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (!File.Exists(startGateMarker))
+            {
+                if (File.Exists(stopMarker) || deadline.Elapsed >= TimeSpan.FromSeconds(10))
+                {
+                    Console.Error.WriteLine("T3g worker did not receive parent containment gate.");
+                    return 7;
+                }
+                Thread.Sleep(50);
+            }
+            if (!OfflineWorkerJob.IsCurrentProcessInJob(expectedJobName))
+            {
+                Console.Error.WriteLine("T3g worker is not assigned to its expected Job Object.");
+                return 7;
+            }
         }
 
         var user = WindowsIdentity.GetCurrent().User?.Value;
