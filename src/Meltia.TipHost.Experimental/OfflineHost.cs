@@ -116,7 +116,7 @@ internal static class OfflineHost
         }
     }
 
-    private static bool UnderTemp(string path)
+    internal static bool UnderTemp(string path)
     {
         try
         {
