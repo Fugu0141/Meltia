@@ -83,8 +83,7 @@ try
                 // Synthetic dispatcher: verifies framing and handshake, NOT conversion.
                 return Active;
             });
-            if ((calls == 1) != expected.Dispatched ||
-                gate.Handshaken != expected.Active && expected.Op == "hello")
+            if ((calls == 1) != expected.Dispatched || gate.Handshaken != expected.Active)
                 throw new InvalidDataException("Unexpected dispatch/handshake state.");
 
             var expectedWireReply = expected.Active
