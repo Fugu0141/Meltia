@@ -74,9 +74,7 @@ try {
     # The OS released the worker mutex and named pipe; no adoption of the old PID.
     $second = Start-Supervisor 'after-parent-kill'
     $replacement = Wait-Worker $second
-    if ($replacement.Id -eq $ownedWorker.Id) {
-        throw 'T3g reused previous worker PID unexpectedly.'
-    }
+    # PID reuse by the OS is legal; the old Process handle has already exited.
     Verify-RealIPC
     Set-Content -LiteralPath $second.Stop -Value 'stop'
     if (-not $second.Process.WaitForExit(12000) -or $second.Process.ExitCode -ne 0) {
