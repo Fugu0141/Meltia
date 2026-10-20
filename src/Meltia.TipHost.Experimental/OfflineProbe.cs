@@ -61,9 +61,7 @@ internal static class OfflineProbe
             pipe.Connect(500);
             pipe.ReadMode = PipeTransmissionMode.Message;
             using var hello = Exchange(pipe, """{"version":1,"op":"hello","process":"notepad"}""");
-            Require(hello, true, false);
-            return hello.RootElement.GetProperty("view").ValueKind == JsonValueKind.Null &&
-                hello.RootElement.GetProperty("commits").GetArrayLength() == 0;
+            return IsHealthyHello(hello.RootElement);
         }
         catch (Exception ex) when (ex is IOException or TimeoutException or OperationCanceledException or
             InvalidOperationException or JsonException or InvalidDataException)
@@ -71,6 +69,27 @@ internal static class OfflineProbe
             return false;
         }
     }
+
+    /// <summary>
+    /// Validate an untrusted v1 hello response without throwing for missing or
+    /// incorrectly typed JSON fields. Invalid responses count as health failures,
+    /// so the supervisor can apply its bounded retry policy.
+    /// </summary>
+    internal static bool IsHealthyHello(JsonElement root) =>
+        root.ValueKind == JsonValueKind.Object &&
+        root.TryGetProperty("version", out var version) &&
+        version.ValueKind == JsonValueKind.Number &&
+        version.TryGetInt32(out var protocol) &&
+        protocol == MeltiaTipIdentity.ProtocolVersion &&
+        root.TryGetProperty("active", out var active) &&
+        active.ValueKind == JsonValueKind.True &&
+        root.TryGetProperty("consumed", out var consumed) &&
+        consumed.ValueKind == JsonValueKind.False &&
+        root.TryGetProperty("commits", out var commits) &&
+        commits.ValueKind == JsonValueKind.Array &&
+        commits.GetArrayLength() == 0 &&
+        root.TryGetProperty("view", out var view) &&
+        view.ValueKind == JsonValueKind.Null;
 
     private static JsonDocument Exchange(NamedPipeClientStream pipe, string request)
     {
