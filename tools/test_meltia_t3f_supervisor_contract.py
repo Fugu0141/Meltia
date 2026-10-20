@@ -44,6 +44,10 @@ class T3fSupervisorContract(unittest.TestCase):
         self.assertIn("FirstListenerReady.WaitAsync", self.host)
         self.assertIn("server.Dispose();", self.host)
         self.assertIn("JsonValueKind.Null", self.probe)
+        self.assertIn("root.TryGetProperty", self.probe)
+        self.assertIn("version.TryGetInt32", self.probe)
+        self.assertIn("return IsHealthyHello(hello.RootElement)", self.probe)
+        self.assertIn('args[0] == "--test-health-replies"', self.program)
 
     def test_faults_are_tested_as_real_processes(self):
         for part in ("Wait-Generation", "Verify-RealIPC", "Start-Supervisor",
