@@ -26,6 +26,8 @@ on:
       - 'tools/test-meltia-t3c-pipe.ps1'
       - 'tools/test_meltia_t3c_b_tipserver.cpp'
       - 'tools/test-meltia-t3c-b-host.ps1'
+      - 'tools/test_meltia_t3d_textservice_request.cpp'
+      - 'tools/test-meltia-t3d-request.ps1'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -68,6 +70,8 @@ on:
       - 'tools/test-meltia-t3c-pipe.ps1'
       - 'tools/test_meltia_t3c_b_tipserver.cpp'
       - 'tools/test-meltia-t3c-b-host.ps1'
+      - 'tools/test_meltia_t3d_textservice_request.cpp'
+      - 'tools/test-meltia-t3d-request.ps1'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -144,6 +148,11 @@ jobs:
         run: |
           ./tools/test-meltia-t3c-b-host.ps1 -Architecture Both
           if ($LASTEXITCODE -ne 0) { throw 'T3c-B real TipServer test failed.' }
+      - name: "T3d: real native TextService::Request IPC (no registration)"
+        shell: pwsh
+        run: |
+          ./tools/test-meltia-t3d-request.ps1 -Architecture Both
+          if ($LASTEXITCODE -ne 0) { throw 'T3d native Request integration failed.' }
       - name: Verify inherited TIP IPC cross-layer source contract (no TSF registration)
         shell: pwsh
         run: |

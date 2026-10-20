@@ -82,6 +82,14 @@ class T3bContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "TextService automatic hello"):
             stage_text("TextService.cpp", changed_text, self.manifest)
 
+    def test_t3d_request_probe_is_test_macro_only(self):
+        original = (ROOT / "native/tip/TextService.h").read_text(encoding="utf-8-sig")
+        staged = stage_text("TextService.h", original, self.manifest)
+        self.assertNotIn("MeltiaRequestProbe", original)
+        self.assertIn("#ifdef MELTIA_T3D_REQUEST_TEST", staged)
+        self.assertIn("friend struct MeltiaRequestProbe;", staged)
+        self.assertIn("MeltiaReconnectPolicy handshake_", staged)
+
     def test_legacy_native_endpoint_remains_unmodified(self):
         self.assertIn("Meltype.Tip.", (ROOT / "native/tip/Pipe.cpp").read_text(encoding="utf-8-sig"))
         self.assertIn('L"Meltype.exe"', self.cpp)

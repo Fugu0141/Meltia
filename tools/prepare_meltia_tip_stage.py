@@ -91,6 +91,12 @@ def stage_text(name, source, manifest):
         source = replace_one(source, '#include "Pipe.h"',
                              '#include "Pipe.h"\n#include "MeltiaReconnectPolicy.h"',
                              "TextService.h reconnect policy")
+        # Test access exists only in the isolated staging header and only
+        # when building the no-registration T3d executable with its macro.
+        source = replace_one(source,
+            "private:\n    ~TextService();",
+            "private:\n#ifdef MELTIA_T3D_REQUEST_TEST\n    friend struct MeltiaRequestProbe;\n#endif\n    ~TextService();",
+            "TextService.h test-only Request probe")
         source = replace_one(source, "    PipeClient pipe_;",
                              "    PipeClient pipe_;\n    MeltiaReconnectPolicy handshake_;",
                              "TextService.h reconnect state")
