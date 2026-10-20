@@ -69,7 +69,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\test-meltia-t3c-b-host.ps1 -Arc
 - commit: `active:true`、`consumed:true`、`commits` 1件の`text == "か"`、`deleteBefore == 0`、`view:null`。
 - 偽の返信を使う**失敗確認テスト**を追加: `consumed:false`、空確定、`deleteBefore:2`、`view.text:"ka"`、文字列型の`version` はいずれも成功条件を満たさない。
 
-`Json.cpp`の使用に必要なUTF-8変換はコンソールテスト側のみで提供する。新しい本番依存・配布ファイルは増やさない。**この修正のCI結果は最新コミットのActionsを別途確認すること。**
+`Json.cpp`の使用に必要なUTF-8変換はコンソールテスト側のみで提供する。新しい本番依存・配布ファイルは増やさない。**修正後の実測:** [Windows Preview CI #](https://github.com/Fugu0141/Meltia/actions/runs/39402952379) は `0f32308ebfe735a2630929612e71b40b22c02ed3` に対し **Windowsジョブ/研究品質ともsuccess**。T3c-B x64/x86の型付きJSON確認・負のテスト・継承Preview監査を通過。[Strict Quality](https://github.com/Fugu0141/Meltia/actions/runs/39402952353) もWindows/Linuxとも **success**。この追記は結果記録のみで、本番IME実機E2Eの完了を意味しない。
 
 ## 検証できないこと・続く工程
 
