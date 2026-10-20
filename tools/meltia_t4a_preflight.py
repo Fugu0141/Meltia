@@ -41,7 +41,12 @@ def validate_preflight_manifest(manifest):
 
 
 def planned_probes(identities):
-    """Conservative bounded inventory, *not* a full TSF registration survey."""
+    """Conservative candidate-root-key presence check, NOT a GUID collision audit.
+
+    The same five GUIDs are applied to CLSID/CTF TIP root-key patterns.
+    Language profiles and display attributes can be registered elsewhere under
+    an owning TIP; those usages are deliberately NOT checked in T4-A.
+    """
     for field in GUID_FIELDS:
         guid = "{" + identities[field].upper() + "}"
         for hive in HIVES:
@@ -98,7 +103,7 @@ def inspect(identities, probe):
         "status": status,
         "registry_writes": False,
         "registration_authorized": False,
-        "note": "Bounded registry key inventory only; never proof of TSF safety.",
+        "note": "40 candidate root-key paths only; no TSF profile/attribute collision check or registration approval.",
         "counts": counts,
         "findings": findings,
     }
