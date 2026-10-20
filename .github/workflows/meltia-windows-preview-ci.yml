@@ -14,12 +14,15 @@ on:
       - 'src/Meltype.Core.Tests/**'
       - 'src/Meltype/**'
       - 'src/Meltia.TipProtocol.Tests/**'
+      - 'src/Meltia.TipIpcFixture/**'
       - 'native/tip/**'
       - 'config/tsf/**'
       - 'tools/test_meltia_t2_identity_contract.py'
       - 'tools/prepare_meltia_tip_stage.py'
       - 'tools/test_meltia_t3a_stage.py'
       - 'tools/test_meltia_t3b_protocol.py'
+      - 'tools/test_meltia_t3c_native_pipe.cpp'
+      - 'tools/test-meltia-t3c-pipe.ps1'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -50,12 +53,15 @@ on:
       - 'src/Meltype.Core.Tests/**'
       - 'src/Meltype/**'
       - 'src/Meltia.TipProtocol.Tests/**'
+      - 'src/Meltia.TipIpcFixture/**'
       - 'native/tip/**'
       - 'config/tsf/**'
       - 'tools/test_meltia_t2_identity_contract.py'
       - 'tools/prepare_meltia_tip_stage.py'
       - 'tools/test_meltia_t3a_stage.py'
       - 'tools/test_meltia_t3b_protocol.py'
+      - 'tools/test_meltia_t3c_native_pipe.cpp'
+      - 'tools/test-meltia-t3c-pipe.ps1'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -122,6 +128,11 @@ jobs:
         run: |
           ./tools/build-meltia-tip-no-registration.ps1 -Architecture Both
           if ($LASTEXITCODE -ne 0) { throw 'Meltia T3a isolated native compile failed.' }
+      - name: "T3c-A: exercise real x64/x86 native-to-managed Named Pipe v1 (no registration)"
+        shell: pwsh
+        run: |
+          ./tools/test-meltia-t3c-pipe.ps1 -Architecture Both
+          if ($LASTEXITCODE -ne 0) { throw 'T3c native/C# pipe fixture failed.' }
       - name: Verify inherited TIP IPC cross-layer source contract (no TSF registration)
         shell: pwsh
         run: |
