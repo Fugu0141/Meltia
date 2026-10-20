@@ -67,14 +67,83 @@ def stage_text(name, source, manifest):
             source = replace_one(source, ORIGINAL_GUIDS[field],
                                  ids[field].upper(), "Globals.h GUID comment")
         source = replace_one(source, 'kDisplayName[] = L"Meltype"', 'kDisplayName[] = L"Meltia"', "Globals.h display")
+    elif name == "Pipe.h":
+        source = replace_one(source, "#include <string>", "#include <cstdint>\n#include <string>", "Pipe.h int64")
+        source = replace_one(source, "    void Close();",
+                             "    void Close();\n    bool EnsureConnected() { return Connect(); }\n"
+                             "    std::uint64_t ConnectionGeneration() const { return generation_; }",
+                             "Pipe.h public connection generation")
+        source = replace_one(source, "    HANDLE pipe_ = INVALID_HANDLE_VALUE;",
+                             "    HANDLE pipe_ = INVALID_HANDLE_VALUE;\n    std::uint64_t generation_ = 0;",
+                             "Pipe.h epoch state")
     elif name == "Pipe.cpp":
-        # Protect against connecting to the original Meltype server.
-        source = replace_one(source, 'L"\\\\\\\\.\\\\pipe\\\\Meltype.Tip."', 'L"\\\\\\\\.\\\\pipe\\\\Meltia.Tip.v1."', "Pipe.cpp endpoint")
+        # Derive the endpoint from the T2 manifest, not a second literal.
+        pipe_prefix = manifest["ipc"]["pipePrefix"]
+        source = replace_one(source, 'L"\\\\\\\\.\\\\pipe\\\\Meltype.Tip."',
+                             'L"\\\\\\\\.\\\\pipe\\\\' + pipe_prefix + '"', "Pipe.cpp endpoint")
+        source = replace_one(
+            source,
+            "    if (event_ == nullptr) event_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);\n    return true;",
+            "    if (event_ == nullptr) event_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);\n"
+            "    ++generation_;  // New accepted server connection.\n    return true;",
+            "Pipe.cpp epoch increment")
+    elif name == "TextService.h":
+        source = replace_one(source, '#include "Pipe.h"',
+                             '#include "Pipe.h"\n#include "MeltiaReconnectPolicy.h"',
+                             "TextService.h reconnect policy")
+        source = replace_one(source, "    PipeClient pipe_;",
+                             "    PipeClient pipe_;\n    MeltiaReconnectPolicy handshake_;",
+                             "TextService.h reconnect state")
     elif name == "TextService.cpp":
         source = replace_one(source, 'return _wcsicmp(name, L"Meltype.exe") == 0;',
                              'return _wcsicmp(name, L"Meltia.exe") == 0;', "TextService own process")
         source = replace_one(source, "kReinjectMarker = 0x4D4C5450", "kReinjectMarker = 0x4D544941",
                              "TextService replay marker")
+        # Every Native request carries the version. Only a versioned response
+        # can drive TSF edits, even when a peer spoofs active=true.
+        request_marker = "    std::string request = json;\n"
+        request_guard = (
+            request_marker
+            + "    if (request.empty() || request.back() != '}') return false;\n"
+            + '    const bool isHello = json.rfind(R"({"op":"hello")", 0) == 0;\n'
+            + '    request.insert(request.size() - 1, R"(,"version":'
+            + str(manifest["protocolVersion"]) + ')");\n'
+        )
+        source = replace_one(source, request_marker, request_guard, "TextService request version")
+        source = replace_one(
+            source, "    if (!pipe_.Transact(request, response, 800)) return false;",
+            '''    // A newly connected pipe starts without any authorization on the C# side.
+    // Perform hello before the FIRST key/commit/select/close on that connection.
+    if (!pipe_.EnsureConnected()) { serverActive_ = false; return false; }
+    const auto epoch = pipe_.ConnectionGeneration();
+    if (!isHello && handshake_.NeedsHello(epoch)) {
+        JsonValue helloReply;
+        if (!Request(R"({"op":"hello","process":)" + JsonString(ProcessName()) + "}", helloReply) ||
+            !helloReply[L"active"].Bool() || pipe_.ConnectionGeneration() != epoch) {
+            serverActive_ = false;
+            return false;  // Never send a normal request on an unhandshaken pipe.
+        }
+        serverActive_ = true;
+    }
+    if (!pipe_.Transact(request, response, 800)) { serverActive_ = false; return false; }''',
+            "TextService automatic hello before regular operations")
+        parse_end = (
+            '    if (!ParseJson(response, reply)) {\n'
+            '        TipLog(L"応答を読めません");\n'
+            '        return false;\n'
+            '    }\n'
+            '    return true;\n'
+        )
+        checked = parse_end.replace(
+            '    return true;\n',
+            '    const bool versionOk = reply[L"version"].type == JsonValue::Type::Number && '
+            'reply[L"version"].number == ' + str(manifest["protocolVersion"]) + ';\n'
+            '    if (isHello && versionOk && reply[L"active"].Bool()) '
+            'handshake_.AcceptHello(pipe_.ConnectionGeneration());\n'
+            '    return versionOk;\n'
+        )
+        source = replace_one(source, parse_end, checked, "TextService response version")
+
     elif name == "Dll.cpp":
         source = replace_one(source, 'L"MELTYPE_TIP_LOG"', 'L"MELTIA_TIP_LOG"', "Dll logging flag")
         source = replace_one(source, 'L"\\\\Meltype\\\\tip-log"', 'L"\\\\Meltia\\\\tip-log"', "Dll log sentinel")
@@ -153,11 +222,14 @@ def prepare(output):
         transformed = stage_text(name, content, manifest)
         target = ("MeltiaTip" + Path(name).suffix) if name in ("MeltypeTip.rc", "MeltypeTip.def") else name
         (output / target).write_text(transformed, encoding="utf-8")
+    # Only the isolated Meltia staging tree receives this portable policy header.
+    policy = ROOT / "tools/MeltiaReconnectPolicy.h"
+    (output / "MeltiaReconnectPolicy.h").write_bytes(policy.read_bytes())
     # No build, registry, installer, or original Meltype artwork copied.
     (output / "STAGING_NOTICE.txt").write_text(
         "Meltia T3a experimental build staging; NOT INSTALLABLE. "
         "DllRegisterServer and DllUnregisterServer always return SELFREG_E_CLASS. "
-        "C# version handshake NOT implemented. Never distribute as an IME.\n",
+        "T3b versioned IPC is experimental; NOT INSTALLABLE. Never distribute as an IME.\n",
         encoding="utf-8",
     )
     return output

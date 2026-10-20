@@ -46,5 +46,21 @@ foreach ($arch in $targets) {
     $dll = Join-Path $out 'MeltiaTip.dll'
     if (-not (Test-Path -LiteralPath $dll)) { throw "T3a DLL missing: $arch" }
     Write-Host "$arch SHA256=$((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash)"
+    # Run the real C++ epoch policy against reconnect / first-key scenarios.
+    # This executable has no Windows APIs and is never shipped with the DLL.
+    $fixtureSource = Join-Path $repo 'tools/test_meltia_t3b_reconnect.cpp'
+    $fixtureExe = Join-Path $out 'MeltiaT3bReconnectTest.exe'
+    $fixtureCmd = @(
+        ($q + $vcvars + $q + ' ' + $vcarch + ' >nul'),
+        ('cd /d ' + $q + $staging + $q),
+        ('cl /nologo /std:c++17 /EHsc /W4 /utf-8 /I' + $q + $staging + $q +
+         ' /Fo' + $q + (Join-Path $obj 'MeltiaT3bReconnectTest.obj') + $q +
+         ' /Fe' + $q + $fixtureExe + $q + ' ' + $q + $fixtureSource + $q)
+    ) -join ' && '
+    cmd /c $fixtureCmd
+    if ($LASTEXITCODE -ne 0) { throw "T3b native reconnect fixture build failed: $arch" }
+    & $fixtureExe
+    if ($LASTEXITCODE -ne 0) { throw "T3b native reconnect fixture failed: $arch" }
+    Write-Host "T3b reconnect policy PASS ($arch)"
 }
 Write-Host 'T3a no-registration native compilation succeeded; NOT INSTALLABLE.'

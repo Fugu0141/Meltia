@@ -13,11 +13,14 @@ on:
       - 'src/Meltype.Core/**'
       - 'src/Meltype.Core.Tests/**'
       - 'src/Meltype/**'
+      - 'src/Meltia.TipProtocol.Tests/**'
       - 'native/tip/**'
       - 'config/tsf/**'
       - 'tools/test_meltia_t2_identity_contract.py'
       - 'tools/prepare_meltia_tip_stage.py'
       - 'tools/test_meltia_t3a_stage.py'
+      - 'tools/test_meltia_t3b_protocol.py'
+      - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
       - 'tests/Meltia.CompositionBridge.Tests/**'
@@ -46,11 +49,14 @@ on:
       - 'src/Meltype.Core/**'
       - 'src/Meltype.Core.Tests/**'
       - 'src/Meltype/**'
+      - 'src/Meltia.TipProtocol.Tests/**'
       - 'native/tip/**'
       - 'config/tsf/**'
       - 'tools/test_meltia_t2_identity_contract.py'
       - 'tools/prepare_meltia_tip_stage.py'
       - 'tools/test_meltia_t3a_stage.py'
+      - 'tools/test_meltia_t3b_protocol.py'
+      - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
       - 'tests/Meltia.CompositionBridge.Tests/**'
@@ -102,6 +108,15 @@ jobs:
         run: |
           python tools/test_meltia_t3a_stage.py
           if ($LASTEXITCODE -ne 0) { throw 'Meltia T3a staging contracts failed.' }
+      - name: "T3b: verify C# and native v1 protocol contracts (offline only)"
+        shell: pwsh
+        run: |
+          python tools/generate_meltia_tip_identity.py --check
+          if ($LASTEXITCODE -ne 0) { throw 'T3b generated identity mismatch.' }
+          python tools/test_meltia_t3b_protocol.py
+          if ($LASTEXITCODE -ne 0) { throw 'T3b source contracts failed.' }
+          dotnet run --project src/Meltia.TipProtocol.Tests/Meltia.TipProtocol.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'T3b managed wire tests failed.' }
       - name: "T3a: build experimental MeltiaTip.dll x64 and x86 (no registration)"
         shell: pwsh
         run: |
