@@ -16,6 +16,12 @@ try {
     $dll = Join-Path $repo 'src/Meltia.TipHost.Experimental/bin/Release/net10.0-windows/Meltia.TipHost.Experimental.dll'
     if (-not (Test-Path $dll)) { throw 'T3f host assembly not found.' }
 
+    # Regression: a fake server returns valid JSON with missing/wrong-type v1
+    # hello properties over the actual named pipe. The health probe must return
+    # false rather than throwing and stopping the whole supervisor.
+    & dotnet $dll --test-health-replies
+    if ($LASTEXITCODE -ne 0) { throw 'T3f malformed real-pipe hello reply regressions failed.' }
+
     function Start-Supervisor([string]$name) {
         $sandbox = Join-Path $root $name
         New-Item -ItemType Directory -Path $sandbox -Force | Out-Null
