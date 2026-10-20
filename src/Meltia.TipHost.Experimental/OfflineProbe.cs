@@ -17,11 +17,9 @@ internal static class OfflineProbe
             var sid = WindowsIdentity.GetCurrent().User?.Value
                 ?? throw new InvalidOperationException("Missing current user SID.");
             using var pipe = new NamedPipeClientStream(".", MeltiaTipIdentity.PipePrefix + sid,
-                PipeDirection.InOut, PipeOptions.None);
+                PipeDirection.InOut, PipeOptions.Asynchronous);
             pipe.Connect(5000);
             pipe.ReadMode = PipeTransmissionMode.Message;
-            pipe.ReadTimeout = 5000;
-            pipe.WriteTimeout = 5000;
 
             using var hello = Exchange(pipe, """{"version":1,"op":"hello","process":"notepad"}""");
             Require(hello, true, false);
@@ -54,13 +52,14 @@ internal static class OfflineProbe
     private static JsonDocument Exchange(NamedPipeClientStream pipe, string request)
     {
         var payload = Encoding.UTF8.GetBytes(request);
-        pipe.Write(payload);
-        pipe.Flush();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        pipe.WriteAsync(payload.AsMemory(), timeout.Token).GetAwaiter().GetResult();
+        pipe.FlushAsync(timeout.Token).GetAwaiter().GetResult();
         var buffer = new byte[8192];
         using var stream = new MemoryStream();
         do
         {
-            var size = pipe.Read(buffer);
+            var size = pipe.ReadAsync(buffer.AsMemory(), timeout.Token).GetAwaiter().GetResult();
             if (size <= 0) throw new IOException("Pipe closed mid-response.");
             stream.Write(buffer, 0, size);
             if (stream.Length > 64 * 1024) throw new IOException("Reply too large.");
