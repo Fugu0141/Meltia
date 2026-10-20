@@ -4,8 +4,8 @@
 """T3a: generate an isolated NO-REGISTRATION native TIP build tree.
 
 This program NEVER writes to the original native/tip, registry, installation
-folders or user data. A generated DLL is not a functional Meltia IME: the C#
-server's versioned IPC handshake is not implemented.
+folders or user data. A generated DLL is not a functional Meltia IME: TSF
+registration and the production Meltia host are deliberately absent.
 """
 import argparse
 import json

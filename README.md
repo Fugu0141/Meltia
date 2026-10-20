@@ -73,6 +73,7 @@
 - [R1c：UTF-16原文保持・保護区間・編集操作の回帰契約](docs/MELTIA_R1C_UTF16_RAW_PROTECTION_CONTRACT_20261017.md)
 - [T3a：Meltia Native TIPの無登録・隔離x64/x86ビルド手順と検証](docs/MELTIA_T3A_ISOLATED_NATIVE_TIP_BUILD_20261017.md)
 - [R2/T3b：Meltia専用C#↔Native v1 IPCゲート（無登録・レビュー用）](docs/MELTIA_R2_T3B_ISOLATED_IPC_20261018.md)
+- [R2/T3c-A：無登録のNative↔C# Named Pipe実通信テスト（専用fixture）](docs/MELTIA_R2_T3C_A_REAL_PIPE_FIXTURE_20261020.md)
 - [2026-10-13 Windows実機入力フィードバック・改修の検証計画](docs/MELTIA_WINDOWS_FIELD_TEST_20261013.md)
 - [Issue #32: `changesuru` の英日境界修正・再現テストと実機確認手順](docs/MELTIA_ISSUE_32_CHANGE_SURU_20261014.md)
 - [2026-10-13 Issue / ブランチ整理（完了Issue・削除候補・安全な削除手順）](docs/MELTIA_ISSUE_BRANCH_CLEANUP_20261013.md)

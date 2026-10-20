@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Windows-only process fixture. Never loads, registers or activates a TSF DLL. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../Meltype/Tip/MeltiaTipWire.cs" Link="MeltiaTipWire.cs" />
+    <Compile Include="../Meltype/Tip/Meltia.Generated/MeltiaTipIdentity.g.cs" Link="MeltiaTipIdentity.g.cs" />
+  </ItemGroup>
+</Project>
