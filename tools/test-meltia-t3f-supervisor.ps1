@@ -103,13 +103,49 @@ try {
 
     # A separate fresh supervisor must NOT enter an infinite restart storm.
     $b = Start-Supervisor 'budget'
-    foreach ($i in @(1, 2, 3)) {
-        $workerId = Wait-Generation $b $i
-        Kill-Worker $workerId
+    $killed = @{}
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not $b.Process.HasExited -and $clock.Elapsed.TotalSeconds -lt 35) {
+        if (Test-Path -LiteralPath $b.Status) {
+            $state = Get-Content -LiteralPath $b.Status -Raw -ErrorAction SilentlyContinue
+            if ($state -match '^launch=(\d+);pid=(\d+)
+    # The earlier negative probe is *expected* to return nonzero. Do not leak
+    # its LASTEXITCODE as the outcome of this successfully completed test script.
+    $global:LASTEXITCODE = 0
+    Write-Host 'PASS T3f: real hello health, listener loss, process crash, duplicate refusal, deliberate stop, bounded recovery.'
+}
+finally {
+    foreach ($proc in $processes) {
+        if (-not $proc.HasExited) {
+            $proc.Kill()
+            $proc.WaitForExit()
+        }
+        $proc.Dispose()
     }
-    if (-not $b.Process.WaitForExit(12000) -or $b.Process.ExitCode -ne 6) {
+    [Environment]::SetEnvironmentVariable('MELTYPE_DATA_DIR', $previousDataDir, 'Process')
+    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+}
+) {
+                $generation = [int]$Matches[1]
+                $workerId = [int]$Matches[2]
+                if (-not $killed.ContainsKey($generation)) {
+                    $worker = Get-Process -Id $workerId -ErrorAction SilentlyContinue
+                    if ($null -ne $worker -and -not $worker.HasExited) {
+                        Kill-Worker $workerId
+                        $killed[$generation] = $true
+                    }
+                }
+            }
+        }
+        Start-Sleep -Milliseconds 100
+    }
+    # A launch that failed before readiness also consumes the finite budget;
+    # do not require all three generations to publish a healthy PID.
+    if (-not $b.Process.WaitForExit(12000) -or $b.Process.ExitCode -ne 6 -or
+        $killed.Count -lt 1 -or (Test-Path (Join-Path $b.Sandbox 'attempt-4'))) {
+        if (Test-Path $b.Stdout) { Get-Content $b.Stdout }
         if (Test-Path $b.Stderr) { Get-Content $b.Stderr }
-        throw 'T3f must terminate with code 6 after the third failed launch.'
+        throw "T3f bounded launch recovery failed: exit=$($b.Process.ExitCode); killed=$($killed.Count)."
     }
     # The earlier negative probe is *expected* to return nonzero. Do not leak
     # its LASTEXITCODE as the outcome of this successfully completed test script.
