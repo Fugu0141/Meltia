@@ -78,6 +78,7 @@
 - [R2/T3d：Native TextService::Request の無登録IPC実通信ゲート（Windows x64/x86 CI成功）](docs/MELTIA_R2_T3D_REQUEST_E2E_20261020.md)
 - [R2/T3e：Meltia無登録ホストの起動・終了・クラッシュ復旧ゲート（試験専用・レビュー中）](docs/MELTIA_R2_T3E_OFFLINE_HOST_LIFECYCLE_20261020.md)
 - [R2/T3f：実験ホストのIPCヘルス監視・上限付きクラッシュ復旧（無登録・レビュー用）](docs/MELTIA_R2_T3F_OFFLINE_HOST_WATCHDOG_20261020.md)
+- [R2/T3g：supervisor強制終了時のJob Objectによる実験worker回収（無登録・Windows試験）](docs/MELTIA_R2_T3G_SUPERVISOR_JOB_CONTAINMENT_20261020.md)
 - [2026-10-13 Windows実機入力フィードバック・改修の検証計画](docs/MELTIA_WINDOWS_FIELD_TEST_20261013.md)
 - [Issue #32: `changesuru` の英日境界修正・再現テストと実機確認手順](docs/MELTIA_ISSUE_32_CHANGE_SURU_20261014.md)
 - [2026-10-13 Issue / ブランチ整理（完了Issue・削除候補・安全な削除手順）](docs/MELTIA_ISSUE_BRANCH_CLEANUP_20261013.md)
