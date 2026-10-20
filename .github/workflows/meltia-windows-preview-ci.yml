@@ -31,6 +31,8 @@ on:
       - 'tools/test-meltia-t3d-request.ps1'
       - 'tools/test-meltia-t3e-host.ps1'
       - 'tools/test_meltia_t3e_host_contract.py'
+      - 'tools/test-meltia-t3f-supervisor.ps1'
+      - 'tools/test_meltia_t3f_supervisor_contract.py'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -78,6 +80,8 @@ on:
       - 'tools/test-meltia-t3d-request.ps1'
       - 'tools/test-meltia-t3e-host.ps1'
       - 'tools/test_meltia_t3e_host_contract.py'
+      - 'tools/test-meltia-t3f-supervisor.ps1'
+      - 'tools/test_meltia_t3f_supervisor_contract.py'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
       - 'tests/Meltia.Core.Tests/**'
@@ -166,6 +170,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'T3e host safety contract failed.' }
           ./tools/test-meltia-t3e-host.ps1
           if ($LASTEXITCODE -ne 0) { throw 'T3e Windows host lifecycle failed.' }
+      - name: "T3f: bounded offline host watchdog, listener loss and crash recovery (no registration)"
+        shell: pwsh
+        run: |
+          python tools/test_meltia_t3f_supervisor_contract.py
+          if ($LASTEXITCODE -ne 0) { throw 'T3f supervisor source gate failed.' }
+          ./tools/test-meltia-t3f-supervisor.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'T3f supervisor Windows E2E failed.' }
       - name: Verify inherited TIP IPC cross-layer source contract (no TSF registration)
         shell: pwsh
         run: |
