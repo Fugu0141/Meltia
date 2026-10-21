@@ -37,6 +37,11 @@ on:
       - 'tools/test_meltia_t3g_job_contract.py'
       - 'tools/meltia_t4a_preflight.py'
       - 'tools/test_meltia_t4a_preflight.py'
+      - 'tools/meltia_t4b_profile_inventory.cpp'
+      - 'tools/meltia_t4b_audit_gate.py'
+      - 'tools/test_meltia_t4b_audit_gate.py'
+      - 'tools/test-meltia-t4b-profile-audit.ps1'
+      - 'docs/MELTIA_T4B1_TSF_PROFILE_AUDIT_AND_ROLLBACK_GATES_20261021.md'
       - 'docs/MELTIA_T4A_READONLY_REGISTRATION_PREFLIGHT_20261021.md'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
@@ -91,6 +96,11 @@ on:
       - 'tools/test_meltia_t3g_job_contract.py'
       - 'tools/meltia_t4a_preflight.py'
       - 'tools/test_meltia_t4a_preflight.py'
+      - 'tools/meltia_t4b_profile_inventory.cpp'
+      - 'tools/meltia_t4b_audit_gate.py'
+      - 'tools/test_meltia_t4b_audit_gate.py'
+      - 'tools/test-meltia-t4b-profile-audit.ps1'
+      - 'docs/MELTIA_T4B1_TSF_PROFILE_AUDIT_AND_ROLLBACK_GATES_20261021.md'
       - 'docs/MELTIA_T4A_READONLY_REGISTRATION_PREFLIGHT_20261021.md'
       - 'tools/generate_meltia_tip_identity.py'
       - 'tools/build-meltia-tip-no-registration.ps1'
@@ -144,6 +154,13 @@ jobs:
         run: |
           python tools/test_meltia_t4a_preflight.py
           if ($LASTEXITCODE -ne 0) { throw 'T4-A offline preflight contract failed.' }
+      - name: "T4-B1: TSF profile audit synthetic x64/x86 + offline rejection tests (NO TSF enumeration)"
+        shell: pwsh
+        run: |
+          python tools/test_meltia_t4b_audit_gate.py
+          if ($LASTEXITCODE -ne 0) { throw 'T4-B1 offline audit gate tests failed.' }
+          ./tools/test-meltia-t4b-profile-audit.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'T4-B1 native synthetic profile audit failed.' }
       - name: "T3a: validate isolated native TIP staging (never install)"
         shell: pwsh
         run: |
