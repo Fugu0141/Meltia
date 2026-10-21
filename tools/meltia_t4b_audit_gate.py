@@ -41,7 +41,13 @@ def validate_t4a(report, identity):
         if state not in counts:
             raise ValueError("T4-A unknown probe finding")
         counts[state] += 1
-    if report.get("counts") != counts:
+    supplied_counts = report.get("counts")
+    if (not isinstance(supplied_counts, dict) or
+            set(supplied_counts) != set(counts) or
+            any(type(value) is not int or value < 0 or value > len(plan)
+                for value in supplied_counts.values())):
+        raise ValueError("T4-A counters must be exactly three non-negative integers")
+    if supplied_counts != counts:
         raise ValueError("T4-A counts do not match findings")
     status = ("inconclusive" if counts["unknown"] else
               "occupied" if counts["occupied"] else "precheck-clear")
@@ -98,6 +104,21 @@ def assess(t4a, tsf, manifest):
     }
 
 
+def read_evidence_json(path):
+    """Read PowerShell 5.1 UTF-16LE BOM or PowerShell 7 UTF-8 evidence.
+
+    Only BOM-declared UTF-16 (LE/BE) and UTF-8 (with/without BOM) are
+    supported. Do not guess other encodings for an audit decision.
+    """
+    raw = path.read_bytes()
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        # UTF-16 BOM is mandatory: unmarked UTF-16 is not trusted.
+        encoding = "utf-16"
+    else:
+        encoding = "utf-8-sig"
+    return json.loads(raw.decode(encoding))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--t4a", type=Path, required=True, help="T4-A captured JSON")
@@ -105,8 +126,8 @@ def main():
     args = parser.parse_args()
     try:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-        t4a = json.loads(args.t4a.read_text(encoding="utf-8"))
-        tsf = json.loads(args.tsf.read_text(encoding="utf-8"))
+        t4a = read_evidence_json(args.t4a)
+        tsf = read_evidence_json(args.tsf)
         report = assess(t4a, tsf, manifest)
     except (ValueError, OSError, UnicodeError) as exc:
         report = {
