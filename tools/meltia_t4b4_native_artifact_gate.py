@@ -51,12 +51,23 @@ def inspect_pe(data, expected_machine, expected_magic):
         raise ValueError("PE machine does not match expected architecture")
     if characteristics & 0x2000 == 0:
         raise ValueError("PE header is not marked as DLL")
-    if not 1 <= section_count <= 96 or optional_size < 2 or \
-            pe_offset + 24 + optional_size + 40 * section_count > len(data):
-        raise ValueError("invalid or truncated PE headers")
-    magic = struct.unpack_from("<H", data, pe_offset + 24)[0]
+    # IMAGE_OPTIONAL_HEADER32/64 has 96/112 fixed bytes BEFORE data
+    # directories. Merely checking Magic (2 bytes) accepts truncated PE files.
+    fixed_size = 96 if expected_magic == 0x10B else 112
+    optional_start = pe_offset + 24
+    optional_end = optional_start + optional_size
+    sections_end = optional_end + 40 * section_count
+    if not 1 <= section_count <= 96 or optional_size < fixed_size or \
+            sections_end > len(data):
+        raise ValueError("invalid or truncated PE optional/section headers")
+    magic = struct.unpack_from("<H", data, optional_start)[0]
     if magic != expected_magic:
         raise ValueError("PE32/PE32+ magic does not match architecture")
+    # NumberOfRvaAndSizes is the last DWORD of the fixed header.
+    # Each claimed data directory requires eight additional header bytes.
+    directory_count = struct.unpack_from("<I", data, optional_start + fixed_size - 4)[0]
+    if directory_count > 16 or fixed_size + 8 * directory_count > optional_size:
+        raise ValueError("PE data directory count exceeds optional header")
     return {"machine": f"0x{machine:04x}",
             "pe_format": "PE32+" if magic == 0x20B else "PE32"}
 
