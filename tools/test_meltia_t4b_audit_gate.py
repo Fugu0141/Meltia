@@ -130,7 +130,7 @@ class T4bProfileAuditTests(unittest.TestCase):
                                          (tsf_path, self.profiles)):
                         payload = json.dumps(report, ensure_ascii=False)
                         if encoding == "utf-16-be":
-                            data = b"\\xfe\\xff" + payload.encode("utf-16-be")
+                            data = b"\xfe\xff" + payload.encode("utf-16-be")
                         else:
                             data = payload.encode(encoding)
                         file.write_bytes(data)
@@ -152,8 +152,8 @@ class T4bProfileAuditTests(unittest.TestCase):
             valid.write_bytes(json.dumps(self.profiles).encode("utf-8"))
             for invalid_bytes in (
                 json.dumps(self.registry).encode("utf-16-le"),  # no BOM
-                b"\\xff\\xff" + json.dumps(self.registry).encode("utf-8"),
-                b"\\xff\\xfe\\x00\\x00" + json.dumps(self.registry).encode("utf-32-le"),
+                b"\xff\xff" + json.dumps(self.registry).encode("utf-8"),
+                b"\xff\xfe\x00\x00" + json.dumps(self.registry).encode("utf-32-le"),
             ):
                 with self.subTest(evidence=invalid_bytes[:6]):
                     t4a_path.write_bytes(invalid_bytes)
