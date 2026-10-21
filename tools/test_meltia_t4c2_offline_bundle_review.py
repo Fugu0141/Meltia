@@ -263,7 +263,9 @@ class BundleReviewTests(unittest.TestCase):
             return records[stage]
         with (mock.patch.object(c1, "guarded_platform", return_value=True),
               mock.patch.object(c1, "checked_observer", return_value=Path(__file__)),
-              mock.patch.object(c1, "checked_output", return_value=self.root / "c1-written"),
+              mock.patch.object(c1, "checked_output",
+                                return_value=(self.root / "c1-written").resolve()),
+              mock.patch.object(c1, "sha256_file", return_value="a" * 64),
               mock.patch.object(c1, "native_runner", side_effect=fake_runner)):
             with contextlib.redirect_stdout(io.StringIO()):
                 code = c1.main(["--profile-exe", "synthetic-profile",
