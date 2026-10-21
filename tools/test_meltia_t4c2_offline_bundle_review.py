@@ -118,6 +118,44 @@ class BundleReviewTests(unittest.TestCase):
         self.assert_blocked(r)
         self.assertEqual("blocked-occupied", r["status"])
         self.assertEqual("internally-consistent-unverified", r["bundle_consistency"])
+        self.assertEqual("observed-identity-conflict", r["reason_code"])
+
+    def test_t4a_mixed_occupied_unknown_replays_original_exit_two(self):
+        # Legitimate registry report: 1 occupied, 1 unknown, 38 absent.
+        # T4-A itself exits 2/inconclusive, while C1 normalizes the result
+        # to occupied because a valid positive collision was observed.
+        findings = iter([True, None] + [False] * 38)
+        self.registry = t4a.inspect(self.identity, lambda *_: next(findings))
+        self.assertEqual(
+            {"occupied": 1, "absent": 38, "unknown": 1},
+            self.registry["counts"])
+        self.assertEqual("inconclusive", self.registry["status"])
+        summary = self.generate(codes=(2, 0, 2))
+        self.assertEqual("occupied", summary["stage_checks"]["t4a"])
+        self.assertEqual("blocked-occupied", summary["status"])
+        self.assertEqual({"t4a.json", "review-summary.json"},
+                         {file.name for file in self.bundle.iterdir()})
+
+        report = self.review()
+        self.assert_blocked(report)
+        self.assertEqual("blocked-occupied", report["status"])
+        self.assertEqual("observed-identity-conflict", report["reason_code"])
+        self.assertEqual("internally-consistent-unverified",
+                         report["bundle_consistency"])
+
+    def test_t4a_unknown_only_replays_original_exit_two(self):
+        findings = iter([None] + [False] * 39)
+        self.registry = t4a.inspect(self.identity, lambda *_: next(findings))
+        self.assertEqual("inconclusive", self.registry["status"])
+        summary = self.generate(codes=(2, 0, 2))
+        self.assertEqual("inconclusive", summary["stage_checks"]["t4a"])
+        self.assertEqual("blocked-inconclusive", summary["status"])
+
+        report = self.review()
+        self.assert_blocked(report)
+        self.assertEqual("blocked-inconclusive", report["status"])
+        self.assertEqual("internally-consistent-unverified",
+                         report["bundle_consistency"])
 
     def test_occupied_t4b1_preserved_without_t4b3(self):
         self.profile.update(profile_count=1, clsid_matches=1, status="occupied")
