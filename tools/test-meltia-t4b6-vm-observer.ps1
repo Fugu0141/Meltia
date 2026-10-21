@@ -41,3 +41,6 @@ try {
 finally {
     Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# Invalid-CLI rejection intentionally returned 2; do not leak it as the script exit.
+exit 0
