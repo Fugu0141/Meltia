@@ -89,6 +89,8 @@ def assess(bundle, staging_root, observer_paths, independent_expected):
     # must survive missing/mismatched observers and malformed C1 summary data.
     try:
         previous = c2.assess_bundle(Path(bundle), Path(staging_root))
+        if previous["status"] not in ("blocked-inconclusive", "blocked-occupied"):
+            return report
         report["status"] = previous["status"]
         report["reason_code"] = previous["reason_code"]
         report["bundle_consistency"] = previous["bundle_consistency"]
