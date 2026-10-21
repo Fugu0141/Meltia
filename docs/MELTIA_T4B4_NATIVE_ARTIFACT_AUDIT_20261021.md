@@ -15,7 +15,7 @@
 1. 唯一の製品識別入力`config/tsf/meltia-t2-identity.json`について、`design-only`、`registrationEnabled=false`、4つのdeploymentフラグがすべて`false`、`assemblyBaseName=MeltiaTip`であることを検証する。
 2. 既存のT3aステージに`STAGING_NOTICE.txt`があり、無登録・非導入の表示が保持されることを確認する。表示は**安全性の証拠ではない**。
 3. 同じステージに`bin/x64/MeltiaTip.dll`と`bin/x86/MeltiaTip.dll`の**双方**が存在することを要求する。シンボリックリンク、巨大/空ファイル、壊れたPEヘッダーを拒否する。
-4. DOS MZ・PE署名・COFF Machine（x64 `0x8664` / x86 `0x014c`）・Optional Header Magic（PE32+ / PE32）・セクションテーブルの境界を最低限検査する。DLLをロードしたりexport関数を呼ばない。
+4. DOS MZ・PE署名・COFF Machine（x64 `0x8664` / x86 `0x014c`）・Optional Header Magic（PE32+ / PE32）・DLLフラグ・セクションテーブルの境界を最低限検査する。DLLをロードしたりexport関数を呼ばない。
 5. SHA-256、バイト長、ステージからの相対パス、アーキテクチャをJSONとして**標準出力だけ**に返す。パスの絶対位置や環境識別子は出さない。判定成功時にも`registration_authorized=false`、`build_provenance_proven=false`、`registration_stubs_proven=false`。
 6. 不正/片方欠損/不一致時は`inconclusive`（exit2）で止め、登録を開始しない。既存T3a単独アーキテクチャビルドに影響しないよう、ビルドスクリプトでのゲート実行は`-Architecture Both`の場合に限定する。
 7. 合成PEバイト列による正例・異常例をテストし、CIの成功を**実Windows VMのTSF動作やバイナリ真正性の証明と混同しない**。本家の登録処理、Keyboard Preview、境界判定・辞書・学習処理は変更しない。
@@ -38,7 +38,7 @@ python tools/meltia_t4b4_native_artifact_gate.py --staging-root <T3aの一時ス
 
 ## 4. 実施記録と未解決事項
 
-- 2026-10-21：開発環境（Windows VMではない）で**人工PEヘッダーのみ**を使うPython試験12件を実行し、12件PASS。実`MeltiaTip.dll`、実x86/x64リンク済みバイナリ、Windows 10/11のTSF実機試験はこの記録では未確認。
+- 2026-10-21：開発環境（Windows VMではない）で**人工PEヘッダーのみ**を使うPython試験15件を実行し、15件PASS。実`MeltiaTip.dll`、実x86/x64リンク済みバイナリ、Windows 10/11のTSF実機試験はこの記録では未確認。
 - 既存WindowsビルドスクリプトのBothモードに検査を連結。Windows実ビルドの成功、生成DLLのexport拒否動作は**この文書からは確認不可**。CIの結果をPR上で別途確認する。
 - T4-B3が扱う表示属性とTSFカテゴリ証拠の所有関係、HKLM/HKCU・x64/x86 registry view・ユーザー権限の衝突判定、登録セッションreceipt、独立スナップショット、実DLLからの関数呼び出し・本家との共存は未解決。
 - 次の実行可能な登録・解除コード／インストール手順は別のレビューを必須とし、専用隔離VM・スナップショット・停止/手動復旧条件・本家データ保全が確認されるまでは導入しない。Issue #16はOpenのままとする。
