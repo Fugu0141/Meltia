@@ -63,4 +63,11 @@ foreach ($arch in $targets) {
     if ($LASTEXITCODE -ne 0) { throw "T3b native reconnect fixture failed: $arch" }
     Write-Host "T3b reconnect policy PASS ($arch)"
 }
+
+# Both architectures must come from the SAME isolated staging tree. This only
+# reads PE headers and computes hashes; it does not load or register DLLs.
+if ($Architecture -eq 'Both') {
+    python (Join-Path $repo 'tools/meltia_t4b4_native_artifact_gate.py') --staging-root $staging
+    if ($LASTEXITCODE -ne 0) { throw 'T4-B4 read-only staged DLL structure audit failed' }
+}
 Write-Host 'T3a no-registration native compilation succeeded; NOT INSTALLABLE.'

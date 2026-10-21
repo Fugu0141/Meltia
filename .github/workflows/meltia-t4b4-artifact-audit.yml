@@ -1,0 +1,26 @@
+name: Meltia T4-B4 isolated native artifact audit tests
+on:
+  pull_request:
+    paths:
+      - 'tools/meltia_t4b4_native_artifact_gate.py'
+      - 'tools/test_meltia_t4b4_native_artifact_gate.py'
+      - 'tools/build-meltia-tip-no-registration.ps1'
+      - 'docs/MELTIA_T4B4_NATIVE_ARTIFACT_AUDIT_20261021.md'
+      - '.github/workflows/meltia-t4b4-artifact-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/meltia_t4b4_native_artifact_gate.py'
+      - 'tools/test_meltia_t4b4_native_artifact_gate.py'
+      - 'tools/build-meltia-tip-no-registration.ps1'
+      - '.github/workflows/meltia-t4b4-artifact-audit.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-pe-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Negative-path PE parsing and inactive T2 contract
+        run: python3 tools/test_meltia_t4b4_native_artifact_gate.py

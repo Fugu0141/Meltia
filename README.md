@@ -92,6 +92,7 @@
 - [セキュリティ報告](SECURITY.md)
 - [サードパーティー通知](THIRD-PARTY-NOTICES.md)
 - [開発・ビルド手順（本家から継承、Meltia 用に未更新）](docs/DEVELOPMENT.md)
+- [T4-B4：無登録Native TIPのx64/x86構造・ハッシュ監査（実登録は未実施）](docs/MELTIA_T4B4_NATIVE_ARTIFACT_AUDIT_20261021.md)
 
 ## Meltia Windows Keyboard Preview（実機未検証）
 
