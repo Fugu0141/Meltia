@@ -82,7 +82,17 @@ def assess(manifest, t4a, tsf, attribute_evidence, staging_root):
 
     checks = report["checks"]
     try:
-        checks["registry_and_profile"] = b1.assess(t4a, tsf, manifest)["status"]
+        # B1 prioritizes "inconclusive" for its overall result. A verified
+        # present resource must still take precedence over unrelated unknowns
+        # in this strictly blocking cross-gate report.
+        identity = manifest["identity"]
+        b1.validate_t4a(t4a, identity)
+        b1.validate_tsf(tsf, identity)
+        if (t4a["counts"]["occupied"] > 0 or tsf["clsid_matches"] > 0
+                or tsf["profile_guid_matches"] > 0):
+            checks["registry_and_profile"] = "occupied"
+        else:
+            checks["registry_and_profile"] = b1.assess(t4a, tsf, manifest)["status"]
     except (ValueError, KeyError, TypeError, AttributeError):
         checks["registry_and_profile"] = "inconclusive"
 
