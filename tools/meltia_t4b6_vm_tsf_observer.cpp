@@ -88,11 +88,15 @@ bool ReadAndMatchManifest(const wchar_t* path) {
     return ManifestMatches(bytes);
 }
 
-bool ValidateBoundT2Inputs(const wchar_t* manifestPath, wchar_t* const* args,
-                           GUID (&ids)[4]) {
+enum class BoundIdentityStatus { Valid, InvalidGuid, ManifestMismatch, RoleMismatch };
+
+BoundIdentityStatus ValidateBoundT2Inputs(const wchar_t* manifestPath,
+                                         wchar_t* const* args, GUID (&ids)[4]) {
     for (int i = 0; i < 4; ++i)
-        if (!ParseGuid(args[i], ids[i])) return false;
-    return ReadAndMatchManifest(manifestPath) && GuidRolesMatch(ids);
+        if (!ParseGuid(args[i], ids[i])) return BoundIdentityStatus::InvalidGuid;
+    if (!ReadAndMatchManifest(manifestPath)) return BoundIdentityStatus::ManifestMismatch;
+    if (!GuidRolesMatch(ids)) return BoundIdentityStatus::RoleMismatch;
+    return BoundIdentityStatus::Valid;
 }
 
 bool ApplyCategoryPage(CategoryResult& result, HRESULT hr, ULONG fetched,
@@ -280,7 +284,17 @@ int wmain(int argc, wchar_t* argv[]) {
     const bool checkOnly = wcscmp(argv[1], L"--selftest-guard") == 0;
     if (!live && !checkOnly) return 2;
     GUID supplied[4]{};
-    if (!ValidateBoundT2Inputs(argv[2], &argv[3], supplied)) return 2;
+    const auto guard = ValidateBoundT2Inputs(argv[2], &argv[3], supplied);
+    if (checkOnly) {
+        // Fixed diagnostic codes, never print the path, user data or GUIDs.
+        const wchar_t* reason =
+            guard == BoundIdentityStatus::Valid ? L"valid" :
+            guard == BoundIdentityStatus::InvalidGuid ? L"invalid-guid" :
+            guard == BoundIdentityStatus::ManifestMismatch ? L"manifest-mismatch" :
+            L"guid-role-mismatch";
+        std::wcout << L"T4-B6 guard: " << reason << L"\n";
+    }
+    if (guard != BoundIdentityStatus::Valid) return 2;
     if (checkOnly) return 0;  // Test-only: no COM, registry or TSF access.
     const GUID clsid = supplied[0];
     const GUID attrs[3] = {supplied[1], supplied[2], supplied[3]};
