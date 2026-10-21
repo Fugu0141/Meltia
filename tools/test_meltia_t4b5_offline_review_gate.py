@@ -96,6 +96,15 @@ class OfflineReviewTests(unittest.TestCase):
             lookup="resolved", owner_clsid=self.identity["clsid"])
         self.assertEqual(self.assess()["status"], "blocked-occupied")
 
+    def test_malformed_attribute_evidence_marked_invalid(self):
+        self.attributes["attributes"].pop()
+        result = self.assess()
+        self.assertEqual(result["checks"]["display_attributes_and_categories"],
+                         "invalid-evidence")
+        self.assertEqual(result["reason_code"],
+                         "missing-invalid-or-incomplete-evidence")
+        self.assertFalse(result["registration_authorized"])
+
     def test_registered_category_collision_halts(self):
         self.attributes["categories"][0]["present"] = True
         self.assertEqual(self.assess()["status"], "blocked-occupied")
