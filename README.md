@@ -80,6 +80,7 @@
 - [R2/T3f：実験ホストのIPCヘルス監視・上限付きクラッシュ復旧（無登録・レビュー用）](docs/MELTIA_R2_T3F_OFFLINE_HOST_WATCHDOG_20261020.md)
 - [R2/T3g：supervisor強制終了時のJob Objectによる実験worker回収（無登録・Windows試験）](docs/MELTIA_R2_T3G_SUPERVISOR_JOB_CONTAINMENT_20261020.md)
 - [T4-A：Windows TSF登録前の読み取り専用preflight・VMゲート（登録未実施）](docs/MELTIA_T4A_READONLY_REGISTRATION_PREFLIGHT_20261021.md)
+- [T4-B1：TSF可視プロファイルGUID照合・登録不可の監査ゲート（実機登録未実施）](docs/MELTIA_T4B1_TSF_PROFILE_AUDIT_AND_ROLLBACK_GATES_20261021.md)
 - [2026-10-13 Windows実機入力フィードバック・改修の検証計画](docs/MELTIA_WINDOWS_FIELD_TEST_20261013.md)
 - [Issue #32: `changesuru` の英日境界修正・再現テストと実機確認手順](docs/MELTIA_ISSUE_32_CHANGE_SURU_20261014.md)
 - [2026-10-13 Issue / ブランチ整理（完了Issue・削除候補・安全な削除手順）](docs/MELTIA_ISSUE_BRANCH_CLEANUP_20261013.md)
