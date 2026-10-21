@@ -26,7 +26,8 @@ def validate_manifest(manifest):
             manifest.get("status") != "design-only" or \
             manifest.get("registrationEnabled") is not False:
         raise ValueError("inactive T2 design manifest required")
-    if manifest.get("distribution", {}).get("assemblyBaseName") != "MeltiaTip":
+    if not isinstance(manifest.get("distribution"), dict) or \
+            manifest["distribution"].get("assemblyBaseName") != "MeltiaTip":
         raise ValueError("MeltiaTip assembly identity mismatch")
     deployment = manifest.get("deployment")
     expected = {"performRegistration", "modifyMeltypeRegistration",
@@ -44,10 +45,12 @@ def inspect_pe(data, expected_machine, expected_magic):
     if pe_offset < 0x40 or pe_offset + 24 > len(data) or \
             data[pe_offset:pe_offset + 4] != b"PE\0\0":
         raise ValueError("missing or truncated PE signature")
-    machine, section_count, _, _, _, optional_size, _ = struct.unpack_from(
+    machine, section_count, _, _, _, optional_size, characteristics = struct.unpack_from(
         "<HHIIIHH", data, pe_offset + 4)
     if machine != expected_machine:
         raise ValueError("PE machine does not match expected architecture")
+    if characteristics & 0x2000 == 0:
+        raise ValueError("PE header is not marked as DLL")
     if not 1 <= section_count <= 96 or optional_size < 2 or \
             pe_offset + 24 + optional_size + 40 * section_count > len(data):
         raise ValueError("invalid or truncated PE headers")
@@ -114,7 +117,8 @@ def main(argv=None):
         code = 0
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
         report = {"phase": "T4-B4", "status": "inconclusive",
-                  "reason": type(exc).__name__ + ": " + str(exc),
+                  "reason": (type(exc).__name__ if isinstance(exc, OSError)
+                             else type(exc).__name__ + ": " + str(exc)),
                   "registration_authorized": False, "native_dll_executed": False,
                   "registry_writes": False, "installer_or_rollback_executed": False,
                   "registration_stubs_proven": False, "build_provenance_proven": False,
