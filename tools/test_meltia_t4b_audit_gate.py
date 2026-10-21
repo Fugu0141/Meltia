@@ -3,9 +3,13 @@
 # Copyright (C) 2026 Meltia contributors
 """Offline T4-B1 adversarial evidence tests; no Windows registry/COM calls."""
 import copy
+from contextlib import redirect_stdout
+import io
 import json
 from pathlib import Path
+import tempfile
 import unittest
+from unittest import mock
 
 import meltia_t4a_preflight as t4a
 import meltia_t4b_audit_gate as gate
@@ -87,6 +91,81 @@ class T4bProfileAuditTests(unittest.TestCase):
                 else:
                     self.registry["phase"] = "T4-A-faked"
                 self.assertEqual(self.assess()["status"], "inconclusive")
+
+    def test_t4a_counts_reject_bool_float_string_negative_and_extra_keys(self):
+        # False == 0, True == 1, 0.0 == 0 must not bypass validation.
+        mutations = (
+            {"occupied": False, "absent": 40, "unknown": False},
+            {"occupied": 0.0, "absent": 40, "unknown": 0},
+            {"occupied": 0, "absent": True, "unknown": 0},
+            {"occupied": 0, "absent": "40", "unknown": 0},
+            {"occupied": -1, "absent": 40, "unknown": 0},
+            {"occupied": 0, "absent": 40, "unknown": 0, "extra": 0},
+            {"occupied": 0, "absent": 40},
+            {"occupied": 0, "absent": 41, "unknown": 0},
+        )
+        for counts in mutations:
+            with self.subTest(counts=counts):
+                self.registry = t4a.inspect(self.identities, lambda *_: False)
+                self.registry["counts"] = counts
+                self.assertEqual(self.assess()["status"], "inconclusive")
+                self.assertIs(self.assess()["registration_authorized"], False)
+
+    def test_ps51_and_ps7_evidence_files_are_accepted_with_matching_guid(self):
+        # Actual capture is only performed by an operator on a separate VM.
+        # These bytes reproduce PowerShell 5.1 redirection (UTF-16LE BOM),
+        # PowerShell 7 redirection (UTF-8), and explicitly encoded BOM files.
+        formats = (
+            ("ps51-utf16le-bom", "utf-16"),
+            ("ps7-utf8", "utf-8"),
+            ("utf8-bom", "utf-8-sig"),
+            ("utf16be-bom", "utf-16-be"),
+        )
+        with tempfile.TemporaryDirectory() as root:
+            for label, encoding in formats:
+                with self.subTest(format=label):
+                    t4a_path = Path(root) / "t4a.json"
+                    tsf_path = Path(root) / "tsf.json"
+                    for file, report in ((t4a_path, self.registry),
+                                         (tsf_path, self.profiles)):
+                        payload = json.dumps(report, ensure_ascii=False)
+                        if encoding == "utf-16-be":
+                            data = b"\\xfe\\xff" + payload.encode("utf-16-be")
+                        else:
+                            data = payload.encode(encoding)
+                        file.write_bytes(data)
+                        self.assertEqual(gate.read_evidence_json(file), report)
+                    stdout = io.StringIO()
+                    argv = ["meltia_t4b_audit_gate.py",
+                            "--t4a", str(t4a_path), "--tsf", str(tsf_path)]
+                    with mock.patch("sys.argv", argv), redirect_stdout(stdout):
+                        code = gate.main()
+                    response = json.loads(stdout.getvalue())
+                    self.assertEqual(code, 0)
+                    self.assertEqual(response["status"], "audit-clear-not-authorized")
+                    self.assertIs(response["registration_authorized"], False)
+
+    def test_invalid_evidence_encoding_fails_closed(self):
+        with tempfile.TemporaryDirectory() as root:
+            valid = Path(root) / "tsf.json"
+            t4a_path = Path(root) / "t4a.json"
+            valid.write_bytes(json.dumps(self.profiles).encode("utf-8"))
+            for invalid_bytes in (
+                json.dumps(self.registry).encode("utf-16-le"),  # no BOM
+                b"\\xff\\xff" + json.dumps(self.registry).encode("utf-8"),
+                b"\\xff\\xfe\\x00\\x00" + json.dumps(self.registry).encode("utf-32-le"),
+            ):
+                with self.subTest(evidence=invalid_bytes[:6]):
+                    t4a_path.write_bytes(invalid_bytes)
+                    stdout = io.StringIO()
+                    argv = ["meltia_t4b_audit_gate.py",
+                            "--t4a", str(t4a_path), "--tsf", str(valid)]
+                    with mock.patch("sys.argv", argv), redirect_stdout(stdout):
+                        code = gate.main()
+                    response = json.loads(stdout.getvalue())
+                    self.assertEqual(code, 2)
+                    self.assertEqual(response["status"], "inconclusive")
+                    self.assertIs(response["registration_authorized"], False)
 
     def test_invalid_profile_report_fails_closed(self):
         for change in (
