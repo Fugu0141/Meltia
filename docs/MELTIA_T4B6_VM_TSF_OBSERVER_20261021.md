@@ -44,7 +44,7 @@ cl /nologo /std:c++17 /EHsc /W4 /WX /utf-8 /DUNICODE /D_UNICODE /I"%T4B6_STAGE%"
 
 ~~~powershell
 $m = Get-Content .\config\tsf\meltia-t2-identity.json -Raw | ConvertFrom-Json
-& "$env:TEMP\meltia-t4b6-vm-review\MeltiaT4b6VmTsfObserver.exe" --vm-readonly .\config\tsf\meltia-t2-identity.json $m.identity.clsid $m.identity.inputAttributeGuid $m.identity.convertedAttributeGuid $m.identity.targetAttributeGuid > .\t4-b3-vm-observation.json
+& "$env:TEMP\meltia-t4b6-vm-review\MeltiaT4b6VmTsfObserver.exe" --vm-readonly .\config\tsf\meltia-t2-identity.json ($m.identity.clsid) ($m.identity.inputAttributeGuid) ($m.identity.convertedAttributeGuid) ($m.identity.targetAttributeGuid) > .\t4-b3-vm-observation.json
 $LASTEXITCODE  # 1=占有、2=陰性/不明。いずれも登録不可
 python tools/meltia_t4b3_evidence_gate.py --evidence .\t4-b3-vm-observation.json
 ~~~
