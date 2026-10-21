@@ -94,6 +94,24 @@ class OfflineReviewTests(unittest.TestCase):
         result = self.assess()
         self.assertEqual(result["status"], "blocked-occupied")
 
+    def test_valid_t4a_occupied_survives_invalid_tsf_report(self):
+        self.t4a = t4a.inspect(self.identity, lambda *_: True)
+        self.tsf["expected_profile_guid"] = "not-a-guid"
+        report = self.assess()
+        self.assertEqual(report["status"], "blocked-occupied")
+        self.assertEqual(report["source_checks"]["t4a"], "occupied")
+        self.assertEqual(report["source_checks"]["t4b1_profiles"], "invalid-evidence")
+        self.assertIs(report["registration_authorized"], False)
+
+    def test_valid_tsf_occupied_survives_invalid_t4a_report(self):
+        self.t4a["findings"].pop()
+        self.tsf.update(profile_count=1, clsid_matches=1, status="occupied")
+        report = self.assess()
+        self.assertEqual(report["status"], "blocked-occupied")
+        self.assertEqual(report["source_checks"]["t4a"], "invalid-evidence")
+        self.assertEqual(report["source_checks"]["t4b1_profiles"], "occupied")
+        self.assertIs(report["registration_authorized"], False)
+
     def test_tsf_profile_collision_halts(self):
         self.tsf.update(profile_count=1, clsid_matches=1, status="occupied")
         self.assertEqual(self.assess()["status"], "blocked-occupied")
@@ -121,6 +139,24 @@ class OfflineReviewTests(unittest.TestCase):
     def test_registered_category_collision_halts(self):
         self.attributes["categories"][0]["present"] = True
         self.assertEqual(self.assess()["status"], "blocked-occupied")
+
+    def test_b3_failed_lookup_is_reported_separately(self):
+        self.attributes["attributes"][0]["lookup"] = "failed"
+        result = self.assess()
+        self.assertEqual(result["status"], "blocked-inconclusive")
+        self.assertEqual(result["reason_code"],
+                         "incomplete-or-failed-tsf-evidence")
+        self.assertEqual(result["b3_observation_summary"]["attribute_lookups_failed"], 1)
+        self.assertIs(result["registration_authorized"], False)
+
+    def test_b3_incomplete_category_is_reported_separately(self):
+        item = self.attributes["categories"][0]
+        item.update(complete=False, present=None)
+        result = self.assess()
+        self.assertEqual(result["status"], "blocked-inconclusive")
+        self.assertEqual(result["reason_code"],
+                         "incomplete-or-failed-tsf-evidence")
+        self.assertEqual(result["b3_observation_summary"]["category_enumerations_incomplete"], 1)
 
     def test_x86_artifact_missing_remains_blocked(self):
         (self.stage / "bin/x86/MeltiaTip.dll").unlink()
@@ -179,6 +215,73 @@ class OfflineReviewTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "ordinary"):
             gate.read_evidence(link)
 
+    def cli(self, missing=()):
+        files = {}
+        for name, report in (("t4a", self.t4a), ("tsf", self.tsf),
+                             ("attributes", self.attributes)):
+            p = self.root / (name + ".json")
+            if name not in missing:
+                p.write_text(json.dumps(report), encoding="utf-8")
+            files[name] = p
+        args = ["--t4a", str(files["t4a"]), "--tsf", str(files["tsf"]),
+                "--attributes", str(files["attributes"]),
+                "--staging-root", str(self.stage)]
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            code = gate.main(args)
+        result = json.loads(stdout.getvalue())
+        self.assertNotIn(str(self.root), stdout.getvalue())
+        self.assertIs(result["registration_authorized"], False)
+        return code, result
+
+    def test_cli_t4a_occupied_b3_missing_exits_one(self):
+        self.t4a = t4a.inspect(self.identity, lambda *_: True)
+        code, result = self.cli(missing=("attributes",))
+        self.assertEqual(code, 1)
+        self.assertEqual(result["status"], "blocked-occupied")
+        self.assertEqual(result["source_checks"]["t4a"], "occupied")
+        self.assertEqual(result["checks"]["display_attributes_and_categories"],
+                         "invalid-evidence")
+
+    def test_cli_b3_occupied_t4a_missing_exits_one(self):
+        self.attributes["categories"][0]["present"] = True
+        code, result = self.cli(missing=("t4a",))
+        self.assertEqual(code, 1)
+        self.assertEqual(result["status"], "blocked-occupied")
+        self.assertEqual(result["checks"]["registry_and_profile"], "inconclusive")
+        self.assertEqual(result["checks"]["display_attributes_and_categories"],
+                         "occupied")
+
+    def test_cli_invalid_tsf_json_does_not_hide_t4a_collision(self):
+        self.t4a = t4a.inspect(self.identity, lambda *_: True)
+        p = self.root / "tsf.json"
+        p.write_text("not valid JSON", encoding="utf-8")
+        for name, report in (("t4a", self.t4a), ("attributes", self.attributes)):
+            (self.root / (name + ".json")).write_text(
+                json.dumps(report), encoding="utf-8")
+        args = ["--t4a", str(self.root / "t4a.json"),
+                "--tsf", str(p),
+                "--attributes", str(self.root / "attributes.json"),
+                "--staging-root", str(self.stage)]
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            code = gate.main(args)
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(stdout.getvalue())["status"],
+                         "blocked-occupied")
+
+    def test_cli_invalid_manifest_still_halts_every_source(self):
+        self.t4a = t4a.inspect(self.identity, lambda *_: True)
+        invalid = self.root / "invalid-manifest.json"
+        mutant = copy.deepcopy(self.manifest)
+        mutant["deployment"]["performRegistration"] = True
+        invalid.write_text(json.dumps(mutant), encoding="utf-8")
+        with patch.object(gate, "MANIFEST", invalid):
+            code, result = self.cli(missing=("tsf",))
+        self.assertEqual(code, 2)
+        self.assertEqual(result["reason_code"], "invalid-manifest")
+        self.assertEqual(result["checks"]["registry_and_profile"], "not-evaluated")
+
     def test_cli_exit_is_never_zero_and_redacts_input_paths(self):
         paths = []
         for name, report in (("t4a", self.t4a), ("tsf", self.tsf),
@@ -198,8 +301,12 @@ class OfflineReviewTests(unittest.TestCase):
         out = io.StringIO()
         with redirect_stdout(out):
             self.assertEqual(gate.main(args), 2)
-        self.assertEqual(json.loads(out.getvalue())["reason_code"],
-                         "invalid-or-unreadable-input")
+        report = json.loads(out.getvalue())
+        self.assertEqual(report["reason_code"],
+                         "missing-invalid-or-incomplete-evidence")
+        self.assertEqual(report["source_checks"]["t4a"], "invalid-evidence")
+        self.assertEqual(report["source_checks"]["t4b1_profiles"],
+                         "enumerated-clear")
         self.assertNotIn(str(self.root), out.getvalue())
 
 
