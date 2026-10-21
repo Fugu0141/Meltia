@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Meltia contributors
-"""T4-C1 hermetic tests: NO Windows API, no subprocess, no file writes."""
+"""T4-C1 tests: no TSF/registry calls; temp dirs and harmless child commands only."""
+import contextlib
 import copy
+import io
 import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
+from unittest import mock
+
+import meltia_t4c1_vm_evidence_capture as cli
 
 from meltia_t4a_preflight import MANIFEST, inspect, validate_preflight_manifest
 from meltia_t4b3_evidence_gate import expected_targets
 from meltia_t4c1_vm_evidence_capture import (
-    capture, guarded_platform, read_json_bytes, validate_observation,
+    capture, checked_output, guarded_platform, native_runner,
+    read_json_bytes, validate_observation,
 )
 
 
@@ -161,6 +172,98 @@ class T4C1Tests(unittest.TestCase):
         for value in (b"", b" " * 131073, b'{"a":0,"a":1}', b"not json"):
             with self.subTest(value=value[:12]), self.assertRaises(ValueError):
                 read_json_bytes(value)
+
+
+    def test_non_object_json_stops_at_exact_stage_without_invoking_next(self):
+        for stage_index, stage in enumerate(("t4a", "t4b1", "t4b3")):
+            for raw in (b"[]", b"null", b'"oops"'):
+                with self.subTest(stage=stage, raw=raw):
+                    cases = self.cases()
+                    cases[stage] = (0, raw)
+                    seen, evidence, result = self.run_case(cases)
+                    self.assertEqual(list(("t4a", "t4b1", "t4b3")[:stage_index + 1]), seen)
+                    self.assertNotIn(stage, evidence)
+                    self.assertEqual("blocked-inconclusive", result["status"])
+                    self.assertEqual(stage + "-invalid-or-unavailable", result["reason_code"])
+                    self.assertEqual("invalid-or-unavailable", result["stage_checks"][stage])
+
+    def test_direct_validation_rejects_non_object(self):
+        for raw in ([], None, "oops"):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                validate_observation("t4a", raw, 0, self.manifest)
+
+    def test_cli_non_object_emits_fixed_anonymized_json_and_exit2(self):
+        for raw in (b"[]", b"null", b'"oops"'):
+            with self.subTest(raw=raw), tempfile.TemporaryDirectory() as private:
+                output = Path(private) / "new-evidence"
+                buffer = io.StringIO()
+                with (mock.patch.object(cli, "guarded_platform", return_value=True),
+                      mock.patch.object(cli, "checked_observer", return_value=Path(__file__)),
+                      mock.patch.object(cli, "sha256_file", return_value="synthetic-sha"),
+                      mock.patch.object(cli, "checked_output", return_value=output),
+                      mock.patch.object(cli, "native_runner", return_value=(0, raw)),
+                      contextlib.redirect_stdout(buffer)):
+                    code = cli.main(["--profile-exe", "synthetic-profile",
+                                     "--attribute-exe", "synthetic-attribute",
+                                     "--output", str(output)])
+                self.assertEqual(2, code)
+                displayed = json.loads(buffer.getvalue())
+                self.assertEqual("T4-C1", displayed["phase"])
+                self.assertEqual("blocked-inconclusive", displayed["status"])
+                self.assertEqual("t4a-invalid-or-unavailable", displayed["reason_code"])
+                self.assertFalse(displayed["registration_authorized"])
+                self.assertNotIn("traceback", buffer.getvalue().lower())
+                self.assertTrue((output / "review-summary.json").exists())
+                self.assertFalse((output / "t4a.json").exists())
+
+    def test_output_rejects_symlink_parent_and_windows_junction(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = base / "checkout"
+            repo.mkdir()
+            alias = base / "alias"
+            if os.name == "nt":
+                # Junction creation does not need Developer Mode/admin rights.
+                try:
+                    subprocess.run(["cmd", "/d", "/c", "mklink", "/J",
+                                    str(alias), str(repo)],
+                                   check=True, capture_output=True)
+                except (OSError, subprocess.CalledProcessError) as exc:
+                    self.skipTest("cannot create Windows junction: " + type(exc).__name__)
+            else:
+                alias.symlink_to(repo, target_is_directory=True)
+            with mock.patch.object(cli, "ROOT", repo):
+                with self.assertRaises(ValueError):
+                    checked_output(alias / "fresh-evidence")
+                self.assertFalse((repo / "fresh-evidence").exists())
+
+    def test_output_accepts_canonical_fresh_destination(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = base / "checkout"
+            repo.mkdir()
+            external = base / "private"
+            external.mkdir()
+            with mock.patch.object(cli, "ROOT", repo):
+                self.assertEqual((external / "fresh").resolve(),
+                                 checked_output(external / "fresh"))
+                (external / "fresh").mkdir()
+                with self.assertRaises(ValueError):
+                    checked_output(external / "fresh")
+                with self.assertRaises(ValueError):
+                    checked_output(repo / "fresh")
+
+    def test_native_runner_bounds_output_while_reading(self):
+        command = [sys.executable, "-c",
+                   "import sys;sys.stdout.buffer.write(b'{}')"]
+        code, output = native_runner(command)
+        self.assertEqual(0, code)
+        self.assertEqual(b"{}", output)
+        oversized = [sys.executable, "-c",
+                     "import sys;sys.stdout.buffer.write(b'x' * 131073);"
+                     "sys.stderr.buffer.write(b'y' * 500000)"]
+        with self.assertRaises(ValueError):
+            native_runner(oversized)
 
     def test_platform_and_ack_controls(self):
         self.assertFalse(guarded_platform("linux", {}, vm_readonly=True,
