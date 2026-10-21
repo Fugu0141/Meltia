@@ -62,9 +62,14 @@ def load_bundle(directory):
     for stage in STAGES:
         p = directory / (stage + ".json")
         try:
-            if p.exists() or p.is_symlink():
-                files[stage] = strict_object(p)
-                raw[stage] = p.read_bytes()
+            if p.is_symlink() or not p.is_file():
+                continue
+            # Parse and hash exactly the same bounded bytes. Reading the file
+            # twice could accept a mixed snapshot if it changes between reads.
+            with p.open("rb") as stream:
+                data = stream.read(c1.MAX_BYTES + 1)
+            files[stage] = c1.read_json_bytes(data)
+            raw[stage] = data
         except (OSError, ValueError, TypeError, UnicodeError, KeyError):
             continue
     return summary, files, raw
