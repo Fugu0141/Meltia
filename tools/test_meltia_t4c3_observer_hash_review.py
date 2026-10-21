@@ -105,6 +105,13 @@ class ObserverHashReviewTests(unittest.TestCase):
         self.assert_denied(r)
         self.assertFalse(r["observer_binary_bytes_match_bundle_and_reference"])
 
+    def test_unexpected_upstream_state_is_fail_closed(self):
+        self.c2_report["status"] = "registration-ready"
+        r = self.run_review()
+        self.assert_denied(r)
+        self.assertEqual("blocked-inconclusive", r["status"])
+        self.assertFalse(r["observer_binary_bytes_match_bundle_and_reference"])
+
     def test_rejects_missing_wrong_name_directory_zero_oversize_and_alias(self):
         profile = self.observers["profile"]
         with self.assertRaises((OSError, ValueError)):
