@@ -46,7 +46,7 @@ try {
         & $exe --selftest
         if ($LASTEXITCODE -ne 0) { throw "T4-B6 no-COM selftest failed: $arch" }
         # Exercising the same pre-COM guard as --vm-readonly, never running it.
-        & $exe --selftest-guard $manifest ($guids[0]) ($guids[1]) ($guids[2]) ($guids[3]) | Out-Null
+        & $exe --selftest-guard $manifest ($guids[0]) ($guids[1]) ($guids[2]) ($guids[3])
         if ($LASTEXITCODE -ne 0) { throw "T4-B6 valid T2 snapshot rejected: $arch" }
         & $exe --selftest-guard $manifest ($guids[0]) ($guids[2]) ($guids[1]) ($guids[3]) | Out-Null
         if ($LASTEXITCODE -ne 2) { throw "T4-B6 swapped attribute GUID accepted: $arch" }
