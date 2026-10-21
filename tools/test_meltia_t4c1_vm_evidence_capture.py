@@ -200,7 +200,7 @@ class T4C1Tests(unittest.TestCase):
                 with (mock.patch.object(cli, "guarded_platform", return_value=True),
                       mock.patch.object(cli, "checked_observer", return_value=Path(__file__)),
                       mock.patch.object(cli, "sha256_file", return_value="synthetic-sha"),
-                      mock.patch.object(cli, "checked_output", return_value=output),
+                      mock.patch.object(cli, "checked_output", return_value=output.resolve()),
                       mock.patch.object(cli, "native_runner", return_value=(0, raw)),
                       contextlib.redirect_stdout(buffer)):
                     code = cli.main(["--profile-exe", "synthetic-profile",
