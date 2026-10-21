@@ -7,11 +7,23 @@ param([Parameter(Mandatory = $true)][string]$Output)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $out = [IO.Path]::GetFullPath($Output)
-if ((Test-Path -LiteralPath $out) -or
-    $out.StartsWith($repo + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
-    $out -eq $repo) {
+# Reuse the Python collector's canonical-path gate: .NET GetFullPath and
+# StartsWith cannot resolve an existing parent symlink / Windows junction.
+# Python is already required to generate the identity header below.
+$validator = @'
+import sys
+sys.path.insert(0, sys.argv[1])
+from meltia_t4c1_vm_evidence_capture import checked_output
+try:
+    print(checked_output(sys.argv[2]))
+except (OSError, ValueError):
+    sys.exit(2)
+'@
+$canonicalOut = & python -c $validator (Join-Path $repo 'tools') $out
+if ($LASTEXITCODE -ne 0 -or -not $canonicalOut) {
     throw 'T4-C1 build output must be a fresh folder outside the checkout'
 }
+$out = [string]$canonicalOut
 
 $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio\Installer\vswhere.exe'
 if (-not (Test-Path -LiteralPath $vswhere)) { throw 'MSVC Build Tools not found' }
