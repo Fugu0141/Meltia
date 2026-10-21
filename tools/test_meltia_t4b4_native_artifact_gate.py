@@ -3,6 +3,8 @@
 # Copyright (C) 2026 Meltia contributors
 """Synthetic negative-path tests. No DLL build, loading, TSF calls or writes outside temp."""
 import copy
+import contextlib
+import io
 import hashlib
 import json
 from pathlib import Path
@@ -27,7 +29,7 @@ def synthetic_pe(machine, magic):
     content[0:2] = b"MZ"
     struct.pack_into("<I", content, 0x3C, 0x80)
     content[0x80:0x84] = b"PE\0\0"
-    struct.pack_into("<HHIIIHH", content, 0x84, machine, 1, 0, 0, 0, 0xE0, 0)
+    struct.pack_into("<HHIIIHH", content, 0x84, machine, 1, 0, 0, 0, 0xE0, 0x2000)
     struct.pack_into("<H", content, 0x98, magic)
     return bytes(content)
 
@@ -115,11 +117,38 @@ class NativeArtifactGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "signature"):
             self.verify()
 
+    def test_non_dll_pe_rejected(self):
+        f = self.root / "bin/x86/MeltiaTip.dll"
+        data = bytearray(f.read_bytes())
+        struct.pack_into("<H", data, 0x80 + 4 + 18, 0)
+        f.write_bytes(data)
+        with self.assertRaisesRegex(ValueError, "not marked as DLL"):
+            self.verify()
+
+    def test_non_dict_distribution_rejected(self):
+        manifest = copy.deepcopy(MANIFEST)
+        manifest["distribution"] = None
+        with self.assertRaisesRegex(ValueError, "assembly"):
+            gate.validate_manifest(manifest)
+
     def test_non_pe_rejected(self):
         f = self.root / "bin/x86/MeltiaTip.dll"
         f.write_bytes(b"not a real DLL")
         with self.assertRaisesRegex(ValueError, "DOS/PE"):
             self.verify()
+
+    def test_main_os_error_does_not_leak_stage_path(self):
+        prior = gate.MANIFEST
+        gate.MANIFEST = self.root / "fake-manifest.json"
+        try:
+            (self.root / "fake-manifest.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+            (self.root / "STAGING_NOTICE.txt").unlink()
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(gate.main(["--staging-root", str(self.root)]), 2)
+            self.assertNotIn(str(self.root), output.getvalue())
+        finally:
+            gate.MANIFEST = prior
 
     def test_main_failure_is_fail_closed(self):
         prior = gate.MANIFEST
