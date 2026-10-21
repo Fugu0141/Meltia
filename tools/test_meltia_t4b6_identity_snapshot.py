@@ -21,7 +21,7 @@ class T4B6SnapshotTests(unittest.TestCase):
         self.assertIn("kManifestBytes[]", header)
         # Reconstruct encoded bytes; C++ lexical newline folding must not
         # change LF/CRLF in the snapshotted manifest.
-        escaped = re.findall(r"\\\\x([0-9a-f]{2})", header)
+        escaped = re.findall(r"\\x([0-9a-f]{2})", header)
         self.assertEqual(self.raw, bytes(int(part, 16) for part in escaped))
         self.assertEqual(1, header.count("kExpectedGuids[4]"))
         for field in FIELDS:
