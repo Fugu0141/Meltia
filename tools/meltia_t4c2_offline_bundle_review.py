@@ -51,26 +51,32 @@ def strict_object(path):
 def load_bundle(directory):
     if directory.is_symlink() or not directory.is_dir():
         raise ValueError("bundle must be an existing ordinary directory")
-    summary = strict_object(directory / "review-summary.json")
+    # The summary and each stage are independent inputs. One unreadable file
+    # must not conceal an independently validated identity conflict elsewhere.
+    try:
+        summary = strict_object(directory / "review-summary.json")
+    except (OSError, ValueError, TypeError, UnicodeError, KeyError):
+        summary = None
     files = {}
     raw = {}
     for stage in STAGES:
         p = directory / (stage + ".json")
-        if p.is_symlink():
-            raise ValueError("evidence symlink")
-        if p.exists():
-            files[stage] = strict_object(p)
-            raw[stage] = p.read_bytes()
+        try:
+            if p.exists() or p.is_symlink():
+                files[stage] = strict_object(p)
+                raw[stage] = p.read_bytes()
+        except (OSError, ValueError, TypeError, UnicodeError, KeyError):
+            continue
     return summary, files, raw
 
 
-def summary_contract(summary, manifest_sha, files, raw):
+def summary_contract(summary, manifest, manifest_sha, files, raw):
     """Check known C1 schema, sequential stage observations and stored digests.
 
     This checks *internal* consistency only. A malicious party can replace both
     observations and hashes; do not infer VM provenance from a passing check.
     """
-    if (summary.get("phase") != "T4-C1"
+    if (not isinstance(summary, dict) or summary.get("phase") != "T4-C1"
             or summary.get("status") not in ("blocked-occupied", "blocked-inconclusive")
             or type(summary.get("reason_code")) is not str
             or summary.get("registration_authorized") is not False
@@ -124,7 +130,7 @@ def summary_contract(summary, manifest_sha, files, raw):
 
     try:
         regenerated_files, regenerated = c1.capture(
-            strict_object(MANIFEST), replay_runner, {stage: stage for stage in STAGES})
+            manifest, replay_runner, {stage: stage for stage in STAGES})
     except (ValueError, KeyError, TypeError, OSError):
         return False
     return (set(regenerated_files) == set(files)
@@ -133,10 +139,10 @@ def summary_contract(summary, manifest_sha, files, raw):
             and regenerated["stage_checks"] == steps)
 
 
-def assess_bundle(directory, staging_root, manifest_path=MANIFEST):
+def assess_bundle(directory, staging_root):
     report = blocked("bundle-unavailable-or-inconsistent")
     try:
-        manifest_raw = manifest_path.read_bytes()
+        manifest_raw = MANIFEST.read_bytes()
         manifest = c1.read_json_bytes(manifest_raw)
         validate_preflight_manifest(manifest)
     except (OSError, ValueError, TypeError, KeyError, UnicodeError):
@@ -166,13 +172,9 @@ def assess_bundle(directory, staging_root, manifest_path=MANIFEST):
     try:
         # Manifest must be immutable relative to the bundle. No live artifact
         # binary hashing is possible here; the two EXE digests are self-reported.
-        if manifest_path == MANIFEST:
-            consistent = summary_contract(
-                summary, hashlib.sha256(manifest_raw).hexdigest(), observed, raw)
-        else:
-            # For tests a manifest can be injected, but summary_contract must
-            # replay against the same manifest. Do not loosen CLI guarantees.
-            consistent = False
+        consistent = summary_contract(
+            summary, manifest, hashlib.sha256(manifest_raw).hexdigest(),
+            observed, raw)
     except (ValueError, KeyError, TypeError, OSError, UnicodeError):
         consistent = False
 
