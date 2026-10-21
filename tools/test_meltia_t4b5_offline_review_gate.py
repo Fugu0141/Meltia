@@ -81,6 +81,19 @@ class OfflineReviewTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked-occupied")
         self.assertEqual(result["reason_code"], "observed-identity-conflict")
 
+    def test_occupied_registry_and_unknown_are_not_masked(self):
+        calls = iter([True, None] + [False] * 38)
+        self.t4a = t4a.inspect(self.identity, lambda *_: next(calls))
+        self.assertEqual(self.t4a["status"], "inconclusive")
+        result = self.assess()
+        self.assertEqual(result["status"], "blocked-occupied")
+
+    def test_incomplete_profile_inventory_with_match_is_occupied(self):
+        self.tsf.update(complete=False, status="inconclusive",
+                        profile_count=1, profile_guid_matches=1)
+        result = self.assess()
+        self.assertEqual(result["status"], "blocked-occupied")
+
     def test_tsf_profile_collision_halts(self):
         self.tsf.update(profile_count=1, clsid_matches=1, status="occupied")
         self.assertEqual(self.assess()["status"], "blocked-occupied")
