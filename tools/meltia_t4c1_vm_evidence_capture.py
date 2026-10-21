@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
 
 from meltia_t4a_preflight import MANIFEST, ROOT, validate_preflight_manifest
 from meltia_t4b_audit_gate import validate_t4a, validate_tsf
@@ -37,10 +38,15 @@ def read_json_bytes(content):
     if not isinstance(content, bytes) or not 0 < len(content) <= MAX_BYTES:
         raise ValueError("missing or oversized evidence")
     # Helpers are expected to write ASCII/UTF-8 JSON to captured stdout.
-    return json.loads(content.decode("utf-8-sig"), object_pairs_hook=_unique_pairs)
+    parsed = json.loads(content.decode("utf-8-sig"), object_pairs_hook=_unique_pairs)
+    if not isinstance(parsed, dict):
+        raise ValueError("evidence top-level JSON must be an object")
+    return parsed
 
 
 def validate_observation(stage, report, code, manifest):
+    if not isinstance(report, dict):
+        raise ValueError("invalid evidence object")
     identity = validate_preflight_manifest(manifest)
     if type(code) is not int:
         raise ValueError("invalid process exit status")
@@ -140,11 +146,16 @@ def checked_observer(path, expected_name):
 
 
 def checked_output(path):
+    # Path.resolve() follows existing parent symlinks and Windows junctions
+    # even when the final evidence directory has not yet been created.
     output = Path(path).absolute()
+    resolved = output.resolve()
     root = ROOT.resolve()
-    if output.exists() or output.is_symlink() or output == root or root in output.parents:
+    if (output.exists() or output.is_symlink() or
+            resolved == root or root in resolved.parents):
         raise ValueError("output must be a fresh directory outside the checkout")
-    return output
+    # Use the canonical destination rather than writing through an alias.
+    return resolved
 
 
 def sha256_file(path):
@@ -156,11 +167,36 @@ def sha256_file(path):
 
 
 def native_runner(command):
-    # No shell. Every command has predetermined program and argument roles.
-    # Never echo stderr, local paths or foreign provider messages.
-    result = subprocess.run(command, shell=False, capture_output=True,
-                            timeout=90, check=False)
-    return result.returncode, result.stdout
+    # Drain stdout while the child is running, enforcing the limit before
+    # further output is buffered. stderr is discarded (never propagated).
+    # A reader thread works with Windows pipes, unlike select() on pipes.
+    with subprocess.Popen(command, shell=False, stdin=subprocess.DEVNULL,
+                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as proc:
+        chunks = []
+        exceeded = threading.Event()
+
+        def drain_stdout():
+            size = 0
+            for chunk in iter(lambda: proc.stdout.read(8192), b""):
+                size += len(chunk)
+                if size > MAX_BYTES:
+                    exceeded.set()
+                    proc.kill()
+                    return
+                chunks.append(chunk)
+
+        reader = threading.Thread(target=drain_stdout, daemon=True)
+        reader.start()
+        try:
+            proc.wait(timeout=90)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            raise
+        reader.join(timeout=5)
+        if reader.is_alive() or exceeded.is_set():
+            raise ValueError("observer stdout limit exceeded or unavailable")
+        return proc.returncode, b"".join(chunks)
 
 
 def main(argv=None):
@@ -200,6 +236,8 @@ def main(argv=None):
         }
         # Out-of-tree/private bundle. Never write observations to Git.
         output.mkdir(mode=0o700)
+        if output.resolve() != output:
+            raise ValueError("output destination changed during creation")
         evidence, result = capture(manifest, native_runner, commands)
         # A changed binary/manifest invalidates collected observations.
         if (binaries["profile_exe_sha256"] != sha256_file(profile) or
