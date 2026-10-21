@@ -3,6 +3,7 @@
 # Copyright (C) 2026 Meltia contributors
 """Offline negative tests for the T4-B6 native snapshot generator (NO COM)."""
 import json
+import re
 import unittest
 
 from generate_meltia_t4b6_snapshot import FIELDS, generate
@@ -18,7 +19,10 @@ class T4B6SnapshotTests(unittest.TestCase):
     def test_snapshot_is_bound_to_exact_manifest_bytes_and_roles(self):
         header = generate(self.raw)
         self.assertIn("kManifestBytes[]", header)
-        self.assertIn(self.raw.decode("utf-8"), header)
+        # Reconstruct encoded bytes; C++ lexical newline folding must not
+        # change LF/CRLF in the snapshotted manifest.
+        escaped = re.findall(r"\\\\x([0-9a-f]{2})", header)
+        self.assertEqual(self.raw, bytes(int(part, 16) for part in escaped))
         self.assertEqual(1, header.count("kExpectedGuids[4]"))
         for field in FIELDS:
             guid = self.manifest["identity"][field].upper()
