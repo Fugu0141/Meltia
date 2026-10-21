@@ -40,6 +40,9 @@ on:
       - 'tools/meltia_t4b_profile_inventory.cpp'
       - 'tools/meltia_t4b_audit_gate.py'
       - 'tools/test_meltia_t4b_audit_gate.py'
+      - 'tools/meltia_t4b2_ownership_model.py'
+      - 'tools/test_meltia_t4b2_ownership_model.py'
+      - 'docs/MELTIA_T4B2_OWNERSHIP_AND_ROLLBACK_CONTRACT_20261021.md'
       - 'tools/test-meltia-t4b-profile-audit.ps1'
       - 'docs/MELTIA_T4B1_TSF_PROFILE_AUDIT_AND_ROLLBACK_GATES_20261021.md'
       - 'docs/MELTIA_T4A_READONLY_REGISTRATION_PREFLIGHT_20261021.md'
@@ -99,6 +102,9 @@ on:
       - 'tools/meltia_t4b_profile_inventory.cpp'
       - 'tools/meltia_t4b_audit_gate.py'
       - 'tools/test_meltia_t4b_audit_gate.py'
+      - 'tools/meltia_t4b2_ownership_model.py'
+      - 'tools/test_meltia_t4b2_ownership_model.py'
+      - 'docs/MELTIA_T4B2_OWNERSHIP_AND_ROLLBACK_CONTRACT_20261021.md'
       - 'tools/test-meltia-t4b-profile-audit.ps1'
       - 'docs/MELTIA_T4B1_TSF_PROFILE_AUDIT_AND_ROLLBACK_GATES_20261021.md'
       - 'docs/MELTIA_T4A_READONLY_REGISTRATION_PREFLIGHT_20261021.md'
@@ -161,6 +167,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'T4-B1 offline audit gate tests failed.' }
           ./tools/test-meltia-t4b-profile-audit.ps1
           if ($LASTEXITCODE -ne 0) { throw 'T4-B1 native synthetic profile audit failed.' }
+      - name: "T4-B2: offline ownership and rollback simulations (NO TSF registration)"
+        shell: pwsh
+        run: |
+          python tools/test_meltia_t4b2_ownership_model.py
+          if ($LASTEXITCODE -ne 0) { throw 'T4-B2 rollback model tests failed.' }
+          python tools/meltia_t4b2_ownership_model.py --simulate-prefix 4
+          if ($LASTEXITCODE -ne 0) { throw 'T4-B2 offline simulation failed.' }
       - name: "T3a: validate isolated native TIP staging (never install)"
         shell: pwsh
         run: |
