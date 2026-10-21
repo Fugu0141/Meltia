@@ -177,13 +177,21 @@ def native_runner(command):
 
         def drain_stdout():
             size = 0
-            for chunk in iter(lambda: proc.stdout.read(8192), b""):
-                size += len(chunk)
-                if size > MAX_BYTES:
-                    exceeded.set()
+            try:
+                for chunk in iter(lambda: proc.stdout.read(8192), b""):
+                    size += len(chunk)
+                    if size > MAX_BYTES:
+                        exceeded.set()
+                        proc.kill()
+                        return
+                    chunks.append(chunk)
+            except OSError:
+                # Thread errors must not print private provider diagnostics.
+                exceeded.set()
+                try:
                     proc.kill()
-                    return
-                chunks.append(chunk)
+                except OSError:
+                    pass
 
         reader = threading.Thread(target=drain_stdout, daemon=True)
         reader.start()
@@ -192,6 +200,7 @@ def native_runner(command):
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
+            reader.join(timeout=5)
             raise
         reader.join(timeout=5)
         if reader.is_alive() or exceeded.is_set():
