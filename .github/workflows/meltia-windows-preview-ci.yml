@@ -47,6 +47,10 @@ on:
       - 'tools/meltia_t4b6_vm_tsf_observer.cpp'
       - 'tools/generate_meltia_t4b6_snapshot.py'
       - 'tools/test_meltia_t4b6_identity_snapshot.py'
+      - 'tools/meltia_t4c1_vm_evidence_capture.py'
+      - 'tools/test_meltia_t4c1_vm_evidence_capture.py'
+      - 'tools/build-meltia-t4c1-vm-observers.ps1'
+      - 'docs/MELTIA_T4C1_VM_EVIDENCE_CAPTURE_20261021.md'
       - 'tools/test-meltia-t4b6-vm-observer.ps1'
       - 'docs/MELTIA_T4B6_VM_TSF_OBSERVER_20261021.md'
       - 'tools/meltia_t4b4_native_artifact_gate.py'
@@ -123,6 +127,10 @@ on:
       - 'tools/meltia_t4b6_vm_tsf_observer.cpp'
       - 'tools/generate_meltia_t4b6_snapshot.py'
       - 'tools/test_meltia_t4b6_identity_snapshot.py'
+      - 'tools/meltia_t4c1_vm_evidence_capture.py'
+      - 'tools/test_meltia_t4c1_vm_evidence_capture.py'
+      - 'tools/build-meltia-t4c1-vm-observers.ps1'
+      - 'docs/MELTIA_T4C1_VM_EVIDENCE_CAPTURE_20261021.md'
       - 'tools/test-meltia-t4b6-vm-observer.ps1'
       - 'docs/MELTIA_T4B6_VM_TSF_OBSERVER_20261021.md'
       - 'tools/meltia_t4b4_native_artifact_gate.py'
@@ -214,6 +222,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'T4-B6 identity snapshot validation failed.' }
           ./tools/test-meltia-t4b6-vm-observer.ps1
           if ($LASTEXITCODE -ne 0) { throw 'T4-B6 native synthetic tests failed.' }
+      - name: "T4-C1: synthetic VM capture order and build-only observer checks (NO live TSF)"
+        shell: pwsh
+        run: |
+          python tools/test_meltia_t4c1_vm_evidence_capture.py
+          if ($LASTEXITCODE -ne 0) { throw 'T4-C1 synthetic evidence orchestration tests failed.' }
+          $stage = Join-Path $env:TEMP ('meltia-t4c1-ci-' + [Guid]::NewGuid().ToString('N'))
+          try {
+            ./tools/build-meltia-t4c1-vm-observers.ps1 -Output $stage
+            if ($LASTEXITCODE -ne 0) { throw 'T4-C1 x64/x86 build-only observers failed.' }
+          }
+          finally {
+            Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+          }
       - name: "T4-B4/B5: synthetic staged PE and offline evidence reconciliation (NO registration)"
         shell: pwsh
         run: |
