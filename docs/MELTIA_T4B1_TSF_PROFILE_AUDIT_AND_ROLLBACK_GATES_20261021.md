@@ -47,7 +47,7 @@ VM内のスナップショットが取得済みであり、対象マシンが個
 2. Visual Studio Developer Command Promptで以下のように読み取り専用ツールを **VMの作業用ディレクトリ**へコンパイルする（x64/x86ともビルド試験済みであることをCIで別途確認）。開発中のリポジトリやOSディレクトリへのコピー/インストールは不要。
 
    ```bat
-   cl /nologo /std:c++17 /EHsc /W4 /WX /utf-8 /DUNICODE /D_UNICODE tools\meltia_t4b_profile_inventory.cpp /Fe:MeltiaT4bProfileInventory.exe /link ole32.lib uuid.lib msctf.lib
+   cl /nologo /std:c++17 /EHsc /W4 /WX /utf-8 /DUNICODE /D_UNICODE tools\meltia_t4b_profile_inventory.cpp /Fe:MeltiaT4bProfileInventory.exe /link ole32.lib uuid.lib
    ```
 
 3. PowerShellでT2の値を読み、作成されたexeへ渡し、標準出力のみを `tsf.json` に保存する。TSF helperは全言語の現ユーザー可視プロファイルを列挙し、候補2つの一致数だけを公開する。
