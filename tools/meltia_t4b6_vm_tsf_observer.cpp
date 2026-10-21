@@ -7,9 +7,13 @@
 #include <windows.h>
 #include <msctf.h>
 #include <cwchar>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
+
+#include "MeltiaT4b6IdentitySnapshot.h"
 
 namespace {
 
@@ -51,6 +55,64 @@ bool ParseGuid(const wchar_t* text, GUID& value) {
     return text != nullptr && SUCCEEDED(CLSIDFromString(text, &value));
 }
 
+
+// The build generates this snapshot ONLY after checking the entire T2
+// design-only manifest (including all deployment flags). At runtime, before
+// CoInitializeEx, require BOTH identical manifest bytes and four matching,
+// correctly ordered GUIDs. Merely well-formed random GUIDs are never allowed.
+bool ManifestMatches(const std::string& bytes) {
+    constexpr size_t kLength = sizeof(meltia_t4b6_identity::kManifestBytes) - 1;
+    return bytes.size() == kLength &&
+           bytes.compare(0, kLength, meltia_t4b6_identity::kManifestBytes, kLength) == 0;
+}
+
+bool GuidRolesMatch(const GUID (&ids)[4]) {
+    for (int i = 0; i < 4; ++i) {
+        GUID expected{};
+        if (!ParseGuid(meltia_t4b6_identity::kExpectedGuids[i], expected) ||
+            !IsEqualGUID(ids[i], expected)) return false;
+    }
+    return true;
+}
+
+bool ReadAndMatchManifest(const wchar_t* path) {
+    if (!path || !*path) return false;
+    std::ifstream input(std::filesystem::path(path), std::ios::binary | std::ios::ate);
+    if (!input) return false;
+    constexpr size_t kLength = sizeof(meltia_t4b6_identity::kManifestBytes) - 1;
+    if (input.tellg() != static_cast<std::streamoff>(kLength)) return false;
+    input.seekg(0, std::ios::beg);
+    std::string bytes(kLength, '\0');
+    if (!input.read(&bytes[0], static_cast<std::streamsize>(bytes.size()))) return false;
+    return ManifestMatches(bytes);
+}
+
+bool ApplyCategoryPage(CategoryResult& result, HRESULT hr, ULONG fetched,
+                       const GUID* item, const GUID& target) {
+    if (hr == S_FALSE && fetched == 0) {
+        result.complete = true;
+        return false;
+    }
+    if (hr != S_OK || fetched != 1 || !item) {
+        // Even if an occupied item was observed before the failure, no
+        // partial count is promoted to an authoritative complete result.
+        result.complete = false;
+        result.present = false;
+        return false;
+    }
+    if (IsEqualGUID(*item, target)) result.present = true;
+    return true;
+}
+
+AttributeResult ClassifyAttribute(HRESULT hr, bool infoAvailable, const GUID& owner) {
+    AttributeResult result;
+    if (hr == S_OK && infoAvailable) {
+        result.resolved = true;
+        result.owner = owner;
+    }
+    return result;
+}
+
 CategoryResult ObserveCategory(ITfCategoryMgr* manager, const GUID& category, const GUID& clsid) {
     CategoryResult result;
     if (!manager) return result;
@@ -64,12 +126,7 @@ CategoryResult ObserveCategory(ITfCategoryMgr* manager, const GUID& category, co
         GUID item{};
         ULONG fetched = 0;
         HRESULT hr = enumerator->Next(1, &item, &fetched);
-        if (hr == S_FALSE && fetched == 0) {
-            result.complete = true;
-            break;
-        }
-        if (hr != S_OK || fetched != 1) break;
-        if (IsEqualGUID(item, clsid)) result.present = true;
+        if (!ApplyCategoryPage(result, hr, fetched, &item, clsid)) break;
     }
     enumerator->Release();
     // A partial enumeration cannot claim that the target is or is not present.
@@ -83,10 +140,7 @@ AttributeResult ObserveAttribute(ITfDisplayAttributeMgr* manager, const GUID& gu
     ITfDisplayAttributeInfo* info = nullptr;
     GUID owner{};
     HRESULT hr = manager->GetDisplayAttributeInfo(guid, &info, &owner);
-    if (hr == S_OK && info != nullptr) {
-        result.resolved = true;
-        result.owner = owner;
-    }
+    result = ClassifyAttribute(hr, info != nullptr, owner);
     if (info) info->Release();
     // No HRESULT other than successful resolution proves global absence.
     return result;
@@ -142,10 +196,61 @@ bool SelfTest() {
     std::wostringstream occupied;
     PrintEvidence(occupied, clsid, attrs, attributes, categories);
     const std::wstring b = occupied.str();
-    return b.find(L"\"lookup\":\"resolved\",\"owner_clsid\":\"{00000005-0000-4000-8000-000000000005}\"")
-               != std::wstring::npos &&
-           b.find(L"\"complete\":true,\"present\":true") != std::wstring::npos &&
-           b.find(L"\"complete\":true,\"present\":false") != std::wstring::npos;
+    if (b.find(L"\"lookup\":\"resolved\",\"owner_clsid\":\"{00000005-0000-4000-8000-000000000005}\"")
+            == std::wstring::npos ||
+        b.find(L"\"complete\":true,\"present\":true") == std::wstring::npos ||
+        b.find(L"\"complete\":true,\"present\":false") == std::wstring::npos) return false;
+
+    // Exercise precisely the same guard called before live CoInitializeEx.
+    GUID allowed[4]{}, swapped[4]{}, arbitrary[4]{};
+    for (int i = 0; i < 4; ++i) {
+        if (!ParseGuid(meltia_t4b6_identity::kExpectedGuids[i], allowed[i])) return false;
+        swapped[i] = allowed[i];
+        arbitrary[i] = allowed[i];
+    }
+    if (!GuidRolesMatch(allowed)) return false;
+    const std::string raw(meltia_t4b6_identity::kManifestBytes,
+                          sizeof(meltia_t4b6_identity::kManifestBytes) - 1);
+    if (!ManifestMatches(raw) || ManifestMatches(raw + " ")) return false;
+    std::string changed = raw;
+    auto field = changed.find("\"registrationEnabled\": false");
+    if (field == std::string::npos) return false;
+    changed.replace(field, sizeof("\"registrationEnabled\": false") - 1,
+                    "\"registrationEnabled\": true ");
+    if (ManifestMatches(changed)) return false;
+    std::swap(swapped[1], swapped[2]);
+    if (GuidRolesMatch(swapped)) return false;
+    if (!ParseGuid(L"{00000006-0000-4000-8000-000000000006}", arbitrary[2]) ||
+        GuidRolesMatch(arbitrary)) return false;
+    GUID duplicate[4] = {allowed[0], allowed[1], allowed[1], allowed[3]};
+    if (GuidRolesMatch(duplicate)) return false;
+
+    // Pure category step reducer: EOF, COM failure, partial occupied entry,
+    // and hitting the bound without terminal EOF must never claim completeness.
+    CategoryResult category{};
+    if (!ApplyCategoryPage(category, S_OK, 1, &thirdParty, clsid) ||
+        category.present || category.complete) return false;
+    if (!ApplyCategoryPage(category, S_OK, 1, &clsid, clsid) ||
+        !category.present || category.complete) return false;
+    if (ApplyCategoryPage(category, E_FAIL, 0, nullptr, clsid) ||
+        category.present || category.complete) return false;
+    category = {};
+    for (unsigned long n = 0; n < kMaxItems; ++n) {
+        if (!ApplyCategoryPage(category, S_OK, 1, &thirdParty, clsid)) return false;
+    }
+    if (category.complete || category.present) return false;
+    if (ApplyCategoryPage(category, S_FALSE, 0, nullptr, clsid) ||
+        !category.complete || category.present) return false;
+    category = {};
+    if (ApplyCategoryPage(category, S_OK, 0, nullptr, clsid) ||
+        category.complete || category.present) return false;
+
+    // Pure attribute classification covers HRESULT and NULL interface cases.
+    if (ClassifyAttribute(S_OK, false, thirdParty).resolved ||
+        ClassifyAttribute(E_FAIL, true, thirdParty).resolved ||
+        ClassifyAttribute(S_FALSE, true, thirdParty).resolved) return false;
+    auto attr = ClassifyAttribute(S_OK, true, thirdParty);
+    return attr.resolved && IsEqualGUID(attr.owner, thirdParty);
 }
 
 }  // namespace
@@ -159,16 +264,16 @@ int wmain(int argc, wchar_t* argv[]) {
     }
 
     // A deliberate opt-in switch prevents incidental TSF/COM access by CI.
-    // Args: --vm-readonly CLSID ATTR_INPUT ATTR_CONVERTED ATTR_TARGET
-    if (argc != 6 || wcscmp(argv[1], L"--vm-readonly") != 0) return 2;
-    GUID clsid{}, attrs[3]{};
-    if (!ParseGuid(argv[2], clsid) || !ParseGuid(argv[3], attrs[0]) ||
-        !ParseGuid(argv[4], attrs[1]) || !ParseGuid(argv[5], attrs[2])) return 2;
-    for (int i = 0; i < 3; ++i) {
-        if (IsEqualGUID(clsid, attrs[i])) return 2;
-        for (int j = i + 1; j < 3; ++j)
-            if (IsEqualGUID(attrs[i], attrs[j])) return 2;
-    }
+    // Args: --vm-readonly T2_MANIFEST CLSID ATTR_INPUT ATTR_CONVERTED ATTR_TARGET
+    // Both checks finish BEFORE CoInitializeEx. A stale/modified manifest is
+    // rejected, not interpreted as an authorization to query foreign GUIDs.
+    if (argc != 7 || wcscmp(argv[1], L"--vm-readonly") != 0) return 2;
+    GUID supplied[4]{};
+    for (int i = 0; i < 4; ++i)
+        if (!ParseGuid(argv[i + 3], supplied[i])) return 2;
+    if (!ReadAndMatchManifest(argv[2]) || !GuidRolesMatch(supplied)) return 2;
+    const GUID clsid = supplied[0];
+    const GUID attrs[3] = {supplied[1], supplied[2], supplied[3]};
 
     AttributeResult values[3]{};
     CategoryResult categories[5]{};
