@@ -44,6 +44,12 @@ on:
       - 'tools/test_meltia_t4b2_ownership_model.py'
       - 'tools/meltia_t4b3_evidence_gate.py'
       - 'tools/test_meltia_t4b3_evidence_gate.py'
+      - 'tools/meltia_t4b4_native_artifact_gate.py'
+      - 'tools/test_meltia_t4b4_native_artifact_gate.py'
+      - 'tools/meltia_t4b5_offline_review_gate.py'
+      - 'tools/test_meltia_t4b5_offline_review_gate.py'
+      - 'docs/MELTIA_T4B4_NATIVE_ARTIFACT_AUDIT_20261021.md'
+      - 'docs/MELTIA_T4B5_OFFLINE_EVIDENCE_RECONCILIATION_20261021.md'
       - 'docs/MELTIA_T4B3_ATTRIBUTE_CATEGORY_EVIDENCE_CONTRACT_20261021.md'
       - 'docs/MELTIA_T4B2_OWNERSHIP_AND_ROLLBACK_CONTRACT_20261021.md'
       - 'tools/test-meltia-t4b-profile-audit.ps1'
@@ -109,6 +115,12 @@ on:
       - 'tools/test_meltia_t4b2_ownership_model.py'
       - 'tools/meltia_t4b3_evidence_gate.py'
       - 'tools/test_meltia_t4b3_evidence_gate.py'
+      - 'tools/meltia_t4b4_native_artifact_gate.py'
+      - 'tools/test_meltia_t4b4_native_artifact_gate.py'
+      - 'tools/meltia_t4b5_offline_review_gate.py'
+      - 'tools/test_meltia_t4b5_offline_review_gate.py'
+      - 'docs/MELTIA_T4B4_NATIVE_ARTIFACT_AUDIT_20261021.md'
+      - 'docs/MELTIA_T4B5_OFFLINE_EVIDENCE_RECONCILIATION_20261021.md'
       - 'docs/MELTIA_T4B3_ATTRIBUTE_CATEGORY_EVIDENCE_CONTRACT_20261021.md'
       - 'docs/MELTIA_T4B2_OWNERSHIP_AND_ROLLBACK_CONTRACT_20261021.md'
       - 'tools/test-meltia-t4b-profile-audit.ps1'
@@ -185,6 +197,13 @@ jobs:
         run: |
           python tools/test_meltia_t4b3_evidence_gate.py
           if ($LASTEXITCODE -ne 0) { throw 'T4-B3 evidence rejection tests failed.' }
+      - name: "T4-B4/B5: synthetic staged PE and offline evidence reconciliation (NO registration)"
+        shell: pwsh
+        run: |
+          python tools/test_meltia_t4b4_native_artifact_gate.py
+          if ($LASTEXITCODE -ne 0) { throw 'T4-B4 PE structure tests failed.' }
+          python tools/test_meltia_t4b5_offline_review_gate.py
+          if ($LASTEXITCODE -ne 0) { throw 'T4-B5 fail-closed evidence tests failed.' }
       - name: "T3a: validate isolated native TIP staging (never install)"
         shell: pwsh
         run: |
