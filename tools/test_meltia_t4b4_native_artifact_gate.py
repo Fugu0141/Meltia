@@ -29,7 +29,8 @@ def synthetic_pe(machine, magic):
     content[0:2] = b"MZ"
     struct.pack_into("<I", content, 0x3C, 0x80)
     content[0x80:0x84] = b"PE\0\0"
-    struct.pack_into("<HHIIIHH", content, 0x84, machine, 1, 0, 0, 0, 0xE0, 0x2000)
+    struct.pack_into("<HHIIIHH", content, 0x84, machine, 1, 0, 0, 0,
+                     0xF0 if magic == 0x20B else 0xE0, 0x2000)
     optional_start = 0x98
     struct.pack_into("<H", content, optional_start, magic)
     fixed_size = 96 if magic == 0x10B else 112
