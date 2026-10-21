@@ -17,6 +17,7 @@ import sys
 import meltia_t4b5_offline_review_gate as b5
 import meltia_t4c1_vm_evidence_capture as c1
 from meltia_t4a_preflight import MANIFEST, validate_preflight_manifest
+from meltia_t4b_audit_gate import validate_t4a
 
 STAGES = ("t4a", "t4b1", "t4b3")
 HASH_KEYS = ("profile_exe_sha256", "attribute_exe_sha256", "t2_manifest_sha256")
@@ -131,7 +132,16 @@ def summary_contract(summary, manifest, manifest_sha, files, raw):
         outcome = steps[stage]
         if outcome not in exits[stage] or stage not in files:
             raise ValueError("missing or invalid stage")
-        return exits[stage][outcome], json.dumps(files[stage]).encode("utf-8")
+        # T4-A's summary is normalized by C1: an observed collision wins even
+        # when the original registry probe reported unknown keys. In that case
+        # the source was "inconclusive" (exit 2), not "occupied" (exit 1).
+        # Recover the raw, validated source status before replaying C1.
+        if stage == "t4a":
+            source_status = validate_t4a(files[stage], manifest["identity"])
+            code = exits[stage][source_status]
+        else:
+            code = exits[stage][outcome]
+        return code, json.dumps(files[stage]).encode("utf-8")
 
     try:
         regenerated_files, regenerated = c1.capture(
