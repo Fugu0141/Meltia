@@ -18,6 +18,14 @@ try {
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $snapshot)) {
         throw 'T4-B6 cannot compile without a validated, disabled T2 snapshot'
     }
+    $manifest = Join-Path $repo 'config/tsf/meltia-t2-identity.json'
+    $t2 = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+    $guids = @($t2.identity.clsid, $t2.identity.inputAttributeGuid, $t2.identity.convertedAttributeGuid, $t2.identity.targetAttributeGuid)
+    $modified = Join-Path $temp 'T2-disabled-flag-mutated.json'
+    $text = [IO.File]::ReadAllText($manifest)
+    $altered = $text.Replace('"registrationEnabled": false', '"registrationEnabled": true ')
+    if ($text -eq $altered) { throw 'T4-B6 test could not mutate T2 registration flag' }
+    [IO.File]::WriteAllText($modified, $altered)
     foreach ($arch in @('x64', 'x86')) {
         $dir = Join-Path $temp $arch
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -37,6 +45,18 @@ try {
         }
         & $exe --selftest
         if ($LASTEXITCODE -ne 0) { throw "T4-B6 no-COM selftest failed: $arch" }
+        # Exercising the same pre-COM guard as --vm-readonly, never running it.
+        & $exe --selftest-guard $manifest $guids[0] $guids[1] $guids[2] $guids[3] | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "T4-B6 valid T2 snapshot rejected: $arch" }
+        & $exe --selftest-guard $manifest $guids[0] $guids[2] $guids[1] $guids[3] | Out-Null
+        if ($LASTEXITCODE -ne 2) { throw "T4-B6 swapped attribute GUID accepted: $arch" }
+        & $exe --selftest-guard $manifest '{00000006-0000-4000-8000-000000000006}' $guids[1] $guids[2] $guids[3] | Out-Null
+        if ($LASTEXITCODE -ne 2) { throw "T4-B6 unrelated valid GUID accepted: $arch" }
+        & $exe --selftest-guard $modified $guids[0] $guids[1] $guids[2] $guids[3] | Out-Null
+        if ($LASTEXITCODE -ne 2) { throw "T4-B6 enabled manifest flag accepted: $arch" }
+        & $exe --selftest-guard (Join-Path $temp 'missing.json') $guids[0] $guids[1] $guids[2] $guids[3] | Out-Null
+        if ($LASTEXITCODE -ne 2) { throw "T4-B6 missing manifest accepted: $arch" }
+
         # Default/invalid argument paths must not invoke OS probing.
         & $exe --incorrect-option | Out-Null
         if ($LASTEXITCODE -ne 2) { throw "T4-B6 unexpected live execution path: $arch" }
