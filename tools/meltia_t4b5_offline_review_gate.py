@@ -81,27 +81,56 @@ def assess(manifest, t4a, tsf, attribute_evidence, staging_root):
         return report
 
     checks = report["checks"]
+    identity = manifest["identity"]
+    # Validate each observation *independently*. An invalid T4-B1 report must
+    # never conceal a validated T4-A occupancy (and vice versa). Existing B1
+    # assess() combines them inside one try and cannot supply this precedence.
     try:
-        # B1 prioritizes "inconclusive" for its overall result. A verified
-        # present resource must still take precedence over unrelated unknowns
-        # in this strictly blocking cross-gate report.
-        identity = manifest["identity"]
-        b1.validate_t4a(t4a, identity)
-        b1.validate_tsf(tsf, identity)
-        if (t4a["counts"]["occupied"] > 0 or tsf["clsid_matches"] > 0
-                or tsf["profile_guid_matches"] > 0):
-            checks["registry_and_profile"] = "occupied"
-        else:
-            checks["registry_and_profile"] = b1.assess(t4a, tsf, manifest)["status"]
+        registry_state = b1.validate_t4a(t4a, identity)
+        if t4a["counts"]["occupied"] > 0:
+            registry_state = "occupied"
     except (ValueError, KeyError, TypeError, AttributeError):
+        registry_state = "invalid-evidence"
+    try:
+        profile_state = b1.validate_tsf(tsf, identity)
+        if tsf["clsid_matches"] > 0 or tsf["profile_guid_matches"] > 0:
+            profile_state = "occupied"
+    except (ValueError, KeyError, TypeError, AttributeError):
+        profile_state = "invalid-evidence"
+
+    report["source_checks"] = {
+        "t4a": registry_state, "t4b1_profiles": profile_state,
+    }
+    if "occupied" in (registry_state, profile_state):
+        checks["registry_and_profile"] = "occupied"
+    elif (registry_state == "precheck-clear"
+          and profile_state == "enumerated-clear"):
+        checks["registry_and_profile"] = "audit-clear-not-authorized"
+    else:
         checks["registry_and_profile"] = "inconclusive"
 
+    b3_incomplete = False
     try:
         # Distinguish valid negative/unknown evidence from malformed records.
         # B3's public assess() intentionally returns inconclusive for BOTH.
         b3.validate_evidence(manifest, attribute_evidence)
         checks["display_attributes_and_categories"] = b3.assess(
             manifest, attribute_evidence)["status"]
+        # Counts only: never expose foreign owners, GUIDs, paths or user data.
+        attrs = attribute_evidence["attributes"]
+        categories = attribute_evidence["categories"]
+        failed = sum(item["lookup"] == "failed" for item in attrs)
+        incomplete = sum(item["complete"] is False for item in categories)
+        report["b3_observation_summary"] = {
+            "attribute_lookups_failed": failed,
+            "attribute_lookups_not_found": sum(
+                item["lookup"] == "not-found" for item in attrs),
+            "category_enumerations_incomplete": incomplete,
+            "categories_enumerated_absent": sum(
+                item["complete"] is True and item["present"] is False
+                for item in categories),
+        }
+        b3_incomplete = failed > 0 or incomplete > 0
     except (ValueError, KeyError, TypeError, AttributeError):
         checks["display_attributes_and_categories"] = "invalid-evidence"
 
@@ -123,8 +152,10 @@ def assess(manifest, t4a, tsf, attribute_evidence, staging_root):
           or checks["display_attributes_and_categories"] != "inconclusive"
           or checks["staged_native_artifacts"] != "structural-audit-only"):
         report["reason_code"] = "missing-invalid-or-incomplete-evidence"
+    elif b3_incomplete:
+        report["reason_code"] = "incomplete-or-failed-tsf-evidence"
     else:
-        # T4-B3 is necessarily inconclusive on negative/absent observations.
+        # Even fully enumerated negatives remain limited to visible scopes.
         report["reason_code"] = "partial-evidence-never-authorizes-registration"
     return report
 
@@ -138,11 +169,24 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         manifest = read_evidence(MANIFEST)
-        report = assess(manifest, read_evidence(args.t4a), read_evidence(args.tsf),
-                        read_evidence(args.attributes), args.staging_root)
-    except (OSError, ValueError, TypeError, UnicodeError, KeyError):
-        # Never print filesystem paths, personal data, or opaque OS exceptions.
-        report = blocked()
+        # Invalid T2 manifest is a global stop. Do not evaluate other input.
+        validate_preflight_manifest(manifest)
+        b2.design_inventory(manifest)
+        b4.validate_manifest(manifest)
+    except (OSError, ValueError, TypeError, UnicodeError, KeyError, AttributeError):
+        report = blocked("invalid-manifest")
+    else:
+        # Missing/malformed evidence is local to one source, not a global abort.
+        # Continue evaluating the other independent sources for occupancy.
+        def optional_evidence(path):
+            try:
+                return read_evidence(path)
+            except (OSError, ValueError, TypeError, UnicodeError, KeyError):
+                return None
+
+        report = assess(manifest, optional_evidence(args.t4a),
+                        optional_evidence(args.tsf),
+                        optional_evidence(args.attributes), args.staging_root)
     print(json.dumps(report, ensure_ascii=False, sort_keys=True))
     # Never return a green/authorization exit code, even for synthetic input.
     return 1 if report["status"] == "blocked-occupied" else 2
