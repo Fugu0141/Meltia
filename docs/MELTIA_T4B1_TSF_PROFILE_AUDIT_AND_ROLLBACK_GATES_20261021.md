@@ -43,20 +43,26 @@ python tools/test_meltia_t4b_audit_gate.py
 
 VM内のスナップショットが取得済みであり、対象マシンが個別レビューで承認された場合のみ、読み取り専用で観測できる。**T4-B1のコマンドはいずれも登録をしない**。
 
-1. T4-Aの既存手順をVMで実行し、標準出力JSONを `t4a.json` に保存する。結果が `occupied`/`inconclusive` なら原因を調査し登録工程へ進まない。
+1. T4-Aの既存手順をVMで実行し、標準出力JSONを `t4a.json` に保存する。Windows PowerShell 5.1・PowerShell 7のどちらでも以下のコマンドで取得できる（TSF/レジストリの変更は行わない）。結果が `occupied`/`inconclusive` なら原因を調査し登録工程へ進まない。
+
+   ```powershell
+   python tools/meltia_t4a_preflight.py > t4a.json
+   ```
 2. Visual Studio Developer Command Promptで以下のように読み取り専用ツールを **VMの作業用ディレクトリ**へコンパイルする（x64/x86ともビルド試験済みであることをCIで別途確認）。開発中のリポジトリやOSディレクトリへのコピー/インストールは不要。
 
    ```bat
    cl /nologo /std:c++17 /EHsc /W4 /WX /utf-8 /DUNICODE /D_UNICODE tools\meltia_t4b_profile_inventory.cpp /Fe:MeltiaT4bProfileInventory.exe /link ole32.lib uuid.lib
    ```
 
-3. PowerShellでT2の値を読み、作成されたexeへ渡し、標準出力のみを `tsf.json` に保存する。TSF helperは全言語の現ユーザー可視プロファイルを列挙し、候補2つの一致数だけを公開する。
+3. PowerShellでT2の値を読み、作成されたexeへ渡し、標準出力のみを `tsf.json` に保存する。TSF helperは全言語の現ユーザー可視プロファイルを列挙し、候補2つの一致数だけを公開する。**PowerShell 5.1の `>` はUTF-16LE（BOM付き）、PowerShell 7の `>` はUTF-8（通常BOMなし）** を生成する。監査ゲートは両方を明示的に受け付けるため、UTF-8への変換作業は不要である。
 
    ```powershell
    $id = (Get-Content .\config\tsf\meltia-t2-identity.json -Raw | ConvertFrom-Json).identity
    .\MeltiaT4bProfileInventory.exe ('{' + $id.clsid + '}') ('{' + $id.profileGuid + '}') > tsf.json
    python tools/meltia_t4b_audit_gate.py --t4a t4a.json --tsf tsf.json
    ```
+
+   監査ゲートのJSON読み込みは**UTF-8（BOMなし/BOM付き）、UTF-16LE/BE（BOM付きに限る）** に対応する。BOMなしUTF-16やその他の不明なエンコーディング、破損したJSONは `inconclusive`（exit 2）で停止する。PS5.1形式とPS7形式の両入力、および不正なT4-Aカウンター型（`false`、浮動小数、文字列、欠損/余剰キー）の回帰テストを `tools/test_meltia_t4b_audit_gate.py` に追加した。**exit 0でもTSF登録の許可ではない。**
 
 4. **両方の検査が成功しても登録しない。** 実環境の証拠はマシン名・SID・他製品名を含めない集計のみに限定してレビューする。観測したユーザー/権限/OSビルド/VMスナップショットを非公開の試験記録に残す。
 
@@ -70,5 +76,6 @@ VM内のスナップショットが取得済みであり、対象マシンが個
 
 ## 6. 確認状況
 
+- PR #89レビューP2/P3に対応：PS5.1 UTF-16LE/PS7 UTF-8証拠入力の明示的判別と、不正なJSON件数の厳格な整数型チェックを追加。実際のPowerShellからの取得ではなく**エンコード済みのテストファイル**で回帰を確認する（CI結果は個別確認）。
 - 本PRは `--selftest` の合成プロファイル試験とPythonの純粋ロジック試験のみ。実WindowsユーザーのTSF一覧取得、登録/解除、IME選択、共存・ロールバック実験は**未実施**。
 - Microsoft Docs：[ITfInputProcessorProfileMgr::EnumProfiles](https://learn.microsoft.com/en-us/windows/win32/api/msctf/nf-msctf-itfinputprocessorprofilemgr-enumprofiles)（langid=0で全言語列挙）、[IEnumTfInputProcessorProfiles](https://learn.microsoft.com/en-us/windows/win32/api/msctf/nn-msctf-ienumtfinputprocessorprofiles)。
