@@ -13,6 +13,11 @@ $temp = Join-Path ([IO.Path]::GetTempPath()) ('meltia-t4b6-' + [Guid]::NewGuid()
 New-Item -ItemType Directory -Force -Path $temp | Out-Null
 $q = [char]34
 try {
+    $snapshot = Join-Path $temp 'MeltiaT4b6IdentitySnapshot.h'
+    python (Join-Path $repo 'tools/generate_meltia_t4b6_snapshot.py') --output $snapshot
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $snapshot)) {
+        throw 'T4-B6 cannot compile without a validated, disabled T2 snapshot'
+    }
     foreach ($arch in @('x64', 'x86')) {
         $dir = Join-Path $temp $arch
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -23,7 +28,7 @@ try {
             ($q + $vcvars + $q + ' ' + $vcarch + ' >nul'),
             ('cd /d ' + $q + $dir + $q),
             ('cl /nologo /std:c++17 /EHsc /W4 /WX /utf-8 /DUNICODE /D_UNICODE ' +
-             '/Fe:' + $q + $exe + $q + ' ' + $q + $source + $q +
+             '/I' + $q + $temp + $q + ' /Fe:' + $q + $exe + $q + ' ' + $q + $source + $q +
              ' /link ole32.lib uuid.lib')
         ) -join ' && '
         cmd /c $cmd
