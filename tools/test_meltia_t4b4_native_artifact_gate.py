@@ -30,7 +30,10 @@ def synthetic_pe(machine, magic):
     struct.pack_into("<I", content, 0x3C, 0x80)
     content[0x80:0x84] = b"PE\0\0"
     struct.pack_into("<HHIIIHH", content, 0x84, machine, 1, 0, 0, 0, 0xE0, 0x2000)
-    struct.pack_into("<H", content, 0x98, magic)
+    optional_start = 0x98
+    struct.pack_into("<H", content, optional_start, magic)
+    fixed_size = 96 if magic == 0x10B else 112
+    struct.pack_into("<I", content, optional_start + fixed_size - 4, 16)
     return bytes(content)
 
 
@@ -69,6 +72,69 @@ class NativeArtifactGateTests(unittest.TestCase):
         x86.write_bytes(synthetic_pe(0x14C, 0x20B))
         with self.assertRaisesRegex(ValueError, "magic"):
             self.verify()
+
+    def test_two_byte_optional_header_rejected(self):
+        # Reproduces review P2: correct Magic, but only two declared bytes.
+        for arch in ("x64", "x86"):
+            with self.subTest(arch=arch):
+                file = self.root / "bin" / arch / "MeltiaTip.dll"
+                original = file.read_bytes()
+                data = bytearray(original)
+                struct.pack_into("<H", data, 0x84 + 16, 2)
+                file.write_bytes(data)
+                with self.assertRaisesRegex(ValueError, "optional"):
+                    self.verify()
+                file.write_bytes(original)
+
+    def test_fixed_optional_header_truncation_rejected(self):
+        for arch, fixed in (("x64", 112), ("x86", 96)):
+            with self.subTest(arch=arch):
+                file = self.root / "bin" / arch / "MeltiaTip.dll"
+                original = file.read_bytes()
+                data = bytearray(original)
+                struct.pack_into("<H", data, 0x84 + 16, fixed - 1)
+                file.write_bytes(data)
+                with self.assertRaisesRegex(ValueError, "optional"):
+                    self.verify()
+                file.write_bytes(original)
+
+    def test_directory_count_requires_declared_space(self):
+        for arch, fixed in (("x64", 112), ("x86", 96)):
+            with self.subTest(arch=arch):
+                file = self.root / "bin" / arch / "MeltiaTip.dll"
+                original = file.read_bytes()
+                data = bytearray(original)
+                struct.pack_into("<H", data, 0x84 + 16, fixed + 8 * 15)
+                file.write_bytes(data)
+                with self.assertRaisesRegex(ValueError, "directory"):
+                    self.verify()
+                file.write_bytes(original)
+
+    def test_directory_count_too_large_rejected(self):
+        for arch, fixed in (("x64", 112), ("x86", 96)):
+            with self.subTest(arch=arch):
+                file = self.root / "bin" / arch / "MeltiaTip.dll"
+                original = file.read_bytes()
+                data = bytearray(original)
+                struct.pack_into("<I", data, 0x98 + fixed - 4, 17)
+                file.write_bytes(data)
+                with self.assertRaisesRegex(ValueError, "directory"):
+                    self.verify()
+                file.write_bytes(original)
+
+    def test_smaller_valid_directory_table_is_accepted(self):
+        for arch, fixed in (("x64", 112), ("x86", 96)):
+            with self.subTest(arch=arch):
+                file = self.root / "bin" / arch / "MeltiaTip.dll"
+                original = file.read_bytes()
+                data = bytearray(original)
+                # Valid minimal optional header with 0 directories.
+                struct.pack_into("<I", data, 0x98 + fixed - 4, 0)
+                struct.pack_into("<H", data, 0x84 + 16, fixed)
+                file.write_bytes(data)
+                self.assertEqual(self.verify()["status"],
+                                 "structural-audit-only-not-authorized")
+                file.write_bytes(original)
 
     def test_truncated_header_rejected(self):
         x64 = self.root / "bin/x64/MeltiaTip.dll"
