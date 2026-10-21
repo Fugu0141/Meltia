@@ -12,6 +12,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include "MeltiaT4b6IdentitySnapshot.h"
 
@@ -85,6 +86,13 @@ bool ReadAndMatchManifest(const wchar_t* path) {
     std::string bytes(kLength, '\0');
     if (!input.read(&bytes[0], static_cast<std::streamsize>(bytes.size()))) return false;
     return ManifestMatches(bytes);
+}
+
+bool ValidateBoundT2Inputs(const wchar_t* manifestPath, wchar_t* const* args,
+                           GUID (&ids)[4]) {
+    for (int i = 0; i < 4; ++i)
+        if (!ParseGuid(args[i], ids[i])) return false;
+    return ReadAndMatchManifest(manifestPath) && GuidRolesMatch(ids);
 }
 
 bool ApplyCategoryPage(CategoryResult& result, HRESULT hr, ULONG fetched,
@@ -265,13 +273,15 @@ int wmain(int argc, wchar_t* argv[]) {
 
     // A deliberate opt-in switch prevents incidental TSF/COM access by CI.
     // Args: --vm-readonly T2_MANIFEST CLSID ATTR_INPUT ATTR_CONVERTED ATTR_TARGET
-    // Both checks finish BEFORE CoInitializeEx. A stale/modified manifest is
-    // rejected, not interpreted as an authorization to query foreign GUIDs.
-    if (argc != 7 || wcscmp(argv[1], L"--vm-readonly") != 0) return 2;
+    // --selftest-guard exercises the EXACT SAME validation without initializing
+    // COM. Only --vm-readonly is allowed to pass the guarded boundary.
+    if (argc != 7) return 2;
+    const bool live = wcscmp(argv[1], L"--vm-readonly") == 0;
+    const bool checkOnly = wcscmp(argv[1], L"--selftest-guard") == 0;
+    if (!live && !checkOnly) return 2;
     GUID supplied[4]{};
-    for (int i = 0; i < 4; ++i)
-        if (!ParseGuid(argv[i + 3], supplied[i])) return 2;
-    if (!ReadAndMatchManifest(argv[2]) || !GuidRolesMatch(supplied)) return 2;
+    if (!ValidateBoundT2Inputs(argv[2], &argv[3], supplied)) return 2;
+    if (checkOnly) return 0;  // Test-only: no COM, registry or TSF access.
     const GUID clsid = supplied[0];
     const GUID attrs[3] = {supplied[1], supplied[2], supplied[3]};
 
