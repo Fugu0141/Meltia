@@ -24,7 +24,7 @@ try {
             ('cd /d ' + $q + $dir + $q),
             ('cl /nologo /std:c++17 /EHsc /W4 /WX /utf-8 /DUNICODE /D_UNICODE ' +
              '/Fe:' + $q + $exe + $q + ' ' + $q + $source + $q +
-             ' /link ole32.lib uuid.lib msctf.lib')
+             ' /link ole32.lib uuid.lib')
         ) -join ' && '
         cmd /c $cmd
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $exe)) {
