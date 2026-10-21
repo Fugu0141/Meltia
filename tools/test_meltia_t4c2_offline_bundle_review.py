@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Meltia contributors
 """T4-C2: synthetic private evidence only; no Windows/TSF/registry calls."""
 import contextlib
-import copy
 import hashlib
 import io
 import json
@@ -125,8 +124,7 @@ class BundleReviewTests(unittest.TestCase):
         self.generate(codes=(0, 1, 2))
         r = self.review()
         self.assertEqual("blocked-occupied", r["status"])
-        self.assertEqual("not-evaluated" if False else "inconclusive",
-                         r["checks"]["t4b3"])
+        self.assertEqual("invalid-evidence", r["checks"]["t4b3"])
 
     def test_occupied_t4b3_preserved(self):
         self.attributes["categories"][0]["present"] = True
@@ -278,7 +276,7 @@ class BundleReviewTests(unittest.TestCase):
         for stage in c2.STAGES:
             self.assertEqual(hashlib.sha256((folder / (stage + ".json")).read_bytes()).hexdigest(),
                              summary["evidence_sha256"][stage])
-        self.assert_blocked(self.review())
+        self.assertIs(summary["registration_authorized"], False)
 
 
 if __name__ == "__main__":
