@@ -53,7 +53,15 @@ std::wstring GuidText(const GUID& value) {
 }
 
 bool ParseGuid(const wchar_t* text, GUID& value) {
-    return text != nullptr && SUCCEEDED(CLSIDFromString(text, &value));
+    if (!text) return false;
+    std::wstring canonical(text);
+    // T2 JSON stores canonical UUIDs without braces. CLSIDFromString requires
+    // Windows CLSID syntax with braces, so normalize before parsing.
+    if (canonical.size() == 36) {
+        canonical.insert(canonical.begin(), L'{');
+        canonical.push_back(L'}');
+    }
+    return SUCCEEDED(CLSIDFromString(canonical.c_str(), &value));
 }
 
 
@@ -192,6 +200,9 @@ bool SelfTest() {
         !ParseGuid(L"{00000003-0000-4000-8000-000000000003}", attrs[1]) ||
         !ParseGuid(L"{00000004-0000-4000-8000-000000000004}", attrs[2]) ||
         !ParseGuid(L"{00000005-0000-4000-8000-000000000005}", thirdParty)) return false;
+    GUID unbraced{};
+    if (!ParseGuid(L"00000001-0000-4000-8000-000000000001", unbraced) ||
+        !IsEqualGUID(unbraced, clsid)) return false;
     AttributeResult attributes[3]{};
     CategoryResult categories[5]{};
     std::wostringstream unknown;
