@@ -87,10 +87,13 @@ def assess(manifest, t4a, tsf, attribute_evidence, staging_root):
         checks["registry_and_profile"] = "inconclusive"
 
     try:
+        # Distinguish valid negative/unknown evidence from malformed records.
+        # B3's public assess() intentionally returns inconclusive for BOTH.
+        b3.validate_evidence(manifest, attribute_evidence)
         checks["display_attributes_and_categories"] = b3.assess(
             manifest, attribute_evidence)["status"]
     except (ValueError, KeyError, TypeError, AttributeError):
-        checks["display_attributes_and_categories"] = "inconclusive"
+        checks["display_attributes_and_categories"] = "invalid-evidence"
 
     try:
         artifact_report = b4.verify_staging_directory(staging_root, manifest)
