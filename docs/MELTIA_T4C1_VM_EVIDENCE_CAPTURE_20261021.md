@@ -24,7 +24,8 @@ T4-B6までで**単独の**レジストリ候補キー検査、可視TSFプロ�
 - `review-summary.json`の `independent_vm_provenance_verified=false` と `actual_vm_snapshot_verified=false` は**必ず維持**。スナップショットを口頭・CLIで確認したことは独立の証明ではない。CI合格・ハッシュ一致・占有不検出も登録許可ではない。
 - 標準出力は限定的な結果コード・状態のみ。プログラムのstderrや外部provider名を標準出力へ書かない。元JSONはGUID等を含み得るため、**公開リポジトリへコミットしない**。保存先は既存ディレクトリやソースツリーを許可せず、事前に空の新規privateディレクトリを要求。
 - `tools/build-meltia-t4c1-vm-observers.ps1`はx64/x86のB1・B6観測実行ファイルをMSVCでビルドし、**合成セルフテストのみ**動かす。C++ヘッダー生成には既存T2バリデータを使い、本家登録スクリプトやTIP DLLには触れない。
-- `tools/meltia_t4c1_vm_evidence_capture.py`は外部コマンドを`shell=False`で実行し、90秒以内の限定的なJSONを検証。実VM経路は明示の3フラグがない限り不可。合成テストは注入runnerで既存スキーマを検証し、OS APIやプロセスを起動しない。
+- `tools/meltia_t4c1_vm_evidence_capture.py`は外部コマンドを`shell=False`で実行し、90秒以内の限定的なJSONを検証。stdoutはWindows対応の専用読み取りスレッドで**読み取り中から128KiB上限を適用**し、超過時は子プロセスを終了する。stderrは破棄し、外部providerの診断文字列を表示しない。実VM経路は明示の3フラグがない限り不可。注入runnerの合成テストではOS APIや観測プロセスを起動しない（別途、無害なPython子プロセスで出力量上限のみテスト）。
+- **レビュー #95 による強化：** T4-A/B1/B6のstdoutは正しいJSON構文であってもトップレベルがオブジェクト以外（`[]`、`null`、文字列）なら拒否する。後続COM照会はせず、限定された`blocked-inconclusive`・終了コード2を返す。出力先は、未作成ディレクトリの**親symlink / Windows junctionも解決してから**実体パスでcheckoutへの包含を確認する。ビルド専用PowerShellもPythonの同じ検証関数を再利用して、別名パスからのソースツリー内への保存を拒否する。
 
 ## 3. 隔離VMオペレーター向けの実行例
 
@@ -68,7 +69,9 @@ try { ./tools/build-meltia-t4c1-vm-observers.ps1 -Output $stage }
 finally { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
 ~~~
 
-負例：登録ON T2、Windows以外/CI、ACK不足、T4-A占有・未知、T4-B1占有・途中失敗、B3占有・不正終了コード、異常JSONと重複キー、サイズ上限超過、外部runner異常、入力バイナリが存在しない・出力フォルダーが既存である場合を拒否。
+負例：登録ON T2、Windows以外/CI、ACK不足、T4-A占有・未知、T4-B1占有・途中失敗、B3占有・不正終了コード、異常JSON・重複キー・トップレベル配列/`null`/文字列、CLI終了コード2と匿名化した停止JSON、サイズ上限超過（子プロセス実行中に検知）、外部runner異常、入力バイナリ不存在・既存出力フォルダー・checkoutに向く親symlink/Windows junctionを拒否。
+
+**レビュー対応と検証範囲（2026-10-21）:** PR #95のP2-1（非辞書型JSON）とP2-2（パス別名によるcheckoutへの書込み）を修正し、P3（観測プロセスのメモリ上の無制限バッファ）についてもstreamingの上限を追加した。上記の負例回帰を追加。**実VM観測・OSへのIME登録は実行していない**。CIの成否は最新の実行結果を別途確認すること。親ディレクトリを他プロセスが同時に差し替える競合、外部COM providerの副作用、VM真正性までは保証せず、隔離VM・非公開保管・手動確認が引き続き必須。
 
 ## 5. 将来へ引き継ぐ作業
 
