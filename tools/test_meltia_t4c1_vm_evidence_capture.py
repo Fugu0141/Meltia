@@ -72,9 +72,7 @@ class T4C1Tests(unittest.TestCase):
         def runner(step):
             seen.append(step)
             return samples[step]
-        evidence, status = capture(self.manifest, runner, dict.fromkeys(
-            ("t4a", "t4b1", "t4b3"), None) if False else
-            {name: name for name in ("t4a", "t4b1", "t4b3")})
+        evidence, status = capture(self.manifest, runner, {name: name for name in ("t4a", "t4b1", "t4b3")})
         self.assertFalse(status["registration_authorized"])
         self.assertFalse(status["independent_vm_provenance_verified"])
         return seen, evidence, status
