@@ -256,10 +256,15 @@ def main(argv=None):
             result["status"] = "blocked-inconclusive"
             result["reason_code"] = "binary-or-manifest-changed-during-collection"
             result["stage_checks"] = dict.fromkeys(STAGES, "untrusted")
+        evidence_hashes = {}
         for stage, entry in evidence.items():
-            (output / (stage + ".json")).write_text(
-                json.dumps(entry, sort_keys=True, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8")
+            encoded = (json.dumps(entry, sort_keys=True, ensure_ascii=False,
+                                  indent=2) + "\n").encode("utf-8")
+            (output / (stage + ".json")).write_bytes(encoded)
+            evidence_hashes[stage] = hashlib.sha256(encoded).hexdigest()
+        # Bind each saved observation to this summary. These hashes establish
+        # internal drift detection, NOT the VM's independent provenance.
+        result["evidence_sha256"] = evidence_hashes
         result["binary_manifest_checksums"] = binaries
         result["actual_vm_snapshot_verified"] = False
         (output / "review-summary.json").write_text(
