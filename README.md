@@ -94,6 +94,7 @@
 - [開発・ビルド手順（本家から継承、Meltia 用に未更新）](docs/DEVELOPMENT.md)
 - [T4-B4：無登録Native TIPのx64/x86構造・ハッシュ監査（実登録は未実施）](docs/MELTIA_T4B4_NATIVE_ARTIFACT_AUDIT_20261021.md)
 - [T4-B5：TSF登録前の証拠統合とfail-closed停止ゲート（登録・実OS観測未実施）](docs/MELTIA_T4B5_OFFLINE_EVIDENCE_RECONCILIATION_20261021.md)
+- [T4-B6：隔離Windows VMで実TSF表示属性・カテゴリを観測するツール（登録はしない）](docs/MELTIA_T4B6_VM_TSF_OBSERVER_20261021.md)
 
 ## Meltia Windows Keyboard Preview（実機未検証）
 
