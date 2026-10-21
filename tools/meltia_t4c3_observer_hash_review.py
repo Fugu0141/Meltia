@@ -53,9 +53,14 @@ def hash_regular_executable(path, expected_name):
     returned digest cannot establish where or when the executable was used.
     """
     target = Path(path).absolute()
-    if (target.name.casefold() != expected_name.casefold() or
-            target.is_symlink() or target.resolve(strict=True) != target):
+    # Windows may canonicalize case/8.3/long names differently in resolve().
+    # Reject actual filesystem aliases instead of comparing path spellings.
+    if target.name.casefold() != expected_name.casefold() or ".." in target.parts:
         raise ValueError("invalid observer path")
+    for component in (target, *target.parents):
+        if (component.is_symlink() or
+                (hasattr(component, "is_junction") and component.is_junction())):
+            raise ValueError("observer path contains a filesystem alias")
     with target.open("rb") as stream:
         before = os.fstat(stream.fileno())
         if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= MAX_EXE_BYTES:
