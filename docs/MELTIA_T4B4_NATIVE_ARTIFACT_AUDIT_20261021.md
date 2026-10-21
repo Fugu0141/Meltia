@@ -2,7 +2,7 @@
 
 > **要件定義・基本設計・read-only検査の実装。** T3aで生成した試験用`MeltiaTip.dll`を**ファイルとして読むだけ**。Native DLLのロード、COM/TSF API、`regsvr32`、レジストリ変更、実登録・解除、IME有効化、配布は行わない。**exit 0は「構造検査成功」の意味だけで登録許可ではない。**
 
-関連：[親Issue #16](https://github.com/Fugu0141/Meltia/issues/16)、[T2マニフェスト](../config/tsf/meltia-t2-identity.json)、[T3a隔離ビルド](MELTIA_T3A_ISOLATED_NATIVE_TIP_BUILD_20261017.md)、[T4-B2所有権台帳](MELTIA_T4B2_OWNERSHIP_AND_ROLLBACK_CONTRACT_20261021.md)、[T4-B3表示属性・カテゴリ証拠](MELTIA_T4B3_ATTRIBUTE_CATEGORY_EVIDENCE_CONTRACT_20261021.md)（別PRでレビュー中）。
+関連：[親Issue #16](https://github.com/Fugu0141/Meltia/issues/16)、[T2マニフェスト](../config/tsf/meltia-t2-identity.json)、[T3a隔離ビルド](MELTIA_T3A_ISOLATED_NATIVE_TIP_BUILD_20261017.md)、[T4-B2所有権台帳](MELTIA_T4B2_OWNERSHIP_AND_ROLLBACK_CONTRACT_20261021.md)、[T4-B3表示属性・カテゴリ証拠](MELTIA_T4B3_ATTRIBUTE_CATEGORY_EVIDENCE_CONTRACT_20261021.md)（PR #91 main統合済み）。
 
 ## 1. 調査・設計の根拠
 
@@ -38,7 +38,7 @@ python tools/meltia_t4b4_native_artifact_gate.py --staging-root <T3aの一時ス
 
 ## 4. 実施記録と未解決事項
 
-- 2026-10-21：開発環境（Windows VMではない）で**人工PEヘッダーのみ**を使うPython試験20件を実行し、20件PASS。実`MeltiaTip.dll`、実x86/x64リンク済みバイナリ、Windows 10/11のTSF実機試験はこの記録では未確認。
+- 2026-10-21：GitHub ActionsのLinux runnerで**人工PEヘッダーのみ**を使うPython試験20件がPASS（[専用CI run 39545095558](https://github.com/Fugu0141/Meltia/actions/runs/39545095558)）。実`MeltiaTip.dll`、実x86/x64リンク済みバイナリ、Windows 10/11のTSF実機試験はこの記録では未確認。
 - 既存WindowsビルドスクリプトのBothモードに検査を連結。Windows実ビルドの成功、生成DLLのexport拒否動作は**この文書からは確認不可**。CIの結果をPR上で別途確認する。
 - T4-B3が扱う表示属性とTSFカテゴリ証拠の所有関係、HKLM/HKCU・x64/x86 registry view・ユーザー権限の衝突判定、登録セッションreceipt、独立スナップショット、実DLLからの関数呼び出し・本家との共存は未解決。
 - 次の実行可能な登録・解除コード／インストール手順は別のレビューを必須とし、専用隔離VM・スナップショット・停止/手動復旧条件・本家データ保全が確認されるまでは導入しない。Issue #16はOpenのままとする。
