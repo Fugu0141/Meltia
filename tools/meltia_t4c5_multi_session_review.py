@@ -133,6 +133,9 @@ def assess(plan_path):
         except (OSError, ValueError, TypeError, KeyError, UnicodeError):
             previous = c4.blocked("offline-session-review-failed")
 
+        if not isinstance(previous, dict):
+            invalid += 1
+            continue
         if previous.get("status") == "blocked-occupied":
             occupied = True
 
@@ -155,7 +158,16 @@ def assess(plan_path):
                 raise ValueError("reused private evidence")
             used_records.add(record)
             used_bundles.add(bundle)
-            if (not previous.get("private_record_consistent_unverified") is True
+            forbidden = ("registration_authorized", "registry_writes",
+                         "native_tsf_access", "native_dll_executed",
+                         "automatic_rollback", "independent_vm_provenance_verified",
+                         "operator_identity_authenticated",
+                         "snapshot_restoration_verified",
+                         "cross_user_architecture_coverage_verified")
+            if (previous.get("phase") != "T4-C4"
+                    or any(previous.get(key) is not False for key in forbidden)
+                    or previous.get("snapshot_reference_consistent_unverified") is not True
+                    or not previous.get("private_record_consistent_unverified") is True
                     or previous.get("upstream_bundle_consistency") !=
                     "internally-consistent-unverified"
                     or previous.get("upstream_observer_bytes_match") is not True
