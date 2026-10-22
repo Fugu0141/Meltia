@@ -60,18 +60,18 @@ T4-C4は、利用者が**非公開で手動作成する自己申告の台帳**�
 ### オフラインレビュー手順（非公開保存物にのみ実行）
 
 ```powershell
-python tools/meltia_t4c4_vm_snapshot_review.py \
-  --record '<private-operator-record.json>' \
-  --bundle '<private-C1-bundle>' \
-  --staging-root '<isolated-T3a-stage>' \
-  --profile-exe '<preserved-MeltiaT4bProfileInventory.exe>' \
-  --attribute-exe '<preserved-MeltiaT4b6VmTsfObserver.exe>' \
-  --expected-profile-sha256 '<independently-kept-64-hex-digest>' \
+python tools/meltia_t4c4_vm_snapshot_review.py `
+  --record '<private-operator-record.json>' `
+  --bundle '<private-C1-bundle>' `
+  --staging-root '<isolated-T3a-stage>' `
+  --profile-exe '<preserved-MeltiaT4bProfileInventory.exe>' `
+  --attribute-exe '<preserved-MeltiaT4b6VmTsfObserver.exe>' `
+  --expected-profile-sha256 '<independently-kept-64-hex-digest>' `
   --expected-attribute-sha256 '<independently-kept-64-hex-digest>'
 # 戻り値は1(衝突)または2(それ以外)だけ。成功=登録可能ではない。
 ```
 
-Windows PowerShellで改行する場合は末尾の `\` をバッククォート `\` に置き換えるか、一行で実行する。期待値はC1サマリーのコピーではなく別経路から取得する。
+PowerShellの行継続は行末バッククォートを使う（後ろに空白を置かない）。期待値はC1サマリーのコピーではなく別経路から取得する。
 
 ## 4. テストと未完了の依存
 
