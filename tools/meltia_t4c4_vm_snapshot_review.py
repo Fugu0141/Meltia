@@ -149,7 +149,8 @@ def check_record(record, actual_sha):
         datetime.fromisoformat(capture["observation_utc"].replace("Z", "+00:00"))
     except ValueError:
         return False
-    if (not isinstance(evidence, dict) or set(evidence) != set(actual_sha)
+    if ("review-summary.json" not in actual_sha or
+            not isinstance(evidence, dict) or set(evidence) != set(actual_sha)
             or any(type(v) is not str or not SHA256.fullmatch(v)
                    for v in evidence.values())):
         return False
