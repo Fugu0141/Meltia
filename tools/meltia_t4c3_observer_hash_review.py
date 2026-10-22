@@ -61,10 +61,25 @@ def hash_regular_executable(path, expected_name):
         if (component.is_symlink() or
                 (hasattr(component, "is_junction") and component.is_junction())):
             raise ValueError("observer path contains a filesystem alias")
-    with target.open("rb") as stream:
+    # lstat before opening: open("rb") on an unattended FIFO can block
+    # forever, so fstat alone is too late to reject special files.
+    expected = target.lstat()
+    if not stat.S_ISREG(expected.st_mode) or not 0 < expected.st_size <= MAX_EXE_BYTES:
+        raise ValueError("observer must be a bounded regular file")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    if os.name == "posix":
+        # A regular file can be replaced by a FIFO/symlink after lstat.
+        # Refuse the read entirely on POSIX systems without these protections.
+        if not hasattr(os, "O_NONBLOCK") or not hasattr(os, "O_NOFOLLOW"):
+            raise ValueError("safe nonblocking observer open is unavailable")
+        flags |= os.O_NONBLOCK | os.O_NOFOLLOW
+    with os.fdopen(os.open(target, flags), "rb") as stream:
         before = os.fstat(stream.fileno())
-        if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= MAX_EXE_BYTES:
-            raise ValueError("observer must be a bounded regular file")
+        if (not stat.S_ISREG(before.st_mode) or
+                not 0 < before.st_size <= MAX_EXE_BYTES or
+                (expected.st_dev, expected.st_ino) !=
+                (before.st_dev, before.st_ino)):
+            raise ValueError("observer replaced or is not a bounded regular file")
         sha = hashlib.sha256()
         read = 0
         while True:
@@ -76,9 +91,17 @@ def hash_regular_executable(path, expected_name):
                 raise ValueError("oversized observer")
             sha.update(data)
         after = os.fstat(stream.fileno())
-        if (read != before.st_size or read != after.st_size or
+        # Check the original path again: a rename after the descriptor was
+        # opened must not count as a successful verification.
+        current = target.lstat()
+        if (not stat.S_ISREG(current.st_mode) or
+                read != before.st_size or read != after.st_size or
                 (before.st_dev, before.st_ino, before.st_mtime_ns) !=
-                (after.st_dev, after.st_ino, after.st_mtime_ns)):
+                (after.st_dev, after.st_ino, after.st_mtime_ns) or
+                (current.st_dev, current.st_ino, current.st_size,
+                 current.st_mtime_ns) !=
+                (before.st_dev, before.st_ino, before.st_size,
+                 before.st_mtime_ns)):
             raise ValueError("observer changed while reading")
         return sha.hexdigest()
 
