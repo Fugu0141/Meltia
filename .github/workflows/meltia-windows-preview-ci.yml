@@ -53,6 +53,10 @@ on:
       - 'tools/test_meltia_t4c2_offline_bundle_review.py'
       - 'tools/meltia_t4c3_observer_hash_review.py'
       - 'tools/test_meltia_t4c3_observer_hash_review.py'
+      - 'tools/meltia_offline_evidence_reader.py'
+      - 'tools/meltia_t4c4_vm_snapshot_review.py'
+      - 'tools/test_meltia_t4c4_vm_snapshot_review.py'
+      - 'docs/MELTIA_T4C4_VM_SNAPSHOT_EVIDENCE_REVIEW_20261022.md'
       - 'docs/MELTIA_T4C3_OBSERVER_HASH_INDEPENDENT_REVIEW_20261021.md'
       - 'docs/MELTIA_T4C2_OFFLINE_EVIDENCE_BUNDLE_REVIEW_20261021.md'
       - 'tools/build-meltia-t4c1-vm-observers.ps1'
@@ -139,6 +143,10 @@ on:
       - 'tools/test_meltia_t4c2_offline_bundle_review.py'
       - 'tools/meltia_t4c3_observer_hash_review.py'
       - 'tools/test_meltia_t4c3_observer_hash_review.py'
+      - 'tools/meltia_offline_evidence_reader.py'
+      - 'tools/meltia_t4c4_vm_snapshot_review.py'
+      - 'tools/test_meltia_t4c4_vm_snapshot_review.py'
+      - 'docs/MELTIA_T4C4_VM_SNAPSHOT_EVIDENCE_REVIEW_20261022.md'
       - 'docs/MELTIA_T4C3_OBSERVER_HASH_INDEPENDENT_REVIEW_20261021.md'
       - 'docs/MELTIA_T4C2_OFFLINE_EVIDENCE_BUNDLE_REVIEW_20261021.md'
       - 'tools/build-meltia-t4c1-vm-observers.ps1'
@@ -196,6 +204,10 @@ jobs:
           persist-credentials: false
       - name: "T4-C3: time-bounded FIFO, open-time replacement and fstat drift"
         run: python3 tools/test_meltia_t4c3_observer_hash_review.py
+      - name: "T4-B5: nonblocking evidence reader and FIFO-swap regression (NO OS probes)"
+        run: python3 tools/test_meltia_t4b5_offline_review_gate.py
+      - name: "T4-C4: offline private-record FIFO rejection (NO VM/TSF calls)"
+        run: python3 tools/test_meltia_t4c4_vm_snapshot_review.py
   windows-preview:
     # Run even on Draft PRs: review must see the actual Preview EXE validation.
     name: Windows Meltia.exe publish, smoke and audit
@@ -267,6 +279,11 @@ jobs:
         run: |
           python tools/test_meltia_t4c3_observer_hash_review.py
           if ($LASTEXITCODE -ne 0) { throw 'T4-C3 offline observer hash comparison tests failed.' }
+      - name: "T4-C4: private VM snapshot metadata review (synthetic, NO VM access)"
+        shell: pwsh
+        run: |
+          python tools/test_meltia_t4c4_vm_snapshot_review.py
+          if ($LASTEXITCODE -ne 0) { throw 'T4-C4 offline VM snapshot record tests failed.' }
       - name: "T4-B4/B5: synthetic staged PE and offline evidence reconciliation (NO registration)"
         shell: pwsh
         run: |

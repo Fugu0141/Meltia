@@ -6,7 +6,10 @@ import copy
 from contextlib import redirect_stdout
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -194,6 +197,46 @@ class OfflineReviewTests(unittest.TestCase):
         p.write_text('{"phase":"T4-A","phase":"T4-B1"}', encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "duplicate"):
             gate.read_evidence(p)
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "mkfifo"),
+                         "POSIX FIFO swap requires mkfifo")
+    def test_b5_open_time_fifo_swap_does_not_hang(self):
+        # This exercises the real B5 JSON reader, not C4's preflight. Run in
+        # a time-bounded child so a blocking open regression cannot stall CI.
+        script = """
+import os, sys, tempfile
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import meltia_t4b5_offline_review_gate as b5
+import meltia_offline_evidence_reader as safe
+with tempfile.TemporaryDirectory() as folder:
+    target = Path(folder) / 'evidence.json'
+    target.write_bytes(b'{}')
+    previous = safe.os.open
+    swapped = [False]
+    def replace(path, flags):
+        if Path(path) == target and not swapped[0]:
+            swapped[0] = True
+            target.unlink()
+            os.mkfifo(target)
+        return previous(path, flags)
+    safe.os.open = replace
+    try:
+        try:
+            b5.read_evidence(target)
+        except (OSError, ValueError):
+            assert swapped[0], 'swap was not reached'
+        else:
+            raise AssertionError('unsafe FIFO replacement was accepted')
+    finally:
+        # os is a process-global module; restore it before tempfile cleanup
+        # (which uses os.open(..., dir_fd=...)).
+        safe.os.open = previous
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(Path(__file__).resolve().parent)],
+            capture_output=True, text=True, timeout=5, check=False)
+        self.assertEqual(0, result.returncode, result.stderr)
 
     def test_utf16le_and_utf8_bom_supported(self):
         p = self.root / "power-shell.json"
