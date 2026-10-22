@@ -21,7 +21,7 @@ T4-C5では、非公開計画JSONに列挙したセッションについて**既
 
 1. `tools/meltia_t4c5_multi_session_review.py` は読取専用。プロセス起動・OS観測・登録・解除・証拠の書込を一切行わず、`registration_authorized`等の許可フラグは常に`false`。CLIは既知衝突時exit 1、それ以外exit 2。**exit 0なし**。
 2. リポジトリ外の**非公開**計画（JSON、上限128KiB、重複キー・余計な外側キー拒否、1〜8セッション）を、C4が提供する安全な通常ファイルreaderで読み込む。各セッションの絶対path・種類・期待SHA-256の文法を確認する。計画や証拠の内容をログ、Issue、PR、CI Artifactへ出さない。
-3. **各セッションで既存C4を先に実行し、いずれかが`blocked-occupied`なら、ほかの記録の欠損・改ざん・重複に関係なく総合`blocked-occupied`を保持**。不正データから「不在」を推定しない。計画自体が読めない場合は`blocked-inconclusive`。
+3. **各セッションで既存C4を先に実行し、いずれかが`blocked-occupied`なら、ほかの記録の欠損・改ざん・重複に関係なく総合`blocked-occupied`を保持**。不正データから「不在」を推定しない。計画自体が読めない場合は`blocked-inconclusive`。 **bundleの位置が有効である限り**、台帳・observer・stagingのパス記述が不正でも安全な無効パスとしてC4へ渡し、C3/C2の独立した衝突発見を先に確認する。
 4. C4レポートの`private_record_consistent_unverified`かつ`upstream_bundle_consistency=internally-consistent-unverified`かつ`upstream_observer_bytes_match`が成立し、非衝突のケースのみ**限定的な自己申告の一枠**として数える。C4レコードが呼び出し中に変わった場合は拒否。
 5. 異なるセッションID・**異なるrecord/bundleパス**のみ集計対象。同じ台帳/証拠パックを複数の観測として数えない。4枠の申告に加え、ゲストOS/ビルドと自己申告スナップショット参照ダイジェストが共通で、全セッション内部整合した場合のみ`claimed_matrix_consistent_unverified=true`。1件の不正・不足・追加セッション・異なる申告があればfalse。
 6. **結果は必ずブロック状態**。集計に氏名・SID・パス・VM名・ダイジェスト値・ビルド番号・第三者TSFデータを出さない。`cross_user_architecture_coverage_verified`、`snapshot_restoration_verified`、`operator_identity_authenticated`、`independent_vm_provenance_verified`は常にfalse。
