@@ -51,6 +51,9 @@ on:
       - 'tools/test_meltia_t4c1_vm_evidence_capture.py'
       - 'tools/meltia_t4c2_offline_bundle_review.py'
       - 'tools/test_meltia_t4c2_offline_bundle_review.py'
+      - 'tools/meltia_t4c3_observer_hash_review.py'
+      - 'tools/test_meltia_t4c3_observer_hash_review.py'
+      - 'docs/MELTIA_T4C3_OBSERVER_HASH_INDEPENDENT_REVIEW_20261021.md'
       - 'docs/MELTIA_T4C2_OFFLINE_EVIDENCE_BUNDLE_REVIEW_20261021.md'
       - 'tools/build-meltia-t4c1-vm-observers.ps1'
       - 'docs/MELTIA_T4C1_VM_EVIDENCE_CAPTURE_20261021.md'
@@ -134,6 +137,9 @@ on:
       - 'tools/test_meltia_t4c1_vm_evidence_capture.py'
       - 'tools/meltia_t4c2_offline_bundle_review.py'
       - 'tools/test_meltia_t4c2_offline_bundle_review.py'
+      - 'tools/meltia_t4c3_observer_hash_review.py'
+      - 'tools/test_meltia_t4c3_observer_hash_review.py'
+      - 'docs/MELTIA_T4C3_OBSERVER_HASH_INDEPENDENT_REVIEW_20261021.md'
       - 'docs/MELTIA_T4C2_OFFLINE_EVIDENCE_BUNDLE_REVIEW_20261021.md'
       - 'tools/build-meltia-t4c1-vm-observers.ps1'
       - 'docs/MELTIA_T4C1_VM_EVIDENCE_CAPTURE_20261021.md'
@@ -180,6 +186,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  t4c3-posix:
+    name: T4-C3 POSIX FIFO and nonblocking read regressions (no OS probes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: "T4-C3: time-bounded FIFO, open-time replacement and fstat drift"
+        run: python3 tools/test_meltia_t4c3_observer_hash_review.py
   windows-preview:
     # Run even on Draft PRs: review must see the actual Preview EXE validation.
     name: Windows Meltia.exe publish, smoke and audit
@@ -246,6 +262,11 @@ jobs:
         run: |
           python tools/test_meltia_t4c2_offline_bundle_review.py
           if ($LASTEXITCODE -ne 0) { throw 'T4-C2 offline evidence bundle tests failed.' }
+      - name: "T4-C3: offline observer EXE bytes and out-of-band hash comparison (NO OS probes)"
+        shell: pwsh
+        run: |
+          python tools/test_meltia_t4c3_observer_hash_review.py
+          if ($LASTEXITCODE -ne 0) { throw 'T4-C3 offline observer hash comparison tests failed.' }
       - name: "T4-B4/B5: synthetic staged PE and offline evidence reconciliation (NO registration)"
         shell: pwsh
         run: |

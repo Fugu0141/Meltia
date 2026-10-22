@@ -97,6 +97,7 @@
 - [T4-B6：隔離Windows VMで実TSF表示属性・カテゴリを観測するツール（登録はしない）](docs/MELTIA_T4B6_VM_TSF_OBSERVER_20261021.md)
 - [T4-C1：隔離VMの登録前TSF観測を一括収集する手順・CLI（OS実測/登録は未実施）](docs/MELTIA_T4C1_VM_EVIDENCE_CAPTURE_20261021.md)
 - [T4-C2：C1証拠バンドルのSHA-256整合性とB5の衝突・Native構造検査（実VM観測/登録は未実施）](docs/MELTIA_T4C2_OFFLINE_EVIDENCE_BUNDLE_REVIEW_20261021.md)
+- [T4-C3：観測用EXEとC1自己申告・別経路SHA-256の三方向照合（実VM由来・登録未証明）](docs/MELTIA_T4C3_OBSERVER_HASH_INDEPENDENT_REVIEW_20261021.md)
 
 ## Meltia Windows Keyboard Preview（実機未検証）
 
