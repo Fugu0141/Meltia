@@ -148,6 +148,28 @@ class MultiSessionTests(unittest.TestCase):
         self.assertEqual("potential-identity-conflict-in-one-or-more-sessions",
                          r["reason_code"])
 
+    def test_invalid_nonbundle_paths_must_not_hide_same_session_collision(self):
+        for key, value in (
+            ("record", "relative/private.json"),
+            ("profile_exe", "relative/profile.exe"),
+            ("staging_root", "relative/stage"),
+        ):
+            with self.subTest(key=key):
+                old = self.sessions[0][key]
+                self.sessions[0][key] = value
+                self.write_plan()
+                calls = []
+                def occupied_first(record_path, *_args):
+                    calls.append(str(record_path))
+                    return self.mock_report(
+                        "blocked-occupied" if len(calls) == 1 else "blocked-inconclusive")
+                result = self.review(occupied_first)
+                self.assert_denied(result)
+                self.assertEqual("blocked-occupied", result["status"])
+                self.assertEqual(4, len(calls))
+                self.assertFalse(result["claimed_matrix_consistent_unverified"])
+                self.sessions[0][key] = old
+
     def test_inconsistent_upstream_never_counts(self):
         def bad_last(record_path, *_args):
             return self.mock_report(consistent=Path(record_path) !=
@@ -306,6 +328,13 @@ class MultiSessionTests(unittest.TestCase):
             })
             fixture.save_summary(summary)
             (fixture.bundle / "t4b3.json").write_bytes(b"not-json")
+            result = c5.assess(self.plan_path)
+            self.assert_denied(result)
+            self.assertEqual("blocked-occupied", result["status"])
+            # Even an unusable C4 metadata path must not suppress the valid
+            # independent occupied t4a report from the real C2/C3 pipeline.
+            self.sessions[0]["record"] = "relative/unreadable.json"
+            self.write_plan()
             result = c5.assess(self.plan_path)
             self.assert_denied(result)
             self.assertEqual("blocked-occupied", result["status"])
