@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 import sys
 
+from meltia_offline_evidence_reader import read_regular_bytes
+
 import meltia_t4b_audit_gate as b1
 import meltia_t4b2_ownership_model as b2
 import meltia_t4b3_evidence_gate as b3
@@ -40,13 +42,7 @@ def _unique_keys(pairs):
 
 def read_evidence(path):
     """Strict bounded JSON reader supporting PowerShell 5.1/7 BOM encodings."""
-    if path.is_symlink() or not path.is_file():
-        raise ValueError("evidence path must be an ordinary file")
-    if not 0 < path.stat().st_size <= MAX_EVIDENCE_BYTES:
-        raise ValueError("evidence file size outside limit")
-    raw = path.read_bytes()
-    if not 0 < len(raw) <= MAX_EVIDENCE_BYTES:
-        raise ValueError("evidence bytes outside limit")
+    raw = read_regular_bytes(path, MAX_EVIDENCE_BYTES)
     encoding = "utf-16" if raw.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
     return json.loads(raw.decode(encoding), object_pairs_hook=_unique_keys)
 
