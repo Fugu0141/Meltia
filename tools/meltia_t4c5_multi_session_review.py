@@ -81,14 +81,25 @@ def session_paths(session):
     if not isinstance(session, dict):
         raise ValueError("invalid session")
     paths = {}
+    paths_ok = True
     for key in PATH_FIELDS:
         value = session.get(key)
-        if (type(value) is not str or not 1 <= len(value) <= 2048
-                or "\x00" in value or not Path(value).is_absolute()
-                or ".." in Path(value).parts):
-            raise ValueError("invalid session path")
-        paths[key] = Path(value)
-    return paths
+        valid = (type(value) is str and 1 <= len(value) <= 2048
+                 and "\x00" not in value and Path(value).is_absolute()
+                 and ".." not in Path(value).parts)
+        if not valid:
+            if key == "bundle":
+                # Without a usable bundle locator, collision evidence cannot
+                # be located. Never search arbitrary directories.
+                raise ValueError("invalid bundle path")
+            paths_ok = False
+            # C4 inspects the bundle via C3/C2/B5 *before* the other paths.
+            # Supply a safe nonexistent path instead of masking an occupied
+            # observation when a record/observer/staging locator is invalid.
+            paths[key] = c1.ROOT / "tools" / ".meltia-c5-invalid-path"
+        else:
+            paths[key] = Path(value)
+    return paths, paths_ok
 
 
 def assess(plan_path):
@@ -113,7 +124,7 @@ def assess(plan_path):
         # Inspect all parseable sessions, even if some others were invalid.
         # A good occupied finding must not be concealed by bad metadata.
         try:
-            paths = session_paths(session)
+            paths, paths_ok = session_paths(session)
         except (OSError, ValueError, TypeError):
             invalid += 1
             continue
@@ -143,6 +154,8 @@ def assess(plan_path):
         try:
             if set(session) != SESSION_FIELDS:
                 raise ValueError("unknown session field")
+            if not paths_ok:
+                raise ValueError("invalid record, staging or observer path")
             if any(type(expected[k]) is not str or not c4.SHA256.fullmatch(expected[k])
                    for k in ("profile", "attribute")):
                 raise ValueError("invalid independently supplied digest")
