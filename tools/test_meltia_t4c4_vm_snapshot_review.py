@@ -228,6 +228,7 @@ try:
     assert report['status'] == 'blocked-occupied', report
     assert report['registration_authorized'] is False
 finally:
+    reader.os.open = previous
     fixture.doCleanups()
 """
         result = subprocess.run(
