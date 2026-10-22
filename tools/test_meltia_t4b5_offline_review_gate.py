@@ -222,11 +222,16 @@ with tempfile.TemporaryDirectory() as folder:
         return previous(path, flags)
     safe.os.open = replace
     try:
-        b5.read_evidence(target)
-    except (OSError, ValueError):
-        assert swapped[0], 'swap was not reached'
-        sys.exit(0)
-    sys.exit(1)
+        try:
+            b5.read_evidence(target)
+        except (OSError, ValueError):
+            assert swapped[0], 'swap was not reached'
+        else:
+            raise AssertionError('unsafe FIFO replacement was accepted')
+    finally:
+        # os is a process-global module; restore it before tempfile cleanup
+        # (which uses os.open(..., dir_fd=...)).
+        safe.os.open = previous
 """
         result = subprocess.run(
             [sys.executable, "-c", script, str(Path(__file__).resolve().parent)],
