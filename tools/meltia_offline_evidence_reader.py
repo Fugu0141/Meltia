@@ -23,11 +23,11 @@ def read_regular_bytes(path, limit=MAX_EVIDENCE_BYTES):
     for part in (target, *target.parents):
         if (part.is_symlink() or
                 (hasattr(part, "is_junction") and part.is_junction())):
-            raise ValueError("filesystem alias")
+            raise ValueError("evidence path must be an ordinary file (alias)")
 
     prior = target.lstat()
     if not stat.S_ISREG(prior.st_mode) or not 0 < prior.st_size <= limit:
-        raise ValueError("evidence must be a bounded regular file")
+        raise ValueError("evidence file size or type outside limit")
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
     if os.name == "posix":
         if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_NONBLOCK"):
