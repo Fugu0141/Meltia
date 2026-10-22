@@ -6,7 +6,12 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
+import stat
+import sys
+import types
 import tempfile
 import unittest
 from unittest import mock
@@ -138,6 +143,93 @@ class ObserverHashReviewTests(unittest.TestCase):
         else:
             with self.assertRaises(ValueError):
                 c3.hash_regular_executable(alias / profile.name, profile.name)
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "mkfifo"),
+                         "FIFO tests require POSIX")
+    def test_fifo_rejected_before_open_without_a_writer(self):
+        profile = self.observers["profile"]
+        profile.unlink()
+        os.mkfifo(profile)
+        # Catch a regression that blocks in open() instead of timing out CI.
+        script = (
+            "import sys\n"
+            "sys.path.insert(0, sys.argv[1])\n"
+            "import meltia_t4c3_observer_hash_review as c3\n"
+            "try:\n"
+            "    c3.hash_regular_executable(sys.argv[2], sys.argv[3])\n"
+            "except (OSError, ValueError):\n"
+            "    sys.exit(0)\n"
+            "sys.exit(1)\n"
+        )
+        outcome = subprocess.run(
+            [sys.executable, "-c", script, str(Path(__file__).resolve().parent),
+             str(profile), profile.name],
+            capture_output=True, text=True, timeout=3, check=False)
+        self.assertEqual(0, outcome.returncode, outcome.stderr)
+        # Even before the open, nonregular paths must be rejected.
+        with mock.patch.object(c3.os, "open",
+                               side_effect=AssertionError("opened a FIFO")):
+            with self.assertRaises(ValueError):
+                c3.hash_regular_executable(profile, profile.name)
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "mkfifo"),
+                         "FIFO races require POSIX")
+    def test_file_swapped_for_fifo_between_lstat_and_open_does_not_block(self):
+        profile = self.observers["profile"]
+        script = (
+            "import os, sys\n"
+            "from pathlib import Path\n"
+            "sys.path.insert(0, sys.argv[1])\n"
+            "import meltia_t4c3_observer_hash_review as c3\n"
+            "file = Path(sys.argv[2])\n"
+            "original_open = os.open\n"
+            "def swap(path, flags):\n"
+            "    file.rename(file.with_suffix('.saved'))\n"
+            "    os.mkfifo(file)\n"
+            "    return original_open(path, flags)\n"
+            "c3.os.open = swap\n"
+            "try:\n"
+            "    c3.hash_regular_executable(file, file.name)\n"
+            "except (OSError, ValueError):\n"
+            "    sys.exit(0)\n"
+            "sys.exit(1)\n"
+        )
+        outcome = subprocess.run(
+            [sys.executable, "-c", script, str(Path(__file__).resolve().parent),
+             str(profile)],
+            capture_output=True, text=True, timeout=3, check=False)
+        self.assertEqual(0, outcome.returncode, outcome.stderr)
+        self.assertTrue(stat.S_ISFIFO(profile.lstat().st_mode))
+
+    def test_changed_fstat_size_inode_and_mtime_are_rejected(self):
+        profile = self.observers["profile"]
+        expected = profile.stat()
+        for changed in ("st_size", "st_ino", "st_mtime_ns"):
+            with self.subTest(field=changed):
+                fields = ("st_mode", "st_size", "st_dev", "st_ino",
+                          "st_mtime_ns")
+                altered = {name: getattr(expected, name) for name in fields}
+                altered[changed] += 1
+                after = types.SimpleNamespace(**altered)
+                with mock.patch.object(c3.os, "fstat",
+                                       side_effect=[expected, after]):
+                    with self.assertRaises(ValueError):
+                        c3.hash_regular_executable(profile, profile.name)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX nofollow flags")
+    def test_nonblocking_nofollow_flags_on_regular_files(self):
+        profile = self.observers["profile"]
+        real_open = os.open
+        seen = []
+        def capture(path, flags):
+            seen.append(flags)
+            return real_open(path, flags)
+        with mock.patch.object(c3.os, "open", side_effect=capture):
+            self.assertEqual(self.expected["profile"],
+                             c3.hash_regular_executable(profile, profile.name))
+        self.assertEqual(1, len(seen))
+        self.assertTrue(seen[0] & os.O_NONBLOCK)
+        self.assertTrue(seen[0] & os.O_NOFOLLOW)
 
     def test_invalid_digest_syntax_and_wrong_schema_never_pass(self):
         for bad in (None, 23, "x" * 64, "A" * 64, "a" * 63):
