@@ -18,6 +18,7 @@ import stat
 import sys
 
 import meltia_t4c1_vm_evidence_capture as c1
+from meltia_offline_evidence_reader import read_regular_bytes as safe_read_bytes
 import meltia_t4c3_observer_hash_review as c3
 
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -58,49 +59,43 @@ def no_aliases(path):
     return p
 
 
-def ordinary_bundle_paths(directory):
-    """Reject special files before C2/C3 might try to read them."""
+def bundle_members(directory):
+    """Enumerate metadata without reading extra/unexpected or special files.
+
+    This must run AFTER C3. A bad unrelated file cannot mask a verified
+    identity collision from another independent stage. C2 and B5 use the
+    shared nonblocking reader so unsafe paths cannot hang in their pipeline.
+    """
     directory = no_aliases(directory)
     if not stat.S_ISDIR(directory.lstat().st_mode):
         raise ValueError("bundle is not an ordinary directory")
-    for filename in FILE_NAMES:
-        path = directory / filename
-        try:
-            st = path.lstat()
-        except FileNotFoundError:
-            continue  # C2 decides whether absent evidence is consistent.
-        if not stat.S_ISREG(st.st_mode) or not 0 < st.st_size <= c1.MAX_BYTES:
-            raise ValueError("unexpected evidence file type or size")
-    return directory
+    present = set()
+    clean = True
+    with os.scandir(directory) as entries:
+        for entry in entries:
+            if entry.name not in FILE_NAMES:
+                clean = False
+                continue  # Never open or follow unrecognized entries.
+            st = entry.stat(follow_symlinks=False)
+            if not stat.S_ISREG(st.st_mode) or not 0 < st.st_size <= c1.MAX_BYTES:
+                clean = False
+                continue
+            present.add(entry.name)
+    return present, clean
 
 
 def read_regular_bytes(path, limit=c1.MAX_BYTES):
-    """Bounded, no-follow and nonblocking file read (not a tamper-proof lock)."""
+    """Shared no-follow, bounded evidence reader (not atomic attestation)."""
+    return safe_read_bytes(path, limit)
+
+
+def private_record_outside_checkout(path):
+    """Reject private operator metadata kept in the Git source tree."""
     p = no_aliases(path)
-    before = p.lstat()
-    if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= limit:
-        raise ValueError("nonregular or oversized record")
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
-    if os.name == "posix":
-        if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_NONBLOCK"):
-            raise ValueError("safe file open unavailable")
-        flags |= os.O_NOFOLLOW | os.O_NONBLOCK
-    with os.fdopen(os.open(p, flags), "rb") as stream:
-        start = os.fstat(stream.fileno())
-        if (not stat.S_ISREG(start.st_mode) or
-                (start.st_dev, start.st_ino, start.st_size) !=
-                (before.st_dev, before.st_ino, before.st_size)):
-            raise ValueError("file changed before read")
-        data = stream.read(limit + 1)
-        finish = os.fstat(stream.fileno())
-        current = p.lstat()
-        ident = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
-        if (len(data) != before.st_size or
-                ident(before) != ident(start) or
-                ident(start) != ident(finish) or
-                ident(finish) != ident(current)):
-            raise ValueError("file changed while reading")
-    return data
+    checkout = c1.ROOT.resolve()
+    if p == checkout or checkout in p.parents:
+        raise ValueError("private operator record must stay outside checkout")
+    return p
 
 
 def check_record(record, actual_sha):
@@ -160,10 +155,14 @@ def check_record(record, actual_sha):
 def assess(record_path, bundle, staging_root, observer_paths, expected):
     report = blocked()
     try:
-        bundle = ordinary_bundle_paths(bundle)
+        # Directory alias checks are independent of the individual stage files.
+        bundle = no_aliases(bundle)
+        if not stat.S_ISDIR(bundle.lstat().st_mode):
+            return report
     except (OSError, ValueError, TypeError):
         return report
-    # C3 already incorporates C2 and preserves a confirmed identity collision.
+    # C3 must run BEFORE examining malformed/extra/special evidence members.
+    # C2/B5 skip unsafe stages without losing independent occupied evidence.
     try:
         earlier = c3.assess(bundle, staging_root, observer_paths, expected)
         if (earlier["status"] not in ("blocked-inconclusive", "blocked-occupied") or
@@ -180,13 +179,17 @@ def assess(record_path, bundle, staging_root, observer_paths, expected):
 
     # A record can only add unverified context; never upgrade a C3 failure.
     try:
+        names, clean = bundle_members(bundle)
+        if not clean:
+            raise ValueError("unexpected or unsafe bundle member")
+        record_path = private_record_outside_checkout(record_path)
         raw_record = read_regular_bytes(record_path)
         record = c1.read_json_bytes(raw_record)
         actual = {}
         for filename in FILE_NAMES:
-            path = bundle / filename
-            if path.exists():
-                actual[filename] = hashlib.sha256(read_regular_bytes(path)).hexdigest()
+            if filename in names:
+                actual[filename] = hashlib.sha256(
+                    read_regular_bytes(bundle / filename)).hexdigest()
         valid = check_record(record, actual)
         if not valid:
             raise ValueError("record metadata/digest mismatch")
