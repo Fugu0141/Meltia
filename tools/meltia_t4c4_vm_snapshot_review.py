@@ -92,10 +92,14 @@ def read_regular_bytes(path, limit=c1.MAX_BYTES):
 def private_record_outside_checkout(path):
     """Reject private operator metadata kept in the Git source tree."""
     p = no_aliases(path)
+    # On Windows, lexical TEMP paths can differ from the canonical path
+    # (case, drive aliases, short names, junctions). Compare both resolved
+    # locations rather than a raw absolute path against the resolved checkout.
+    canonical = p.resolve(strict=True)
     checkout = c1.ROOT.resolve()
-    if p == checkout or checkout in p.parents:
+    if canonical == checkout or checkout in canonical.parents:
         raise ValueError("private operator record must stay outside checkout")
-    return p
+    return canonical
 
 
 def check_record(record, actual_sha):
