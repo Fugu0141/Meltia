@@ -204,6 +204,8 @@ jobs:
           persist-credentials: false
       - name: "T4-C3: time-bounded FIFO, open-time replacement and fstat drift"
         run: python3 tools/test_meltia_t4c3_observer_hash_review.py
+      - name: "T4-B5: nonblocking evidence reader and FIFO-swap regression (NO OS probes)"
+        run: python3 tools/test_meltia_t4b5_offline_review_gate.py
       - name: "T4-C4: offline private-record FIFO rejection (NO VM/TSF calls)"
         run: python3 tools/test_meltia_t4c4_vm_snapshot_review.py
   windows-preview:
