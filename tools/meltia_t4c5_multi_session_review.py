@@ -140,6 +140,9 @@ def assess(plan_path):
         try:
             if set(session) != SESSION_FIELDS:
                 raise ValueError("unknown session field")
+            if any(type(expected[k]) is not str or not c4.SHA256.fullmatch(expected[k])
+                   for k in ("profile", "attribute")):
+                raise ValueError("invalid independently supplied digest")
             sid = session["id"]
             if type(sid) is not str or not SESSION_ID.fullmatch(sid):
                 raise ValueError("invalid anonymous session id")
