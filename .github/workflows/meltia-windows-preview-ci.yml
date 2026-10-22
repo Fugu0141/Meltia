@@ -186,6 +186,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  t4c3-posix:
+    name: T4-C3 POSIX FIFO and nonblocking read regressions (no OS probes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: "T4-C3: time-bounded FIFO, open-time replacement and fstat drift"
+        run: python3 tools/test_meltia_t4c3_observer_hash_review.py
   windows-preview:
     # Run even on Draft PRs: review must see the actual Preview EXE validation.
     name: Windows Meltia.exe publish, smoke and audit
