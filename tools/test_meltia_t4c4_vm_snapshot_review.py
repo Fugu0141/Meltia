@@ -137,6 +137,104 @@ class VmSnapshotRecordTests(unittest.TestCase):
         self.assert_never_authorized(r)
         self.assertFalse(r["private_record_consistent_unverified"])
 
+    def test_unexpected_bundle_filename_and_directory_are_rejected(self):
+        for name, as_directory in (("t4b2.json", False), ("another-stage.json", False),
+                                   ("unexpected-subdirectory", True)):
+            with self.subTest(name=name):
+                path = self.bundle / name
+                if as_directory:
+                    path.mkdir()
+                else:
+                    path.write_bytes(b"{}")
+                result = self.assess()
+                self.assert_never_authorized(result)
+                self.assertFalse(result["private_record_consistent_unverified"])
+                if as_directory:
+                    path.rmdir()
+                else:
+                    path.unlink()
+
+    def test_private_record_inside_checkout_is_rejected(self):
+        checkout = self.root / "checkout"
+        checkout.mkdir()
+        private = checkout / "private-record.json"
+        private.write_bytes(self.record_path.read_bytes())
+        with (mock.patch.object(c4.c1, "ROOT", checkout),
+              mock.patch.object(c4.c3, "assess", return_value=self.earlier)):
+            r = c4.assess(private, self.bundle, self.stage, {}, {})
+        self.assert_never_authorized(r)
+        self.assertFalse(r["private_record_consistent_unverified"])
+
+    def test_real_c2_c3_collision_survives_invalid_unrelated_stage(self):
+        # Genuine C2/B5/C3 code, no mock. This exercises the P1 regression:
+        # valid occupied T4-A remains occupied when a later stage is corrupt.
+        import meltia_t4a_preflight as t4a
+        from test_meltia_t4c2_offline_bundle_review import BundleReviewTests
+        for kind in ("malformed", "fifo"):
+            if kind == "fifo" and (os.name != "posix" or
+                                   not hasattr(os, "mkfifo")):
+                continue
+            with self.subTest(kind=kind):
+                fixture = BundleReviewTests(
+                    methodName="test_complete_bundle_is_only_internally_consistent")
+                fixture.setUp()
+                try:
+                    fixture.registry = t4a.inspect(fixture.identity, lambda *_: True)
+                    fixture.generate(codes=(1, 0, 2))
+                    unrelated = fixture.bundle / "t4b3.json"
+                    if kind == "fifo":
+                        os.mkfifo(unrelated)
+                    else:
+                        unrelated.write_bytes(b"not-json")
+                    result = c4.assess(self.record_path, fixture.bundle,
+                                       fixture.stage, {}, {})
+                    self.assert_never_authorized(result)
+                    self.assertEqual("blocked-occupied", result["status"])
+                    self.assertFalse(result["private_record_consistent_unverified"])
+                finally:
+                    fixture.doCleanups()
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "mkfifo"),
+                         "POSIX nonblocking open-time race regression")
+    def test_real_c2_open_time_fifo_swap_does_not_hang_or_hide_collision(self):
+        # Run inside a subprocess: a regression to blocking open cannot hang CI.
+        script = """
+import os, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import meltia_t4a_preflight as t4a
+import meltia_t4c4_vm_snapshot_review as c4
+import meltia_offline_evidence_reader as reader
+from test_meltia_t4c2_offline_bundle_review import BundleReviewTests
+fixture = BundleReviewTests(methodName='test_complete_bundle_is_only_internally_consistent')
+fixture.setUp()
+try:
+    fixture.registry = t4a.inspect(fixture.identity, lambda *_: True)
+    fixture.generate(codes=(1, 0, 2))
+    target = fixture.bundle / 't4b3.json'
+    target.write_bytes(b'{}')
+    previous = reader.os.open
+    swap_done = [False]
+    def swap(path, flags):
+        if Path(path) == target and not swap_done[0]:
+            swap_done[0] = True
+            target.unlink()
+            os.mkfifo(target)
+        return previous(path, flags)
+    reader.os.open = swap
+    report = c4.assess(fixture.root / 'missing-record.json',
+                       fixture.bundle, fixture.stage, {}, {})
+    assert swap_done[0], 'open-time swap was not exercised'
+    assert report['status'] == 'blocked-occupied', report
+    assert report['registration_authorized'] is False
+finally:
+    fixture.doCleanups()
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(Path(__file__).resolve().parent)],
+            capture_output=True, text=True, timeout=5, check=False)
+        self.assertEqual(0, result.returncode, result.stderr)
+
     def test_snapshot_reference_mismatch_and_missing_restore_ack_fail(self):
         self.record["snapshot"]["restore_drill_reference_sha256"] = "b" * 64
         self.write_record()
@@ -214,10 +312,13 @@ class VmSnapshotRecordTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         (self.bundle / "t4a.json").unlink()
         os.mkfifo(self.bundle / "t4a.json")
-        with mock.patch.object(c4.c3, "assess",
-                               side_effect=AssertionError("should precheck FIFO")):
+        # C3 MUST run even if an unrelated stage is unsafe: it might find
+        # independent evidence of an identity collision elsewhere.
+        with mock.patch.object(c4.c3, "assess", return_value=self.earlier) as called:
             r = c4.assess(self.record_path, self.bundle, self.stage, {}, {})
+        called.assert_called_once()
         self.assert_never_authorized(r)
+        self.assertFalse(r["private_record_consistent_unverified"])
 
     def test_cli_exits_two_or_one_and_never_exposes_private_values(self):
         args = ["--record", str(self.record_path),
