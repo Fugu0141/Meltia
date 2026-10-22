@@ -123,6 +123,14 @@ class VmSnapshotRecordTests(unittest.TestCase):
         r = self.assess()
         self.assertFalse(r["private_record_consistent_unverified"])
 
+    def test_missing_summary_cannot_count_as_valid_record(self):
+        (self.bundle / "review-summary.json").unlink()
+        self.record["evidence_sha256"].pop("review-summary.json")
+        self.write_record()
+        r = self.assess()
+        self.assert_never_authorized(r)
+        self.assertFalse(r["private_record_consistent_unverified"])
+
     def test_extra_unlisted_evidence_fails(self):
         (self.bundle / "t4b1.json").write_bytes(b"{}")
         r = self.assess()
