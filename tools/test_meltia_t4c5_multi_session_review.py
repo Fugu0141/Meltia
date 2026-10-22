@@ -157,6 +157,23 @@ class MultiSessionTests(unittest.TestCase):
         self.assertFalse(r["claimed_matrix_consistent_unverified"])
         self.assertEqual(3, r["sessions_reconciled_unverified"])
 
+    def test_upstream_illegal_authorization_or_missing_contract_never_counts(self):
+        for field, value in [
+            ("registration_authorized", True),
+            ("registry_writes", True),
+            ("phase", "T4-C3"),
+            ("snapshot_reference_consistent_unverified", False),
+        ]:
+            with self.subTest(field=field):
+                previous = self.mock_report()
+                previous[field] = value
+                r = self.review(previous)
+                self.assert_denied(r)
+                self.assertFalse(r["claimed_matrix_consistent_unverified"])
+                self.assertEqual(4, r["sessions_invalid_or_unverified"])
+        self.assertFalse(self.review(lambda *_args: None)[
+            "claimed_matrix_consistent_unverified"])
+
     def test_guest_build_and_snapshot_mismatch(self):
         for section, key, replacement in [
             ("environment", "guest_build", "10.0.19045"),
