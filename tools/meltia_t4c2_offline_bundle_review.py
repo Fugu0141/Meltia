@@ -15,6 +15,7 @@ import re
 import sys
 
 import meltia_t4b5_offline_review_gate as b5
+from meltia_offline_evidence_reader import read_regular_bytes
 import meltia_t4c1_vm_evidence_capture as c1
 from meltia_t4a_preflight import MANIFEST, validate_preflight_manifest
 from meltia_t4b_audit_gate import validate_t4a
@@ -63,12 +64,9 @@ def load_bundle(directory):
     for stage in STAGES:
         p = directory / (stage + ".json")
         try:
-            if p.is_symlink() or not p.is_file():
-                continue
-            # Parse and hash exactly the same bounded bytes. Reading the file
-            # twice could accept a mixed snapshot if it changes between reads.
-            with p.open("rb") as stream:
-                data = stream.read(c1.MAX_BYTES + 1)
+            # The same safely opened bounded bytes feed both parsing and hash.
+            # A malformed/missing stage must not conceal other occupied stages.
+            data = read_regular_bytes(p, c1.MAX_BYTES)
             files[stage] = c1.read_json_bytes(data)
             raw[stage] = data
         except (OSError, ValueError, TypeError, UnicodeError, KeyError):
