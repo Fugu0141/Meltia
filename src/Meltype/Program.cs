@@ -15,6 +15,9 @@ internal static class Program
 #if MELTIA_PREVIEW
         // Must precede the first AppPaths access in the shared Meltype.Core assembly.
         MeltiaPreviewSafety.Initialize();
+        // Interactive Windows E2E runner launches an isolated child using the real hook.
+        if (args.FirstOrDefault() == "--meltia-e2e")
+            return MeltiaE2eHarness.Run(args);
         // Offline integration smoke: no hook and no TSF registration.
         if (args.FirstOrDefault() == "--meltia-selftest")
             return MeltiaPreviewSelfTest.Run(args.ElementAtOrDefault(1));
@@ -62,6 +65,22 @@ internal static class Program
         settings.Mode = InputMode.Keyboard;
         settings.AutoUpdate = false;
         settings.WelcomeShown = true;
+        if (MeltiaE2eTrace.Enabled)
+        {
+            // Test-only settings; the runner supplied a newly created private profile.
+            // User state, bundled dictionaries, other IMEs and OS learning remain untouched.
+            settings.AllowInjectedInput = true;
+            settings.LearningEnabled = false;
+            settings.LiveConversion = false;
+            settings.PredictiveCandidates = false;
+            settings.AutoCorrectAfterCommit = false;
+            settings.CorrectTypos = false;
+            settings.ShowModeIndicator = false;
+            settings.ShowModeIndicatorOnFocus = false;
+            settings.DirectModeAutoDetect = false;
+            settings.LogTypedText = false;
+            settings.FileLog = false;
+        }
 #endif
         if (!File.Exists(AppPaths.ConfigFile))
         {
@@ -99,7 +118,11 @@ internal static class Program
         using (engine)
         {
             using var exitSignal = new ExitSignal();
-            Application.Run(new TrayApplicationContext(engine));
+            using var tray = new TrayApplicationContext(engine);
+#if MELTIA_PREVIEW
+            MeltiaE2eTrace.Ready(); // Hook and composition service are attached.
+#endif
+            Application.Run(tray);
         }
         return 0;
     }
