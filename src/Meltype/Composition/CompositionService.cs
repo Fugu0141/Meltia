@@ -523,6 +523,9 @@ internal sealed class CompositionService : ICompositionHost, IDisposable
 
     public void Show(CompositionView view)
     {
+#if MELTIA_PREVIEW
+        MeltiaE2eTrace.Record("view", Controller, view.Text);
+#endif
         if (_window.Visible)
         {
             // 確定した文字の分だけ右へ (同じ位置のままだと、確定した文字を変換ボックスが隠してしまう: issue #57)。
