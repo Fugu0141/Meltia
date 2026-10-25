@@ -8,6 +8,9 @@ on:
     types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - 'src/Meltia.Windows/**'
+      - 'tools/generate_meltia_e2e_corpus.py'
+      - 'tests/test_meltia_e2e_corpus.py'
+      - 'docs/MELTIA_WINDOWS_REAL_KEY_E2E_REQUIREMENTS_20261025.md'
       - 'src/Meltia.Core/**'
       - 'src/Meltia.CompositionBridge/**'
       - 'src/Meltype.Core/**'
@@ -98,6 +101,9 @@ on:
     branches: [main]
     paths:
       - 'src/Meltia.Windows/**'
+      - 'tools/generate_meltia_e2e_corpus.py'
+      - 'tests/test_meltia_e2e_corpus.py'
+      - 'docs/MELTIA_WINDOWS_REAL_KEY_E2E_REQUIREMENTS_20261025.md'
       - 'src/Meltia.Core/**'
       - 'src/Meltia.CompositionBridge/**'
       - 'src/Meltype.Core/**'
@@ -220,6 +226,13 @@ jobs:
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: 10.0.x
+      - name: Verify real-key E2E corpus determinism, uniqueness and spans (offline only)
+        shell: pwsh
+        run: |
+          python tests/test_meltia_e2e_corpus.py
+          if ($LASTEXITCODE -ne 0) { throw 'E2E corpus verification failed.' }
+          python tools/generate_meltia_e2e_corpus.py --count 10000 --seed 20261025 --output artifacts/meltia-e2e/input-10000.jsonl
+          if ($LASTEXITCODE -ne 0) { throw 'E2E corpus generation failed.' }
       - name: Verify Meltia T2 disabled TSF identity contract (offline only)
         shell: pwsh
         run: |
