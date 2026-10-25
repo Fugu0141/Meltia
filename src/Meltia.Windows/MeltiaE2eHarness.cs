@@ -119,6 +119,7 @@ internal static class MeltiaE2eHarness
         int processed = 0;
         int matches = 0;
         int noTraces = 0;
+        int missingBoundaryEvidence = 0;
         int boundaryFailures = 0;
         int boundariesCompared = 0, boundariesMatched = 0;
         string? fatal = null;
@@ -251,7 +252,8 @@ internal static class MeltiaE2eHarness
                     bool matched = test.Expected is null || string.Equals(observed, test.Expected, StringComparison.Ordinal);
                     if (test.Expected is not null && matched) matches++;
                     if (events.Count == 0) noTraces++;
-                    if (spanEvent is not null && !covered) boundaryFailures++;
+                    if (spanEvent is null) missingBoundaryEvidence++;
+                    else if (!covered) boundaryFailures++;
                     durations.Add(caseClock.Elapsed.TotalMilliseconds);
                     var current = perCategory.GetValueOrDefault(test.Category);
                     perCategory[test.Category] = (
@@ -281,7 +283,8 @@ internal static class MeltiaE2eHarness
                     if (processed % 100 == 0)
                         form.Text = $"Meltia E2E — {processed}/{cases.Count} complete, mismatches {processed - matches}";
                 }
-                returnCode = noTraces == 0 && boundaryFailures == 0 ? 0 : 1;
+                returnCode = noTraces == 0 && missingBoundaryEvidence == 0 &&
+                    boundaryFailures == 0 ? 0 : 1;
             }
             catch (Exception ex)
             {
@@ -311,6 +314,7 @@ internal static class MeltiaE2eHarness
                         keyDelayMs = keyDelay, settleMs = settle,
                         requested = cases.Count, completed = processed,
                         expectedMatches = matches, noTraceCases = noTraces,
+                        missingBoundaryEvidence,
                         boundaryCoverageFailures = boundaryFailures,
                         boundariesCompared, boundariesMatched,
                         durationSeconds = clock.Elapsed.TotalSeconds,
@@ -376,19 +380,32 @@ internal static class MeltiaE2eHarness
         var records = new List<JsonElement>();
         if (!File.Exists(path)) return records;
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        if (offset > stream.Length) throw new InvalidDataException("Trace was replaced during the run.");
+        if (offset > stream.Length)
+            throw new InvalidDataException("Trace was replaced during the run.");
         stream.Seek(offset, SeekOrigin.Begin);
-        using (var reader = new StreamReader(stream, Encoding.UTF8, true, leaveOpen: true))
+        long available = stream.Length - offset;
+        if (available > 16 * 1024 * 1024)
+            throw new InvalidDataException("More than 16 MiB of unprocessed E2E trace data in one case.");
+        if (available == 0) return records;
+        var bytes = new byte[(int)available];
+        int read = 0;
+        while (read < bytes.Length)
         {
-            string? line;
-            while ((line = reader.ReadLine()) is not null)
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                using var record = JsonDocument.Parse(line);
-                records.Add(record.RootElement.Clone());
-            }
+            int size = stream.Read(bytes, read, bytes.Length - read);
+            if (size == 0) break;
+            read += size;
         }
-        offset = stream.Position;
+        // The child may be writing a JSON line right now. Consume only a fully
+        // terminated line, preserving the unconsumed trailing bytes for next time.
+        int lastLf = Array.LastIndexOf(bytes, (byte)'\n', read - 1);
+        if (lastLf < 0) return records;
+        var content = Encoding.UTF8.GetString(bytes, 0, lastLf + 1);
+        foreach (var line in content.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            using var record = JsonDocument.Parse(line);
+            records.Add(record.RootElement.Clone());
+        }
+        offset += lastLf + 1;
         return records;
     }
 
