@@ -17,9 +17,35 @@ internal static class MeltiaE2eTrace
     private static readonly object Sync = new();
     private static StreamWriter? _writer;
     private static bool _initialized;
+    private static string? _lastControlToken;
     public static bool Enabled =>
         Environment.GetEnvironmentVariable("MELTIA_E2E_CHILD") == "1" &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MELTIA_E2E_TRACE"));
+
+    /// <summary>Reset controller state between synthetic cases on the Preview UI thread.</summary>
+    public static void ProcessControl(CompositionController controller)
+    {
+        if (!Enabled) return;
+        var control = Environment.GetEnvironmentVariable("MELTIA_E2E_CONTROL");
+        var ack = Environment.GetEnvironmentVariable("MELTIA_E2E_ACK");
+        if (string.IsNullOrWhiteSpace(control) || string.IsNullOrWhiteSpace(ack)) return;
+        try
+        {
+            if (!File.Exists(control)) return;
+            var token = File.ReadAllText(control, Encoding.UTF8);
+            if (token.Length == 0 || token == _lastControlToken) return;
+            controller.Reset();
+            controller.ResetContext();
+            controller.ForgetLastCommit();
+            controller.Pump(); // Release any stale capture before the next case.
+            File.WriteAllText(ack, token, Encoding.UTF8);
+            _lastControlToken = token;
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.Log.Warn("E2E case reset failed: " + ex.GetType().Name);
+        }
+    }
 
     public static void Ready()
     {
