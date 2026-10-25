@@ -61,6 +61,8 @@ internal static class MeltiaE2eHarness
         var state = Path.Combine(runDir, "profile");
         Directory.CreateDirectory(state); // New, empty; no user files are removed or migrated.
         var ready = Path.Combine(runDir, "ready.txt");
+        var control = Path.Combine(runDir, "control.txt");
+        var ack = Path.Combine(runDir, "ack.txt");
         var trace = Path.Combine(runDir, "composition.jsonl");
         var results = Path.Combine(runDir, "cases.jsonl");
         var summary = Path.Combine(runDir, "summary.json");
@@ -98,6 +100,8 @@ internal static class MeltiaE2eHarness
         start.Environment["MELTIA_E2E_CHILD"] = "1";
         start.Environment["MELTIA_E2E_TRACE"] = trace;
         start.Environment["MELTIA_E2E_READY"] = ready;
+        start.Environment["MELTIA_E2E_CONTROL"] = control;
+        start.Environment["MELTIA_E2E_ACK"] = ack;
         start.Environment["MELTIA_DATA_DIR"] = state;
         start.Environment["MELTYPE_DATA_DIR"] = state;
         // Do not enable the experimental model implicitly: inherit caller selection.
@@ -162,7 +166,18 @@ internal static class MeltiaE2eHarness
                     SendVirtualKey(0x1B); // Escape
                     await Task.Delay(30);
                     field.Clear();
-                    await Task.Delay(30);
+                    string token = test.Id + ":" + processed.ToString(CultureInfo.InvariantCulture);
+                    File.WriteAllText(control, token, Encoding.UTF8);
+                    var resetDeadline = Stopwatch.StartNew();
+                    while ((!File.Exists(ack) || File.ReadAllText(ack, Encoding.UTF8) != token) &&
+                           resetDeadline.Elapsed < TimeSpan.FromSeconds(5))
+                    {
+                        if (child.HasExited)
+                            throw new InvalidOperationException("Preview exited during case reset.");
+                        await Task.Delay(25);
+                    }
+                    if (!File.Exists(ack) || File.ReadAllText(ack, Encoding.UTF8) != token)
+                        throw new TimeoutException("Preview did not acknowledge clean per-case composition reset.");
                     ReadTrace(trace, ref traceOffset); // discard inter-case reset observations
                     var caseClock = Stopwatch.StartNew();
                     double sendMs = 0;
@@ -300,7 +315,8 @@ internal static class MeltiaE2eHarness
                 exp.ValueKind != JsonValueKind.Null ? exp.GetString() : null;
             var spans = item.TryGetProperty("spans", out var s) ? (JsonElement?)s.Clone() : null;
             if (id.Length is < 1 or > 128 || !identifiers.Add(id) ||
-                category is not ("ja" or "en" or "mixed") ||
+                category.Length is < 1 or > 64 ||
+                category.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_')) ||
                 raw.Length is < 1 or > MaxRawLength ||
                 raw.Any(c => c < 0x20 || c > 0x7E))
                 throw new InvalidDataException($"Invalid or duplicate E2E case at line {index}.");
