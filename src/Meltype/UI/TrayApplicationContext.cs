@@ -91,6 +91,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
             Opacity = () => _engine.Settings.CompositionOpacityValue,
         });
         _engine.AttachComposition(_composition);
+#if MELTIA_PREVIEW
+        if (MeltiaE2eTrace.Enabled)
+            MeltiaE2eTrace.OnCaseReset = _engine.ResetE2eContext;
+#endif
         _tipServer = new Tip.TipServer(_invoker, _composition, () => _engine.Settings);
 #if !MELTIA_PREVIEW
         _tipServer.Start();

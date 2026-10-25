@@ -91,7 +91,13 @@ internal sealed class CompositionService : ICompositionHost, IDisposable
         Focus.TextInputEntered += () => { if (onFocus()) ShowMode(!_directMode()); };
         Focus.CaptureLost += Abandon;
         Controller.Committed += text => Diagnostics.Log.Decision($"確定: {Diagnostics.Log.Text(text.Length > 20 ? text[..20] + "…" : text)}");
-        _tick.Tick += (_, _) => Safely(() => Controller.Tick(Environment.TickCount64));
+        _tick.Tick += (_, _) => Safely(() =>
+        {
+#if MELTIA_PREVIEW
+            MeltiaE2eTrace.ProcessControl(Controller, this);
+#endif
+            Controller.Tick(Environment.TickCount64);
+        });
         _tick.Start();
     }
 
@@ -286,6 +292,9 @@ internal sealed class CompositionService : ICompositionHost, IDisposable
 
     public void CommitText(string text)
     {
+#if MELTIA_PREVIEW
+        MeltiaE2eTrace.Record("commit", Controller, text);
+#endif
         // 変換ボックスを出したまま確定して、続けて打っている (kyouha Space iitenki): 次に見せるときに、確定した分だけ右へずらす
         if (_window.Visible) _committedWhileVisible += text;
         EnsureSystemImeClosed();
@@ -520,6 +529,9 @@ internal sealed class CompositionService : ICompositionHost, IDisposable
 
     public void Show(CompositionView view)
     {
+#if MELTIA_PREVIEW
+        MeltiaE2eTrace.Record("view", Controller, view.Text);
+#endif
         if (_window.Visible)
         {
             // 確定した文字の分だけ右へ (同じ位置のままだと、確定した文字を変換ボックスが隠してしまう: issue #57)。

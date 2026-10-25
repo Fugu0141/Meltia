@@ -320,6 +320,11 @@ public sealed partial class CompositionController
     /// <summary>変換ボックスに入力中か、英数状態で打ち始めの語を判定中か。</summary>
     public bool IsComposing => !_text.IsEmpty || _heldLetters.Length > 0;
 
+    /// <summary>Read-only live raw and boundaries for opt-in OS E2E tracing.
+    /// The returned spans use UTF-16 indices and are not committed text.</summary>
+    public (string Raw, IReadOnlyList<CompositionSegment> Segments) DiagnosticSnapshot() =>
+        (_text.Raw, _text.Segments(final: false));
+
     /// <summary>直近に確定した文字列 (テスト・ログ用)。</summary>
     public event Action<string>? Committed;
 

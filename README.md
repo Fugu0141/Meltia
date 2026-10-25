@@ -30,6 +30,7 @@
 - [プロジェクトの由来と本家との関係](docs/MELTIA_ORIGIN.md)
 - [ライセンスと著作権の取り扱い](docs/MELTIA_LICENSE_POLICY.md)
 - [開発ロードマップ](docs/MELTIA_ROADMAP.md)
+- [Windows実打鍵E2E（1万件・独立学習状態・性能/境界ログ、実機未検証）](docs/MELTIA_WINDOWS_REAL_KEY_E2E_REQUIREMENTS_20261025.md)
 - [Meltype上流変更の受け入れとMeltia段階的リファクタリング方針（レビュー用）](docs/MELTIA_UPSTREAM_MELTYPE_INTAKE_AND_REFACTORING_POLICY_20261017.md)
 - [Meltype上流変更の受け入れ判定シート（複製用）](docs/MELTIA_UPSTREAM_INTAKE_TEMPLATE.md)
 - [Meltype v1.2.1差分78ファイルの三方比較・R0棚卸し台帳](docs/MELTIA_MELTYPE_V121_R0_FILE_INVENTORY_20261017.md)
@@ -99,6 +100,12 @@
 - [T4-C2：C1証拠バンドルのSHA-256整合性とB5の衝突・Native構造検査（実VM観測/登録は未実施）](docs/MELTIA_T4C2_OFFLINE_EVIDENCE_BUNDLE_REVIEW_20261021.md)
 - [T4-C3：観測用EXEとC1自己申告・別経路SHA-256の三方向照合（実VM由来・登録未証明）](docs/MELTIA_T4C3_OBSERVER_HASH_INDEPENDENT_REVIEW_20261021.md)
 - [T4-C4：隔離Windows VMの環境・スナップショット自己申告台帳とオフライン検査（実VM・復旧演習は未実施）](docs/MELTIA_T4C4_VM_SNAPSHOT_EVIDENCE_REVIEW_20261022.md)
+
+## Windows実打鍵E2E検証ツール（開発中）
+
+Meltia Windows Keyboard Previewの実フック経由で一語・一文を入力し、実際の確定結果、未確定表示、日英区間、遅延をJSONLに保存する実機検証基盤を追加しています。毎run新規の隔離学習フォルダーを使用し、通常のMeltype/Meltiaデータを削除しません。合成コーパスは日本語3,334件・英語3,333件・混合3,333件の合計10,000件。**Windows実機で10,000件を実行・合格したという意味ではありません。**
+
+実行コマンド、学習・辞書の分離範囲、VMで統一するべき残条件は [実打鍵E2Eの要件・設計・手順](docs/MELTIA_WINDOWS_REAL_KEY_E2E_REQUIREMENTS_20261025.md) を参照してください。正式TSFのE2Eではありません。
 
 ## Meltia Windows Keyboard Preview（実機未検証）
 

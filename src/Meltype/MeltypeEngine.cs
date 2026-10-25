@@ -402,6 +402,19 @@ internal sealed class MeltypeEngine : ISessionEnvironment, IDisposable
 
     /// <param name="resetJapanese">半角/全角 で日本語にしていた行の設定も戻すか (キャレットが別の場所に動いたとき)。</param>
     /// <param name="keepSigil">/ $ @ の名前の判定 (前の文字) をそのままにするか。</param>
+#if MELTIA_PREVIEW
+    /// <summary>Discard per-field context between isolated, synthetic E2E cases.</summary>
+    internal void ResetE2eContext()
+    {
+        if (!MeltiaE2eTrace.Enabled) return;
+        InvalidateLine();
+        _sigil.Start();
+        _lastLineKind = null;
+        _directEnglishWord = false;
+        _keyboardDirect = false;
+    }
+#endif
+
     private void InvalidateLine(bool resetJapanese = true, int delayMs = 80, bool keepSigil = false)
     {
         _line.Invalidate();
