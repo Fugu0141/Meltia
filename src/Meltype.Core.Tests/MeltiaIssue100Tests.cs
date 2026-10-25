@@ -44,7 +44,7 @@ internal static class MeltiaIssue100Tests
         // The stem before "." is ambiguous, so do not change an unrelated Japanese
         // sentence or convert every occurrence of "node" into an English word.
         var japanese = new CompositionText(CompositionDetector.CreateDefault());
-        foreach (var key in "konnichiwa.") japanese.Append(key);
-        Assert.Equal("こんにちは。", japanese.Display(final: true));
+        foreach (var key in "kyouha.") japanese.Append(key);
+        Assert.Equal("きょうは。", japanese.Display(final: true));
     }
 }
