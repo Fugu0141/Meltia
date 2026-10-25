@@ -94,7 +94,7 @@ internal sealed class CompositionService : ICompositionHost, IDisposable
         _tick.Tick += (_, _) => Safely(() =>
         {
 #if MELTIA_PREVIEW
-            MeltiaE2eTrace.ProcessControl(Controller);
+            MeltiaE2eTrace.ProcessControl(Controller, this);
 #endif
             Controller.Tick(Environment.TickCount64);
         });
