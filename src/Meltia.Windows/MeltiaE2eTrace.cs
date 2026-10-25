@@ -18,12 +18,13 @@ internal static class MeltiaE2eTrace
     private static StreamWriter? _writer;
     private static bool _initialized;
     private static string? _lastControlToken;
+    internal static Action? OnCaseReset;
     public static bool Enabled =>
         Environment.GetEnvironmentVariable("MELTIA_E2E_CHILD") == "1" &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MELTIA_E2E_TRACE"));
 
     /// <summary>Reset controller state between synthetic cases on the Preview UI thread.</summary>
-    public static void ProcessControl(CompositionController controller)
+    public static void ProcessControl(CompositionController controller, CompositionService composition)
     {
         if (!Enabled) return;
         var control = Environment.GetEnvironmentVariable("MELTIA_E2E_CONTROL");
@@ -37,6 +38,8 @@ internal static class MeltiaE2eTrace
             controller.Reset();
             controller.ResetContext();
             controller.ForgetLastCommit();
+            composition.Languages.Clear(); // Do not let a previous case supply language-memory evidence.
+            OnCaseReset?.Invoke();
             controller.Pump(); // Release any stale capture before the next case.
             File.WriteAllText(ack, token, Encoding.UTF8);
             _lastControlToken = token;
