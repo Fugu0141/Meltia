@@ -76,6 +76,7 @@ internal static class MeltiaE2eTrace
             var item = new
             {
                 type = kind,
+                caseId = _lastControlToken,
                 qpc = Stopwatch.GetTimestamp(),
                 utc = DateTimeOffset.UtcNow,
                 raw = snapshot.Raw,
