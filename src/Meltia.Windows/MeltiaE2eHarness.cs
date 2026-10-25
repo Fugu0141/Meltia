@@ -113,10 +113,11 @@ internal static class MeltiaE2eHarness
         int matches = 0;
         int noTraces = 0;
         int boundaryFailures = 0;
+        int boundariesCompared = 0, boundariesMatched = 0;
         bool interrupted = false;
         string? fatal = null;
         var durations = new List<double>(cases.Count);
-        var perCategory = new Dictionary<string, (int Total, int Matches)>(StringComparer.Ordinal);
+        var perCategory = new Dictionary<string, (int Total, int Matches, int BoundariesCompared, int BoundariesMatched)>(StringComparer.Ordinal);
         var clock = Stopwatch.StartNew();
         using var output = new StreamWriter(results, false, new UTF8Encoding(false)) { AutoFlush = true };
         var traceOffset = 0L;
@@ -211,13 +212,22 @@ internal static class MeltiaE2eHarness
                         ? (JsonElement?)spans : null;
                     bool covered = spanEvent is { } item2 &&
                         item2.TryGetProperty("coversRaw", out var covers) && covers.GetBoolean();
+                    bool? boundaryMatch = MatchBoundaryLanguages(test.Spans, actualSpans, test.Raw.Length);
+                    if (boundaryMatch is { } isMatch)
+                    {
+                        boundariesCompared++;
+                        if (isMatch) boundariesMatched++;
+                    }
                     bool matched = test.Expected is null || string.Equals(observed, test.Expected, StringComparison.Ordinal);
                     if (test.Expected is not null && matched) matches++;
                     if (events.Count == 0) noTraces++;
                     if (spanEvent is not null && !covered) boundaryFailures++;
                     durations.Add(caseClock.Elapsed.TotalMilliseconds);
                     var current = perCategory.GetValueOrDefault(test.Category);
-                    perCategory[test.Category] = (current.Total + 1, current.Matches + (matched ? 1 : 0));
+                    perCategory[test.Category] = (
+                        current.Total + 1, current.Matches + (matched ? 1 : 0),
+                        current.BoundariesCompared + (boundaryMatch.HasValue ? 1 : 0),
+                        current.BoundariesMatched + (boundaryMatch == true ? 1 : 0));
                     processed++;
                     output.WriteLine(JsonSerializer.Serialize(new
                     {
@@ -228,6 +238,7 @@ internal static class MeltiaE2eHarness
                         reportedCommit = lastCommitEvent is { } c && c.TryGetProperty("visible", out var committed) ? committed.GetString() : null,
                         result = test.Expected is null ? "unlabeled" : matched ? "match" : "mismatch",
                         boundaryCovered = spanEvent is null ? (bool?)null : covered,
+                        boundaryMatch,
                         traceEvents = events.Count,
                         durationMs = caseClock.Elapsed.TotalMilliseconds,
                         sendInputApiMs = sendMs,
@@ -267,12 +278,16 @@ internal static class MeltiaE2eHarness
                         requested = cases.Count, completed = processed,
                         expectedMatches = matches, noTraceCases = noTraces,
                         boundaryCoverageFailures = boundaryFailures,
+                        boundariesCompared, boundariesMatched,
                         durationSeconds = clock.Elapsed.TotalSeconds,
                         durationMsP50 = Percentile(durations, .50),
                         durationMsP95 = Percentile(durations, .95),
                         durationMsP99 = Percentile(durations, .99),
                         categories = perCategory.ToDictionary(p => p.Key,
-                            p => new { completed = p.Value.Total, matches = p.Value.Matches }),
+                            p => new {
+                                completed = p.Value.Total, matches = p.Value.Matches,
+                                boundariesCompared = p.Value.BoundariesCompared,
+                                boundariesMatched = p.Value.BoundariesMatched }),
                         profileFiles = stateFiles, fatal, interrupted,
                         result = returnCode == 0 ? "completed-with-observations" : "incomplete-or-observation-failure"
                     }, JsonOptions));
@@ -345,6 +360,35 @@ internal static class MeltiaE2eHarness
         }
         offset = stream.Position;
         return records;
+    }
+
+    /// <summary>Compare labels per UTF-16 unit, not the arbitrary number of same-language spans.</summary>
+    private static bool? MatchBoundaryLanguages(JsonElement? expected, JsonElement? actual, int rawLength)
+    {
+        if (expected is null || actual is null ||
+            expected.Value.ValueKind != JsonValueKind.Array ||
+            actual.Value.ValueKind != JsonValueKind.Array) return null;
+        static string[]? ToLanguages(JsonElement spans, int length)
+        {
+            var languages = new string[length];
+            var position = 0;
+            foreach (var span in spans.EnumerateArray())
+            {
+                if (!span.TryGetProperty("start", out var a) ||
+                    !span.TryGetProperty("end", out var b) ||
+                    !span.TryGetProperty("language", out var l)) return null;
+                int start = a.GetInt32(), end = b.GetInt32();
+                if (start != position || end <= start || end > length) return null;
+                var language = l.GetString();
+                if (language is not ("ja" or "en")) return null;
+                for (int i = start; i < end; ++i) languages[i] = language;
+                position = end;
+            }
+            return position == length ? languages : null;
+        }
+        var left = ToLanguages(expected.Value, rawLength);
+        var right = ToLanguages(actual.Value, rawLength);
+        return left is null || right is null ? null : left.SequenceEqual(right);
     }
 
     private static double? Percentile(List<double> values, double proportion)
