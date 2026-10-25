@@ -207,7 +207,9 @@ internal static class MeltiaE2eHarness
                     var observed = field.Text;
                     caseClock.Stop();
 
-                    var events = ReadTrace(trace, ref traceOffset);
+                    var events = ReadTrace(trace, ref traceOffset)
+                        .Where(ev => ev.TryGetProperty("caseId", out var caseId) &&
+                                     caseId.GetString() == token).ToList();
                     JsonElement? lastSpanEvent = null, lastCommitEvent = null;
                     foreach (var item in events)
                     {
@@ -249,15 +251,16 @@ internal static class MeltiaE2eHarness
                         boundariesCompared++;
                         if (isMatch) boundariesMatched++;
                     }
-                    bool matched = test.Expected is null || string.Equals(observed, test.Expected, StringComparison.Ordinal);
-                    if (test.Expected is not null && matched) matches++;
+                    bool? matched = test.Expected is null ? null :
+                        string.Equals(observed, test.Expected, StringComparison.Ordinal);
+                    if (matched == true) matches++;
                     if (events.Count == 0) noTraces++;
                     if (spanEvent is null) missingBoundaryEvidence++;
                     else if (!covered) boundaryFailures++;
                     durations.Add(caseClock.Elapsed.TotalMilliseconds);
                     var current = perCategory.GetValueOrDefault(test.Category);
                     perCategory[test.Category] = (
-                        current.Total + 1, current.Matches + (matched ? 1 : 0),
+                        current.Total + 1, current.Matches + (matched == true ? 1 : 0),
                         current.BoundariesCompared + (boundaryMatch.HasValue ? 1 : 0),
                         current.BoundariesMatched + (boundaryMatch == true ? 1 : 0));
                     processed++;
@@ -268,7 +271,7 @@ internal static class MeltiaE2eHarness
                         expectedSpans = test.Spans, observedSpans = actualSpans,
                         previewText = spanEvent is { } e && e.TryGetProperty("visible", out var txt) ? txt.GetString() : null,
                         reportedCommit = lastCommitEvent is { } c && c.TryGetProperty("visible", out var committed) ? committed.GetString() : null,
-                        result = test.Expected is null ? "unlabeled" : matched ? "match" : "mismatch",
+                        result = matched is null ? "unlabeled" : matched == true ? "match" : "mismatch",
                         boundaryCovered = spanEvent is null ? (bool?)null : covered,
                         boundaryMatch,
                         traceEvents = events.Count,
