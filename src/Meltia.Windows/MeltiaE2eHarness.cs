@@ -187,6 +187,8 @@ internal static class MeltiaE2eHarness
                     if (!File.Exists(ack) || File.ReadAllText(ack, Encoding.UTF8) != token)
                         throw new TimeoutException("Preview did not acknowledge clean per-case composition reset.");
                     ReadTrace(trace, ref traceOffset); // discard inter-case reset observations
+                    if (field.TextLength != 0)
+                        throw new InvalidOperationException("Target field changed during case reset; aborting to prevent mixed results.");
                     var caseClock = Stopwatch.StartNew();
                     double sendMs = 0;
                     var keyQpc = new List<long>(test.Raw.Length);
@@ -487,6 +489,12 @@ internal static class MeltiaE2eHarness
         var inputs = events.ToArray();
         uint done = Native.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Native.INPUT>());
         if (done != inputs.Length)
-            throw new Win32Exception(Marshal.GetLastWin32Error(), $"SendInput delivered {done}/{inputs.Length} events");
+        {
+            int error = Marshal.GetLastWin32Error();
+            // A partially delivered Shift-down must not leave a modifier held.
+            var release = new[] { Key(0x10, true), Key(0x11, true), Key(0x12, true) };
+            Native.SendInput((uint)release.Length, release, Marshal.SizeOf<Native.INPUT>());
+            throw new Win32Exception(error, $"SendInput delivered {done}/{inputs.Length} events");
+        }
     }
 }
