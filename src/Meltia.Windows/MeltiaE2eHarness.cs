@@ -81,6 +81,13 @@ internal static class MeltiaE2eHarness
             AutoCorrectAfterCommit = false,
             CorrectTypos = false,
             AutoUpdate = false,
+            ConversionEngine = ConversionEngine.System,
+            TranslationCandidates = false,
+            ShowCandidateMeanings = false,
+            TabConversion = false,
+            PasteApps = "",
+            NoPasteApps = "",
+            UseTsf = false,
             FileLog = false,
             LogTypedText = false,
             ShowNotifications = false,
@@ -288,7 +295,7 @@ internal static class MeltiaE2eHarness
                                 completed = p.Value.Total, matches = p.Value.Matches,
                                 boundariesCompared = p.Value.BoundariesCompared,
                                 boundariesMatched = p.Value.BoundariesMatched }),
-                        profileFiles = stateFiles, fatal, interrupted,
+                        profileFiles = stateFiles, fatal, interrupted = processed < cases.Count,
                         result = returnCode == 0 ? "completed-with-observations" : "incomplete-or-observation-failure"
                     }, JsonOptions));
                 }
