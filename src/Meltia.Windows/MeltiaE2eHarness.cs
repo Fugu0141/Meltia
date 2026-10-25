@@ -121,7 +121,6 @@ internal static class MeltiaE2eHarness
         int noTraces = 0;
         int boundaryFailures = 0;
         int boundariesCompared = 0, boundariesMatched = 0;
-        bool interrupted = false;
         string? fatal = null;
         var durations = new List<double>(cases.Count);
         var perCategory = new Dictionary<string, (int Total, int Matches, int BoundariesCompared, int BoundariesMatched)>(StringComparer.Ordinal);
@@ -189,10 +188,12 @@ internal static class MeltiaE2eHarness
                     ReadTrace(trace, ref traceOffset); // discard inter-case reset observations
                     var caseClock = Stopwatch.StartNew();
                     double sendMs = 0;
+                    var keyQpc = new List<long>(test.Raw.Length);
                     foreach (char character in test.Raw)
                     {
                         if (Native.GetForegroundWindow() != form.Handle || !field.Focused)
                             throw new InvalidOperationException("Foreground changed during synthetic typing. Input stopped.");
+                        keyQpc.Add(Stopwatch.GetTimestamp());
                         var sent = Stopwatch.StartNew();
                         SendCharacter(character);
                         sent.Stop();
@@ -213,6 +214,28 @@ internal static class MeltiaE2eHarness
                         if (type.GetString() == "commit") lastCommitEvent = item;
                         if (item.TryGetProperty("raw", out var raw) &&
                             raw.GetString() == test.Raw) lastSpanEvent = item;
+                    }
+                    // First live-view observation of each exact raw prefix after its SendInput.
+                    // These timings include keyboard-hook dispatch and UI scheduling, but
+                    // do not claim the target edit control has painted the character.
+                    var keyViewLatencies = new List<double>();
+                    var observedPrefixCount = 0;
+                    for (int i = 0; i < test.Raw.Length; ++i)
+                    {
+                        var rawPrefix = test.Raw[..(i + 1)];
+                        foreach (var ev in events)
+                        {
+                            if (!ev.TryGetProperty("type", out var et) ||
+                                et.GetString() != "view" ||
+                                !ev.TryGetProperty("raw", out var er) ||
+                                er.GetString() != rawPrefix ||
+                                !ev.TryGetProperty("qpc", out var tqpc)) continue;
+                            long tick = tqpc.GetInt64();
+                            if (tick < keyQpc[i]) continue;
+                            observedPrefixCount++;
+                            keyViewLatencies.Add((tick - keyQpc[i]) * 1000.0 / Stopwatch.Frequency);
+                            break;
+                        }
                     }
                     var spanEvent = lastSpanEvent ?? lastCommitEvent;
                     var actualSpans = spanEvent is { } record && record.TryGetProperty("spans", out var spans)
@@ -249,6 +272,10 @@ internal static class MeltiaE2eHarness
                         traceEvents = events.Count,
                         durationMs = caseClock.Elapsed.TotalMilliseconds,
                         sendInputApiMs = sendMs,
+                        keyViewObserved = observedPrefixCount,
+                        keyViewLatencyMsP50 = Percentile(keyViewLatencies, .50),
+                        keyViewLatencyMsP95 = Percentile(keyViewLatencies, .95),
+                        keyViewLatencyMsP99 = Percentile(keyViewLatencies, .99),
                         enterQpc // correlate input and child trace QPC; not a processing-latency measurement
                     }));
                     if (processed % 100 == 0)
@@ -302,10 +329,6 @@ internal static class MeltiaE2eHarness
                 catch (Exception ex) { fatal ??= "Unable to write summary: " + ex.Message; }
                 form.Close();
             }
-        };
-        form.FormClosed += (_, _) =>
-        {
-            if (processed < cases.Count) interrupted = true;
         };
         try { Application.Run(form); }
         finally
