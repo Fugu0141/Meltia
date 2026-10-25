@@ -34,6 +34,10 @@ public sealed partial class CompositionDetector
 
     private static readonly HashSet<string> DomainSuffixes = ["ai", "app", "au", "biz", "ca", "cn", "co", "com", "de", "dev", "edu", "eu", "fr", "gg", "gov", "info", "in", "io", "jp", "kr", "me", "net", "org", "uk", "us", "xyz"];
 
+    // A code extension can disambiguate a stem also readable as Japanese romaji.
+    private static readonly HashSet<string> CodeFileSuffixes =
+        new(StringComparer.Ordinal) { "js", "jsx", "ts", "tsx", "json", "mjs", "cjs" };
+
     public CompositionDetector(RomajiDetector romaji, DictionaryDetector japanese, EnglishDetector english, TypoDetector typo, ProperNouns? proper = null,
         KanaDetector? kana = null)
     {
@@ -112,6 +116,11 @@ public sealed partial class CompositionDetector
         // 連結した原文と各位置のオフセットを使い回す (内容・順序は同じで、文字列を毎回連結しない)。
         Prepare(units);
         var token = _preparedRaw + pending;
+        // The usual dot-suffix rule requires the stem to already be English.
+        // "node" can be read as Japanese "ので"; a complete file suffix is
+        // additional evidence that the whole token should remain literal.
+        if (!kanaInput && level != DetectionLevel.Manual && IsDottedCodeName(token))
+            return [new CompositionSegment(true, "", token)];
         // Structured Latin tokens are opaque; their components are not Japanese readings.
         if (!kanaInput && token.All(c => c is >= '!' and <= '~') &&
             (token.Contains('@') && token.Any(char.IsAsciiLetter) || token.Contains('_') || token.Contains("://", StringComparison.Ordinal) ||
@@ -393,6 +402,24 @@ public sealed partial class CompositionDetector
     /// 知っている英単語か (同梱の辞書・固有名詞・ユーザーが英字に直して覚えた語・4 文字以上ならスペルチェッカー)。
     /// python + no の n のように、英単語の最後の n と次の音がくっつくのを防ぐのに使う。
     /// </summary>
+    /// <summary>
+    /// A known Latin stem and complete code extension form a structural token.
+    /// Do not interpret a lone dot or an arbitrary suffix as evidence, and
+    /// respect an explicit learned Japanese classification.
+    /// </summary>
+    private bool IsDottedCodeName(string token)
+    {
+        var dot = token.IndexOf('.');
+        if (dot < 3 || dot != token.LastIndexOf('.') || dot + 1 >= token.Length)
+            return false;
+        var stem = token[..dot];
+        var suffix = token[(dot + 1)..];
+        return stem.All(char.IsAsciiLetter) && suffix.All(char.IsAsciiLetter) &&
+            CodeFileSuffixes.Contains(suffix.ToLowerInvariant()) &&
+            IsKnownEnglishWord(stem) &&
+            Memory?.Get(token.ToLowerInvariant()) != false;
+    }
+
     public bool IsKnownEnglishWord(string word)
     {
         var lower = word.ToLowerInvariant();
