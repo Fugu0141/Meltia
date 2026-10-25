@@ -91,7 +91,13 @@ internal sealed class CompositionService : ICompositionHost, IDisposable
         Focus.TextInputEntered += () => { if (onFocus()) ShowMode(!_directMode()); };
         Focus.CaptureLost += Abandon;
         Controller.Committed += text => Diagnostics.Log.Decision($"確定: {Diagnostics.Log.Text(text.Length > 20 ? text[..20] + "…" : text)}");
-        _tick.Tick += (_, _) => Safely(() => Controller.Tick(Environment.TickCount64));
+        _tick.Tick += (_, _) => Safely(() =>
+        {
+#if MELTIA_PREVIEW
+            MeltiaE2eTrace.ProcessControl(Controller);
+#endif
+            Controller.Tick(Environment.TickCount64);
+        });
         _tick.Start();
     }
 
