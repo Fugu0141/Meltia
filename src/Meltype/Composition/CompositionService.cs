@@ -286,6 +286,9 @@ internal sealed class CompositionService : ICompositionHost, IDisposable
 
     public void CommitText(string text)
     {
+#if MELTIA_PREVIEW
+        MeltiaE2eTrace.Record("commit", Controller, text);
+#endif
         // 変換ボックスを出したまま確定して、続けて打っている (kyouha Space iitenki): 次に見せるときに、確定した分だけ右へずらす
         if (_window.Visible) _committedWhileVisible += text;
         EnsureSystemImeClosed();
