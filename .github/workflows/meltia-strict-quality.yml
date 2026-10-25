@@ -40,6 +40,8 @@ jobs:
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: 10.0.x
+      - name: Run issue #100 exact-display and commit regressions
+        run: dotnet run --project src/Meltype.Core.Tests -c Release -- MeltiaIssue100
       - name: Run deterministic safety, replay and gold quality checks
         shell: bash
         env:
