@@ -70,6 +70,7 @@ internal static class MeltiaQualityGate
         new("mixed", "kyouhagoogledekensaku \n", "今日はgoogleで検索", ["今日はgoogleで検索"]),
         new("acronym", "IME\n", "IME", ["IME"]),
         new("acronym", "API\n", "API", ["API"]),
+        new("code-dotted", "node.js\n", "node.js", ["node.js"]),
         new("protected-url", "https://example.com\n", "https://example.com", ["https://example.com"]),
         new("protected-email", "alice@example.com\n", "alice@example.com", ["alice@example.com"]),
         new("editing", "kyouhab\b\n", "きょうは", ["きょうは"], "きょうは"),
